@@ -9,11 +9,11 @@
     "dev": "nodemon index.js"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3",
     "nodemon": "^3.0.2"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.97",
+    "cross-env": "^7.0.3",
     "@prisma/client": "^5.10.2",
     "@tesseract.js-data/eng": "^1.0.0",
     "bcryptjs": "^2.4.3",
