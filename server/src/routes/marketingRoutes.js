@@ -18,7 +18,8 @@ function normalizeVin(value = '') {
   return String(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 17);
 }
 
-function toNumber(value, fallback = 0) {
+function toNumber(value, fallback = null) {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -82,9 +83,9 @@ router.post('/generate', async (req, res, next) => {
     let vin = normalizeVin(req.body.vin);
     let vehicleSpecs = String(req.body.vehicleSpecs || '').trim();
     let photos = Array.isArray(req.body.photos) ? req.body.photos.map(String).filter(Boolean) : [];
-    let mileage = toNumber(req.body.mileage);
+    let mileage = toNumber(req.body.mileage, null);
     let condition = String(req.body.condition || '').trim();
-    let pricing = toNumber(req.body.pricing);
+    let pricing = toNumber(req.body.pricing, null);
     const channels = Array.isArray(req.body.channels) && req.body.channels.length ? req.body.channels : DEFAULT_CHANNELS;
 
     if (vehicleId) {
@@ -96,13 +97,13 @@ router.post('/generate', async (req, res, next) => {
 
       vin = vin || normalizeVin(vehicle.vin);
       vehicleSpecs = vehicleSpecs || [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ');
-      mileage = mileage || Number(vehicle.mileage || 0);
+      mileage = mileage !== null ? mileage : Number(vehicle.mileage || 0);
       condition = condition || 'Good';
-      pricing = pricing || Number(vehicle.purchase?.purchasePrice || 0);
+      pricing = pricing !== null ? pricing : Number(vehicle.purchase?.purchasePrice || 0);
       photos = photos.length ? photos : [];
     }
 
-    if (!vin || !vehicleSpecs || !mileage || !condition || !pricing) {
+    if (!vin || !vehicleSpecs || mileage === null || mileage === undefined || !condition || pricing === null || pricing === undefined) {
       return res.status(400).json({ message: 'vin, vehicleSpecs, mileage, condition and pricing are required' });
     }
 
