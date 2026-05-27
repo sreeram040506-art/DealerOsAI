@@ -181,7 +181,37 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
       <section className="stat-card space-y-4">
         <h2 className="text-lg font-semibold">Listing Generation Pipeline</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}>
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={form.vehicleId}
+            onChange={(e) => {
+              const selectedId = e.target.value;
+              if (!selectedId) {
+                setForm({
+                  vehicleId: '',
+                  vin: '',
+                  vehicleSpecs: '',
+                  photos: '',
+                  mileage: '',
+                  condition: '',
+                  pricing: '',
+                });
+                return;
+              }
+              const v = vehicles.find((veh) => veh.id === selectedId);
+              if (v) {
+                setForm({
+                  vehicleId: v.id,
+                  vin: v.vin || '',
+                  vehicleSpecs: `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim(),
+                  photos: '',
+                  mileage: v.mileage !== undefined ? String(v.mileage) : '',
+                  condition: 'Excellent',
+                  pricing: v.purchasePrice !== undefined ? String(v.purchasePrice) : '',
+                });
+              }
+            }}
+          >
             <option value="">Select Inventory Vehicle (optional)</option>
             {vehicles.map((v) => (
               <option key={v.id} value={v.id}>{[v.year, v.make, v.model, v.vin].filter(Boolean).join(' ')}</option>
