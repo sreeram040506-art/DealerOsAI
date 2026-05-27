@@ -5,7 +5,17 @@ function getDefaultApiOrigin() {
     return 'http://127.0.0.1:3001';
   }
 
-  return `${window.location.protocol}//${window.location.hostname}:3001`;
+  // Use port 3001 only for local development
+  if (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname === '[::1]'
+  ) {
+    return `${window.location.protocol}//${window.location.hostname}:3001`;
+  }
+
+  // In production/deployment, use same-origin to let vercel/proxy rewrites work
+  return window.location.origin;
 }
 
 export const API_ORIGIN = (rawApiOrigin || getDefaultApiOrigin()).replace(/\/+$/, '');

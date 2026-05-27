@@ -164,7 +164,68 @@ router.get('/:id', async (req, res, next) => {
       where: { id: req.params.id, dealershipId: req.dealershipId }
     });
     if (!customer) return res.status(404).json({ message: 'Customer not found' });
-    res.json(customer);
+
+    // Find sales matching this customer
+    const sales = await prisma.sale.findMany({
+      where: {
+        dealershipId: req.dealershipId,
+        OR: [
+          { customerName: { contains: customer.firstName, mode: 'insensitive' } },
+          ...(customer.phone ? [{ phone: customer.phone }] : [])
+        ]
+      },
+      include: {
+        vehicle: true
+      }
+    });
+
+    // Refine matching for sales (prevent false positives if just first name matches broadly)
+    const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim().toLowerCase();
+    const matchedSales = sales.filter(s => {
+      if (s.phone && customer.phone && s.phone === customer.phone) return true;
+      const saleName = s.customerName.toLowerCase();
+      return saleName.includes(customer.firstName.toLowerCase()) && 
+             (customer.lastName ? saleName.includes(customer.lastName.toLowerCase()) : true);
+    });
+
+    // For each matched sale, get the vehicle's documents
+    const salesWithDocs = await Promise.all(matchedSales.map(async (sale) => {
+      const docs = [];
+      
+      if (sale.billOfSaleBase64) {
+        docs.push({ type: 'Bill of Sale', base64: sale.billOfSaleBase64, name: 'Bill of Sale' });
+      }
+
+      if (sale.vehicle?.vin) {
+        // Insurance
+        const insurances = await prisma.insurancePolicy.findMany({
+          where: { vin: sale.vehicle.vin, dealershipId: req.dealershipId, documentBase64: { not: null } }
+        });
+        insurances.forEach(i => docs.push({ type: 'Insurance', base64: i.documentBase64, name: i.provider }));
+
+        // Warranty
+        const warranties = await prisma.warrantyContract.findMany({
+          where: { vin: sale.vehicle.vin, dealershipId: req.dealershipId, documentBase64: { not: null } }
+        });
+        warranties.forEach(w => docs.push({ type: 'Warranty', base64: w.documentBase64, name: w.warrantyCompany }));
+        
+        // Registry Docs
+        const registries = await prisma.documentRegistry.findMany({
+          where: { vin: sale.vehicle.vin, dealershipId: req.dealershipId, documentBase64: { not: null } }
+        });
+        registries.forEach(r => docs.push({ type: r.documentType || 'Document', base64: r.documentBase64, name: r.sourceFileName || r.documentType }));
+      }
+
+      return {
+        ...sale,
+        documents: docs
+      };
+    }));
+
+    res.json({
+      ...customer,
+      sales: salesWithDocs
+    });
   } catch (err) {
     next(err);
   }

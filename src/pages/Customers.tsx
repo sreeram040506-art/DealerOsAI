@@ -12,6 +12,7 @@ import { Car, Download, FileUp, Loader2, Mail, MapPin, Pencil, Phone, Plus, Sear
 import { toast } from '@/components/ui/toast-utils';
 import { useAuth } from '@/context/auth-hooks';
 import { apiFetch, apiUrl, handleApiResponse } from '@/lib/api';
+import CustomerDetailDialog from '@/components/CustomerDetailDialog';
 
 const CUSTOMER_CATEGORIES = ['Bought Vehicle', 'Came for Visit', 'Lead', 'Follow Up', 'Other'] as const;
 const META_PREFIX = 'APH_CUSTOMER_META:';
@@ -90,6 +91,7 @@ export default function Customers() {
   const [docName, setDocName] = useState('');
   const [docFile, setDocFile] = useState<File | null>(null);
   const [customerDocs, setCustomerDocs] = useState<CustomerDocument[]>([]);
+  const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
 
   const vehiclesById = useMemo(() => new Map(vehicles.map((vehicle) => [vehicle.id, vehicle])), [vehicles]);
 
@@ -367,6 +369,16 @@ export default function Customers() {
                     >
                       <FileUp className="w-4 h-4" />
                     </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDetailCustomer(customer)}
+                      className="h-8 w-8 text-primary hover:bg-primary/10 shrink-0"
+                      aria-label={`View details for ${fullName}`}
+                    >
+                      <Users className="w-4 h-4" />
+                    </Button>
                   </div>
                   <div className="space-y-2 text-xs text-muted-foreground">
                     <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5" /> {customer.phone || 'No contact number'}</p>
@@ -437,6 +449,16 @@ export default function Customers() {
                           aria-label={`Upload document for ${fullName}`}
                         >
                           <FileUp className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDetailCustomer(customer)}
+                          className="h-8 w-8 text-primary hover:bg-primary/10"
+                          aria-label={`View details for ${fullName}`}
+                        >
+                          <Users className="w-3.5 h-3.5" />
                         </Button>
                       </td>
                     </tr>
@@ -604,6 +626,12 @@ export default function Customers() {
           </div>
         </DialogContent>
       </Dialog>
+      
+      <CustomerDetailDialog 
+        customerId={detailCustomer?.id || null} 
+        open={!!detailCustomer} 
+        onOpenChange={(open) => !open && setDetailCustomer(null)} 
+      />
     </AppLayout>
   );
 }

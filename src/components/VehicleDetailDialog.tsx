@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formatSafeDate } from '@/lib/dateUtils';
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -52,6 +52,30 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [uploadingSale, setUploadingSale] = useState(false);
   const [saleFile, setSaleFile] = useState<File | null>(null);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+
+  useEffect(() => {
+    if (open && vehicle && token) {
+      const fetchDocs = async () => {
+        setLoadingDocs(true);
+        try {
+          const resp = await fetch(apiUrl(`/vehicles/${vehicle.id}/all-documents`), {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            setDocuments(data);
+          }
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setLoadingDocs(false);
+        }
+      };
+      fetchDocs();
+    }
+  }, [open, vehicle, token]);
 
   const handleView = async (docType: 'report' | 'source' | 'bill_of_sale') => {
     if (!token || !vehicle) return;
@@ -480,6 +504,9 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
             <TabsTrigger value="notes" className="data-[state=active]:bg-amber-500 data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
               <MessageSquare className="w-3.5 h-3.5" /> Viewing Notes
             </TabsTrigger>
+            <TabsTrigger value="documents" className="data-[state=active]:bg-blue-600 data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
+              <FileText className="w-3.5 h-3.5" /> Documents
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="edit" className="animate-in fade-in slide-in-from-top-2 duration-300">
@@ -690,6 +717,68 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 <BuyerInfoSection vehicleId={vehicle.id} />
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="documents" className="animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-4">
+              <h4 className="text-sm font-black uppercase tracking-widest text-primary">All Vehicle Documents</h4>
+              {loadingDocs ? (
+                <div className="py-8 flex justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              ) : documents.length === 0 ? (
+                <p className="text-muted-foreground text-sm italic">No documents found for this vehicle.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {documents.map((doc: any, i: number) => (
+                    <div key={i} className="flex flex-col justify-between bg-card border border-border/50 p-4 rounded-xl shadow-sm">
+                      <div className="flex items-start gap-3 mb-4">
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                          <FileText className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-foreground text-sm">{doc.type}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{doc.name}</p>
+                          <p className="text-[10px] uppercase font-black text-muted-foreground mt-1">
+                            {doc.date ? formatSafeDate(doc.date) : 'No Date'} &bull; {doc.source}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1 text-[10px] font-black uppercase tracking-widest h-8"
+                          onClick={() => {
+                            setViewerDoc({ base64: doc.base64, name: doc.name || doc.type, type: doc.type });
+                            setViewerOpen(true);
+                          }}
+                        >
+                          Preview
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          className="flex-1 text-[10px] font-black uppercase tracking-widest h-8 bg-primary text-primary-foreground hover:bg-primary/90"
+                          onClick={() => {
+                            const buffer = Buffer.from(doc.base64.replace(/^data:.+;base64,/, ''), 'base64');
+                            const blob = new Blob([buffer], { type: 'application/pdf' }); // default to pdf
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = doc.name || 'document.pdf';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                        >
+                          Download
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="repairs" className="animate-in fade-in slide-in-from-top-2 duration-300">
