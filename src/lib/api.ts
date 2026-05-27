@@ -18,7 +18,10 @@ function getDefaultApiOrigin() {
   return window.location.origin;
 }
 
-export const API_ORIGIN = (rawApiOrigin || getDefaultApiOrigin()).replace(/\/+$/, '');
+// In production, always use same-origin (ignoring VITE_API_ORIGIN)
+// This ensures Vercel proxy rewrites work correctly
+const isProduction = import.meta.env.MODE === 'production';
+export const API_ORIGIN = (isProduction ? getDefaultApiOrigin() : (rawApiOrigin || getDefaultApiOrigin())).replace(/\/+$/, '');
 export const API_BASE_URL = `${API_ORIGIN}/api`;
 
 export function apiUrl(path: string) {
