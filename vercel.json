@@ -24,7 +24,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://auto-profit-hub-server.onrender.com/api/:path*"
+      "destination": "https://dealerosai.onrender.com/api/:path*"
     },
     {
       "source": "/((?!assets/|.*\\..*).*)",

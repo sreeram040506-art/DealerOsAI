@@ -3,11 +3,13 @@ import AppLayout from '@/components/AppLayout';
 import QueryErrorState from '@/components/QueryErrorState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Sparkles, Megaphone, AlertTriangle, Plus } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Search, Sparkles, Megaphone, AlertTriangle, Plus, Upload, X, Image as ImageIcon, Users, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMarketing } from '@/hooks/useMarketing';
 import { useInventory } from '@/hooks/useInventory';
 import { useAdvertising } from '@/hooks/useAdvertising';
+import { useAuth } from '@/context/auth-hooks';
 import AddAdvertisingDialog from '@/components/AddAdvertisingDialog';
 import { formatCurrency } from '@/lib/utils';
 
@@ -29,6 +31,7 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
   const { listings, isLoading: marketingLoading, isError: marketingError, generateListing, updateSchedule, updateAnalytics, publishListing, captureLead, isSaving } = useMarketing();
   const { ads, isLoading: adsLoading, isError: adsError } = useAdvertising();
   const { vehicles } = useInventory();
+  const { token } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [form, setForm] = useState({
     vehicleId: '',
@@ -42,19 +45,95 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
 
   const [advertisingDialogOpen, setAdvertisingDialogOpen] = useState(false);
   const [editingAd, setEditingAd] = useState<any>(null);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [leadsDialogOpen, setLeadsDialogOpen] = useState(false);
+  const [leads, setLeads] = useState<any[]>([]);
 
   const filteredListings = useMemo(
     () => listings.filter((row) => `${row.vin} ${row.vehicleSpecs} ${row.seoTitle}`.toLowerCase().includes(searchTerm.toLowerCase())),
     [listings, searchTerm],
   );
 
+  const handleImageUpload = async (files: FileList | null) => {
+    if (!files) return;
+    
+    const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      toast.error('Please select image files only');
+      return;
+    }
+
+    const base64Images: string[] = [];
+    
+    for (const file of imageFiles) {
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        base64Images.push(base64);
+      } catch (error) {
+        toast.error(`Failed to process ${file.name}`);
+      }
+    }
+
+    setUploadedImages(prev => [...prev, ...base64Images]);
+    toast.success(`${base64Images.length} image(s) added`);
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setUploadedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleImageUpload(e.dataTransfer.files);
+  };
+
+  const fetchLeads = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_ORIGIN}/api/marketing/leads/list`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setLeads(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch leads:', error);
+    }
+  };
+
+  const handleOpenLeadsDialog = () => {
+    fetchLeads();
+    setLeadsDialogOpen(true);
+  };
+
   const handleGenerate = async () => {
     try {
+      const photosToUse = uploadedImages.length > 0 ? uploadedImages : form.photos.split(',').map((p) => p.trim()).filter(Boolean);
+      
       const created = await generateListing({
         vehicleId: form.vehicleId || undefined,
         vin: form.vin,
         vehicleSpecs: form.vehicleSpecs,
-        photos: form.photos.split(',').map((p) => p.trim()).filter(Boolean),
+        photos: photosToUse,
         mileage: Number(form.mileage),
         condition: form.condition,
         pricing: Number(form.pricing),
@@ -63,6 +142,7 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
       await publishListing({ id: created.id, channels: CHANNELS });
       toast.success('AI listing generated and scheduled.');
       setForm({ vehicleId: '', vin: '', vehicleSpecs: '', photos: '', mileage: '', condition: '', pricing: '' });
+      setUploadedImages([]);
     } catch (err: any) {
       toast.error(err.message || 'Failed to generate listing');
     }
@@ -98,16 +178,26 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
       <section className="space-y-4">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold">Advertising Campaigns</h2>
-          <Button 
-            onClick={() => {
-              setEditingAd(null);
-              setAdvertisingDialogOpen(true);
-            }}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 font-black uppercase tracking-widest text-[10px] shadow-sm transition-all"
-          >
-            <Megaphone className="w-4 h-4 mr-2" />
-            Launch Campaign
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleOpenLeadsDialog}
+              variant="outline"
+              className="h-10 px-4 font-black uppercase tracking-widest text-[10px] shadow-sm transition-all"
+            >
+              <Users className="w-4 h-4 mr-2" />
+              View Leads
+            </Button>
+            <Button 
+              onClick={() => {
+                setEditingAd(null);
+                setAdvertisingDialogOpen(true);
+              }}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 font-black uppercase tracking-widest text-[10px] shadow-sm transition-all"
+            >
+              <Megaphone className="w-4 h-4 mr-2" />
+              Launch Campaign
+            </Button>
+          </div>
         </div>
 
         <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
@@ -222,7 +312,70 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
           <Input placeholder="Mileage" type="number" value={form.mileage} onChange={(e) => setForm({ ...form, mileage: e.target.value })} />
           <Input placeholder="Condition" value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} />
           <Input placeholder="Pricing" type="number" value={form.pricing} onChange={(e) => setForm({ ...form, pricing: e.target.value })} />
-          <Input placeholder="Photos (comma-separated URLs)" value={form.photos} onChange={(e) => setForm({ ...form, photos: e.target.value })} />
+        </div>
+
+        {/* Image Upload Section */}
+        <div className="space-y-3">
+          <div
+            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+              isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/30'
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => document.getElementById('image-upload-input')?.click()}
+          >
+            <input
+              id="image-upload-input"
+              type="file"
+              multiple
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleImageUpload(e.target.files)}
+            />
+            <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm font-medium text-foreground">
+              {isDragging ? 'Drop images here' : 'Click to upload or drag & drop images'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF up to 10MB each</p>
+          </div>
+
+          {/* Image Previews */}
+          {uploadedImages.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {uploadedImages.map((image, index) => (
+                <div key={index} className="relative group">
+                  <img
+                    src={image}
+                    alt={`Upload ${index + 1}`}
+                    className="w-full h-24 object-cover rounded-lg border border-border"
+                  />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveImage(index);
+                    }}
+                    className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Fallback: URL Input */}
+          {uploadedImages.length === 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Or paste URLs:</span>
+              <Input
+                placeholder="Photos (comma-separated URLs)"
+                value={form.photos}
+                onChange={(e) => setForm({ ...form, photos: e.target.value })}
+                className="flex-1"
+              />
+            </div>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">Channels: {CHANNELS.join(', ')}</p>
         <Button onClick={handleGenerate} disabled={isSaving} className="bg-primary text-primary-foreground">
@@ -302,6 +455,10 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
                               leadName: 'New Buyer',
                             });
                             toast.success('Lead captured from marketing channel.');
+                            // Refresh leads if dialog is open
+                            if (leadsDialogOpen) {
+                              fetchLeads();
+                            }
                           }}
                         >
                           Capture Lead
@@ -323,6 +480,59 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
         </div>
       </div>
       <AddAdvertisingDialog open={advertisingDialogOpen} onOpenChange={setAdvertisingDialogOpen} ad={editingAd} />
+      
+      {/* Leads Dialog */}
+      <Dialog open={leadsDialogOpen} onOpenChange={setLeadsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-card border-border text-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black font-display tracking-tight text-foreground uppercase flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Captured Marketing Leads
+            </DialogTitle>
+          </DialogHeader>
+          
+          {leads.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+              <p className="text-muted-foreground">No leads captured yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Leads will appear here when captured from marketing channels</p>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-secondary/50">
+                      <th className="text-left px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Source</th>
+                      <th className="text-left px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Campaign</th>
+                      <th className="text-left px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Lead Name</th>
+                      <th className="text-left px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Contact</th>
+                      <th className="text-left px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Captured</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leads.map((lead) => (
+                      <tr key={lead.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3 text-sm font-medium text-foreground">{lead.source}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">{lead.campaign || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-foreground">{lead.leadName || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {lead.leadPhone && <div className="text-xs">{lead.leadPhone}</div>}
+                          {lead.leadEmail && <div className="text-xs">{lead.leadEmail}</div>}
+                          {!lead.leadPhone && !lead.leadEmail && '-'}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {new Date(lead.createdAt).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
