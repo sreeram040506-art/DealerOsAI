@@ -1,0 +1,96 @@
+[
+  {
+    "file": "public\\buy\\WhatsApp Image 2026-04-21 at 11.46.09 PM (5).jpeg",
+    "missingFields": [
+      "missing vin"
+    ],
+    "suspicious": [],
+    "info": {
+      "purchasePrice": 520
+    }
+  },
+  {
+    "file": "public\\buy\\WhatsApp Image 2026-04-21 at 11.46.10 PM (3).jpeg",
+    "missingFields": [
+      "missing vin"
+    ],
+    "suspicious": [
+      "very low price"
+    ],
+    "info": {
+      "purchasePrice": 11
+    }
+  },
+  {
+    "file": "public\\buy\\WhatsApp Image 2026-04-21 at 11.46.10 PM (7).jpeg",
+    "missingFields": [
+      "missing price"
+    ],
+    "suspicious": [],
+    "info": {
+      "vin": "WDDGF4HB2DA809211"
+    }
+  },
+  {
+    "file": "public\\buy\\WhatsApp Image 2026-04-21 at 11.46.11 PM.jpeg",
+    "missingFields": [
+      "missing price"
+    ],
+    "suspicious": [],
+    "info": {
+      "vin": "JF2SJAEC3EH502817",
+      "titleNumber": "BS123206"
+    }
+  },
+  {
+    "file": "public\\buy\\WhatsApp Image 2026-04-21 at 11.46.12 PM (7).jpeg",
+    "missingFields": [],
+    "suspicious": [
+      "very low price"
+    ],
+    "info": {
+      "vin": "1PMCU9JXXGUB02440",
+      "purchasePrice": 18
+    }
+  },
+  {
+    "file": "public\\sale\\WhatsApp Image 2026-04-21 at 11.46.08 PM.jpeg",
+    "missingFields": [
+      "missing vin"
+    ],
+    "suspicious": [],
+    "info": {
+      "purchasePrice": 8150
+    }
+  },
+  {
+    "file": "public\\sale\\WhatsApp Image 2026-04-21 at 11.46.09 PM.jpeg",
+    "missingFields": [
+      "missing price"
+    ],
+    "suspicious": [],
+    "info": {
+      "vin": "SFNYF4H61BB077174"
+    }
+  },
+  {
+    "file": "public\\sale\\WhatsApp Image 2026-04-21 at 11.46.10 PM (11).jpeg",
+    "missingFields": [
+      "missing vin"
+    ],
+    "suspicious": [],
+    "info": {
+      "purchasePrice": 202
+    }
+  },
+  {
+    "file": "public\\sale\\WhatsApp Image 2026-04-21 at 11.46.11 PM (10).jpeg",
+    "missingFields": [
+      "missing vin"
+    ],
+    "suspicious": [],
+    "info": {
+      "purchasePrice": 125
+    }
+  }
+]

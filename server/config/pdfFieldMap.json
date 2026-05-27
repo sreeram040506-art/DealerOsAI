@@ -1,0 +1,188 @@
+{
+  "year": {
+    "x": 135,
+    "y": 669,
+    "width": 50,
+    "height": 14,
+    "font": "helvetica"
+  },
+  "make": {
+    "x": 228,
+    "y": 669,
+    "width": 110,
+    "height": 14,
+    "font": "helvetica"
+  },
+  "model": {
+    "x": 392,
+    "y": 669,
+    "width": 95,
+    "height": 14,
+    "font": "helvetica"
+  },
+  "color": {
+    "x": 512,
+    "y": 669,
+    "width": 85,
+    "height": 14,
+    "font": "helvetica"
+  },
+  "obtainedFrom": {
+    "x": 174,
+    "y": 429,
+    "width": 185,
+    "height": 12,
+    "font": "courier"
+  },
+  "transactionDate": {
+    "x": 446,
+    "y": 431,
+    "width": 130,
+    "height": 12,
+    "font": "courier"
+  },
+  "address": {
+    "x": 187,
+    "y": 404,
+    "width": 395,
+    "height": 12,
+    "font": "courier"
+  },
+  "city": {
+    "x": 116,
+    "y": 376,
+    "width": 130,
+    "height": 12,
+    "font": "courier"
+  },
+  "state": {
+    "x": 294,
+    "y": 377,
+    "width": 35,
+    "height": 12,
+    "font": "courier"
+  },
+  "zipCode": {
+    "x": 371,
+    "y": 375,
+    "width": 75,
+    "height": 12,
+    "font": "courier"
+  },
+  "odometerIn": {
+    "x": 507,
+    "y": 377,
+    "width": 85,
+    "height": 12,
+    "font": "courier"
+  },
+  "sourceRepeater": {
+    "x": 358,
+    "y": 298,
+    "width": 230,
+    "height": 12,
+    "font": "courier"
+  },
+  "stockNo": {
+    "x": 475,
+    "y": 755,
+    "width": 110,
+    "height": 14,
+    "font": "helvetica"
+  },
+  "titleNo": {
+    "x": 88,
+    "y": 538,
+    "width": 200,
+    "height": 14,
+    "font": "helvetica"
+  },
+  "disposedTo": {
+    "x": 121,
+    "y": 212,
+    "width": 235,
+    "height": 12,
+    "font": "courier"
+  },
+  "disposedAddress": {
+    "x": 179,
+    "y": 186,
+    "width": 230,
+    "height": 12,
+    "font": "courier"
+  },
+  "disposedCity": {
+    "x": 112,
+    "y": 157,
+    "width": 155,
+    "height": 12,
+    "font": "courier"
+  },
+  "disposedState": {
+    "x": 293,
+    "y": 158,
+    "width": 35,
+    "height": 12,
+    "font": "courier"
+  },
+  "disposedZip": {
+    "x": 377,
+    "y": 161,
+    "width": 60,
+    "height": 12,
+    "font": "courier"
+  },
+  "disposedOdometer": {
+    "x": 513,
+    "y": 157,
+    "width": 85,
+    "height": 12,
+    "font": "courier"
+  },
+  "disposedDate": {
+    "x": 449,
+    "y": 213,
+    "width": 115,
+    "height": 12,
+    "font": "courier"
+  },
+  "disposedPrice": {
+    "x": 267,
+    "y": 74,
+    "width": 130,
+    "height": 12,
+    "font": "courier"
+  },
+  "disposedDl": {
+    "x": 349,
+    "y": 131,
+    "width": 150,
+    "height": 11,
+    "font": "courier"
+  },
+  "disposedDlState": {
+    "x": 515,
+    "y": 133,
+    "width": 40,
+    "height": 11,
+    "font": "courier"
+  },
+  "dealerSignature": {
+    "x": 399,
+    "y": 34,
+    "width": 175,
+    "height": 12,
+    "font": "courier"
+  },
+  "vinArea": {
+    "x": 126,
+    "y": 612,
+    "width": 290,
+    "height": 16
+  },
+  "vinSettings": {
+    "startX": 126,
+    "startY": 612,
+    "stepX": 16.1
+  }
+}

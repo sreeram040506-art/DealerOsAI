@@ -1,0 +1,45 @@
+{
+  "name": "auto-profit-hub-server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "cross-env NODE_ENV=production node index.js",
+    "build": "prisma generate",
+    "dev": "nodemon index.js"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.0.2"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.97",
+    "@prisma/client": "^5.10.2",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "docxtemplater": "^3.68.4",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.6.0",
+    "morgan": "^1.10.1",
+    "multer": "^1.4.5-lts.1",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^5.6.205",
+    "pizzip": "^3.2.0",
+    "prisma": "^5.10.2",
+    "tesseract.js": "^7.0.0",
+    "stripe": "^14.14.0",
+    "@sendgrid/mail": "^8.1.0",
+    "twilio": "^4.20.0",
+    "zod": "^4.3.6"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}

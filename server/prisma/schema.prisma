@@ -1,0 +1,537 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Dealership {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  slug        String   @unique
+  address     String?
+  phone       String?
+  email       String?
+  logoBase64  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  users               User[]
+  vehicles            Vehicle[]
+  sales               Sale[]
+  purchases           Purchase[]
+  repairs             Repair[]
+  customerNotes       CustomerNote[]
+  customers           Customer[]
+  advertisingExpenses AdvertisingExpense[]
+  businessExpenses    BusinessExpense[]
+  documents           DocumentRegistry[]
+  insurancePolicies   InsurancePolicy[]
+  warranties          WarrantyContract[]
+  auctions            AuctionVehicle[]
+  notifications       Notification[]
+  integrations        IntegrationConnection[]
+  complianceRecords   ComplianceRecord[]
+  complianceAudits    ComplianceAuditLog[]
+  customerDocuments   CustomerDocument[]
+  marketingListings   MarketingListing[]
+  marketingLeads      MarketingLead[]
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String
+  password  String
+  name      String
+  role      String   @default("STAFF") // ADMIN, MANAGER, STAFF
+  createdAt DateTime @default(now())
+  
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  // Relations for tracking activity
+  vehiclesAdded Vehicle[]
+  salesMade     Sale[]
+
+  @@unique([email, dealershipId])
+}
+
+model Vehicle {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  vin               String
+  make              String
+  model             String
+  year              Int
+  mileage           Int
+  color             String
+  purchaseDate      DateTime
+  status            String   @default("Available")
+  titleNumber       String?
+  daysInInventory   Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  // Relations
+  purchase          Purchase?
+  repairs           Repair[]
+  sale              Sale?
+  
+  // Activity tracking
+  createdById       String?  @db.ObjectId
+  createdBy         User?    @relation(fields: [createdById], references: [id])
+  customerNotes     CustomerNote[]
+
+  // Indexes for common query patterns
+  @@unique([vin, dealershipId])
+  @@index([status])           // Dashboard filters by status
+  @@index([createdAt])        // Sorted listing by creation date
+  @@index([dealershipId])
+}
+
+model CustomerNote {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId    String   @db.ObjectId
+  customerName String
+  phone        String
+  email        String?
+  note         String
+  createdAt    DateTime @default(now())
+
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([vehicleId])        // Lookup notes by vehicle
+  @@index([dealershipId])
+}
+
+
+model Purchase {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicle           Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId         String   @unique @db.ObjectId
+  sellerName        String
+  sellerAddress     String?
+  sellerCity        String?
+  sellerState       String?
+  sellerZip         String?
+  purchasePrice     Float
+  buyerFee          Float    @default(0)
+  transportCost     Float    @default(0)
+  inspectionCost    Float    @default(0)
+  registrationCost  Float    @default(0)
+  totalPurchaseCost Float
+  purchaseDate      DateTime
+  paymentMethod     String
+  documentBase64    String?
+  sourceDocumentBase64 String?
+  createdAt         DateTime @default(now())
+
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+}
+
+model Repair {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId       String   @db.ObjectId
+  repairShop      String
+  partsCost       Float
+  laborCost       Float
+  description     String?
+  documentBase64  String?
+  sourceFileName  String?
+  repairDate      DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([vehicleId])        // Lookup repairs by vehicle
+  @@index([dealershipId])
+}
+
+model Sale {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId      String   @unique @db.ObjectId
+  customerName   String
+  phone          String
+  address        String
+  driverLicense  String?
+  saleDate       DateTime
+  salePrice      Float
+  paymentMethod  String
+  profit         Float
+  
+  // Flattened Loan Details
+  financeCompany String?
+  downPayment   Float?
+  loanAmount     Float?
+  interestRate   Float?
+  loanTerm       Int?
+  monthlyPayment Float?
+
+  // Activity tracking
+  createdById    String?  @db.ObjectId
+  createdBy      User?    @relation(fields: [createdById], references: [id])
+
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  // Document archiving
+  billOfSaleBase64 String?
+  hasBillOfSale    Boolean  @default(false)
+
+  // Payment Tracking
+  paymentStatus    String?  @default("PENDING") // PENDING, PAID, FAILED
+  stripeSessionId  String?
+
+  createdAt      DateTime @default(now())
+
+  @@index([saleDate])         // Dashboard sorted by sale date
+  @@index([createdById])      // Team analytics queries
+  @@index([dealershipId])
+}
+
+model AdvertisingExpense {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  campaignName    String
+  platform        String
+  startDate       DateTime
+  endDate         DateTime
+  amountSpent     Float
+  budgetLimit     Float?
+  status          String    @default("Active")
+  adCopy          String?
+  linkedVehicleId String?   @db.ObjectId
+  createdAt       DateTime  @default(now())
+
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+}
+
+model BusinessExpense {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  category String
+  amount   Float
+  date     DateTime
+  notes    String?
+  createdAt DateTime @default(now())
+
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+}
+
+model DocumentRegistry {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  vin               String?
+  make              String?
+  model             String?
+  year              String?
+  color             String?
+  mileage           String?
+  titleNumber       String?
+  purchaseDate      String?
+  purchasedFrom     String?  // The dealer/source name
+  sellerAddress     String?
+  sellerCity        String?
+  sellerState       String?
+  sellerZip         String?
+  documentType      String   @default("Used Vehicle Record")
+  documentBase64    String
+  sourceFileName    String?
+  sourceDocumentBase64 String?
+  
+  // Disposition details (from Bill of Sale)
+  disposedTo        String?
+  disposedAddress   String?
+  disposedCity      String?
+  disposedState     String?
+  disposedZip       String?
+  disposedDate      String?
+  disposedPrice     String?
+  disposedOdometer  String?
+  disposedDlNumber  String?
+  disposedDlState   String?
+
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  createdAt         DateTime @default(now())
+
+  @@index([vin])              // VIN lookup for document searches
+  @@index([dealershipId])
+}
+
+model Customer {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  firstName     String
+  lastName      String?
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  state         String?
+  zip           String?
+  driverLicense String?
+  notes         String?
+  source        String?  @default("manual") // manual, sale, note
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Multi-tenancy
+  dealershipId  String     @db.ObjectId
+  dealership    Dealership @relation(fields: [dealershipId], references: [id])
+  documents     CustomerDocument[]
+
+  @@index([dealershipId])
+}
+
+model CustomerDocument {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  customerId    String   @db.ObjectId
+  customer      Customer @relation(fields: [customerId], references: [id])
+  customerName  String
+  documentName  String
+  fileName      String
+  mimeType      String
+  fileBase64    String
+  createdAt     DateTime @default(now())
+
+  dealershipId  String     @db.ObjectId
+  dealership    Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+  @@index([customerId])
+}
+
+model InsurancePolicy {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  provider      String
+  policyNumber  String
+  effectiveDate DateTime
+  expirationDate DateTime
+  coverage      String?
+  customerName  String?
+  vin           String?
+  make          String?
+  model         String?
+  year          Int?
+  sourceFileName String?
+  documentBase64 String?
+  status        String   @default("ACTIVE")
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  dealershipId  String     @db.ObjectId
+  dealership    Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+  @@index([expirationDate])
+}
+
+model WarrantyContract {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  warrantyCompany String
+  coverageType    String
+  expirationMiles Int?
+  expirationDate  DateTime?
+  claimsCount     Int      @default(0)
+  customerName    String?
+  vin             String?
+  make            String?
+  model           String?
+  year            Int?
+  sourceFileName  String?
+  documentBase64  String?
+  status          String   @default("ACTIVE")
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  dealershipId  String     @db.ObjectId
+  dealership    Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+  @@index([expirationDate])
+}
+
+model AuctionVehicle {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  auctionSource     String
+  laneNumber        String?
+  vin               String?
+  estimatedValue    Float?
+  maxBid            Float?
+  transportEstimate Float?
+  recommendedMaxBid Float?
+  status            String   @default("WATCHLIST")
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  dealershipId  String     @db.ObjectId
+  dealership    Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+}
+
+model ComplianceRecord {
+  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
+  vin                    String
+  vehicleCategory        String?
+  dealType               String?
+  stateRegulations       Json?
+  insuranceStatus        String?
+  titleStatus            String?
+
+  titleTransfer          String?  @default("PENDING")
+  registrationStatus     String?  @default("PENDING")
+  inspectionValidity     String?  @default("PENDING")
+  insuranceVerification  String?  @default("PENDING")
+  taxSubmission          String?  @default("PENDING")
+  temporaryPlateExpiration DateTime?
+
+  complianceWarnings     String[]
+  filingDeadlines        String[]
+  penaltyRisks           String[]
+  blockingActions        String[]
+  updatedAt              DateTime @updatedAt
+  createdAt              DateTime @default(now())
+
+  dealershipId           String     @db.ObjectId
+  dealership             Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+  @@index([vin])
+}
+
+model ComplianceAuditLog {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  complianceId  String?  @db.ObjectId
+  user_id       String
+  timestamp     DateTime @default(now())
+  action_type   String
+  old_value     Json?
+  new_value     Json?
+  device        String?
+  IP            String?
+
+  dealershipId  String     @db.ObjectId
+  dealership    Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+  @@index([complianceId])
+}
+
+model MarketingListing {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicleId        String?  @db.ObjectId
+  vin              String
+  vehicleSpecs     String
+  photos           String[]
+  mileage          Int
+  condition        String
+  pricing          Float
+  channels         String[]
+
+  seoTitle         String
+  description      String
+  hashtags         String[]
+  featureBullets   String[]
+  adCopy           String
+  ctaOptimization  String
+  formattedListing String
+
+  scheduledPosts   Json?
+  analytics        Json?
+  leadAttribution  Json?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  dealershipId     String     @db.ObjectId
+  dealership       Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+  @@index([vin])
+  @@index([vehicleId])
+}
+
+model MarketingLead {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  listingId      String   @db.ObjectId
+  source         String
+  campaign       String?
+  clickTimestamp DateTime @default(now())
+  leadName       String?
+  leadPhone      String?
+  leadEmail      String?
+  createdAt      DateTime @default(now())
+
+  dealershipId   String     @db.ObjectId
+  dealership     Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+  @@index([listingId])
+  @@index([source])
+}
+
+model Notification {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  type        String
+  title       String
+  message     String
+  severity    String   @default("MEDIUM")
+  isRead      Boolean  @default(false)
+  dueAt       DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dealershipId  String     @db.ObjectId
+  dealership    Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+  @@index([isRead])
+}
+
+model IntegrationConnection {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  provider       String
+  status         String   @default("DISCONNECTED")
+  webhookUrl     String?
+  lastSyncAt     DateTime?
+  errorMessage   String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  dealershipId  String     @db.ObjectId
+  dealership    Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
+}

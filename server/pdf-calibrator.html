@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Placement Calibrator</title>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #sidebar {
+            width: 350px;
+            background: #252525;
+            border-right: 1px solid #333;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        #canvas-container {
+            flex-grow: 1;
+            position: relative;
+            overflow: auto;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 40px;
+        }
+        #template-wrapper {
+            position: relative;
+            width: 612px; /* PDF Points */
+            height: 792px; /* PDF Points */
+            background-image: url('used-vechile-report.jpeg');
+            background-size: contain;
+            background-repeat: no-repeat;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            background-color: white;
+        }
+        .field-box {
+            position: absolute;
+            border: 1px solid rgba(0, 100, 255, 0.5);
+            background: rgba(0, 100, 255, 0.1);
+            color: #0064ff;
+            font-size: 10px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            user-select: none;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .field-box:hover {
+            border-color: #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+            color: #00ff00;
+            z-index: 100;
+        }
+        .field-box.active {
+            border-color: #ff0000;
+            background: rgba(255, 0, 0, 0.1);
+            color: #ff0000;
+            z-index: 101;
+        }
+        h2 { margin: 0 0 10px 0; font-size: 18px; }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            background: #0064ff;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover { background: #0056d3; }
+        .field-item {
+            background: #333;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .field-item span { color: #aaa; }
+        pre {
+            background: #000;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            max-height: 200px;
+            overflow: auto;
+        }
+        .helper-text { font-size: 12px; color: #888; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>PDF Calibrator</h2>
+    <p class="helper-text">Drag the blue boxes on the right to position the data. The Y-coordinate in PDF is measured from the <b>BOTTOM</b>.</p>
+    
+    <div class="controls">
+        <button onclick="copyJson()">Copy JSON</button>
+        <button onclick="downloadJson()" style="background: #333;">Download</button>
+    </div>
+
+    <div style="margin-top: 10px; background: #333; padding: 10px; border-radius: 4px;">
+        <label style="font-size: 12px; display: block; margin-bottom: 5px;">VIN Character Spacing (StepX)</label>
+        <input type="range" id="vin-step-slider" min="15" max="25" step="0.01" value="17.05" style="width: 100%" oninput="updateVinSpacing(this.value)">
+        <div id="vin-step-value" style="font-size: 11px; text-align: right; color: #0064ff;">17.05</div>
+    </div>
+
+    <div id="field-list"></div>
+    
+    <h3>Current JSON</h3>
+    <pre id="json-output"></pre>
+</div>
+
+<div id="canvas-container">
+    <div id="template-wrapper">
+        <!-- Fields will be injected here -->
+    </div>
+</div>
+
+<script>
+    const PAGE_HEIGHT = 792;
+    const initialData = {
+        "year": { "x": 135, "y": 669, "width": 50, "height": 14, "font": "helvetica" },
+        "make": { "x": 228, "y": 669, "width": 110, "height": 14, "font": "helvetica" },
+        "model": { "x": 392, "y": 669, "width": 95, "height": 14, "font": "helvetica" },
+        "color": { "x": 512, "y": 669, "width": 85, "height": 14, "font": "helvetica" },
+        "obtainedFrom": { "x": 174, "y": 429, "width": 185, "height": 12, "font": "courier" },
+        "transactionDate": { "x": 446, "y": 431, "width": 130, "height": 12, "font": "courier" },
+        "address": { "x": 187, "y": 404, "width": 395, "height": 12, "font": "courier" },
+        "city": { "x": 116, "y": 376, "width": 130, "height": 12, "font": "courier" },
+        "state": { "x": 294, "y": 377, "width": 35, "height": 12, "font": "courier" },
+        "zipCode": { "x": 371, "y": 375, "width": 75, "height": 12, "font": "courier" },
+        "odometerIn": { "x": 507, "y": 377, "width": 85, "height": 12, "font": "courier" },
+        "sourceRepeater": { "x": 358, "y": 298, "width": 230, "height": 12, "font": "courier" },
+        "stockNo": { "x": 475, "y": 755, "width": 110, "height": 14, "font": "helvetica" },
+        "titleNo": { "x": 88, "y": 538, "width": 200, "height": 14, "font": "helvetica" },
+        "disposedTo": { "x": 121, "y": 212, "width": 235, "height": 12, "font": "courier" },
+        "disposedAddress": { "x": 179, "y": 186, "width": 230, "height": 12, "font": "courier" },
+        "disposedCity": { "x": 112, "y": 157, "width": 155, "height": 12, "font": "courier" },
+        "disposedState": { "x": 293, "y": 158, "width": 35, "height": 12, "font": "courier" },
+        "disposedZip": { "x": 377, "y": 161, "width": 60, "height": 12, "font": "courier" },
+        "disposedOdometer": { "x": 513, "y": 157, "width": 85, "height": 12, "font": "courier" },
+        "disposedDate": { "x": 449, "y": 213, "width": 115, "height": 12, "font": "courier" },
+        "disposedPrice": { "x": 269, "y": 79, "width": 130, "height": 12, "font": "courier" },
+        "disposedDl": { "x": 322, "y": 131, "width": 150, "height": 11, "font": "courier" },
+        "disposedDlState": { "x": 515, "y": 133, "width": 40, "height": 11, "font": "courier" },
+        "dealerSignature": { "x": 399, "y": 34, "width": 175, "height": 12, "font": "courier" }
+    };
+
+    let vinSettings = { startX: 114, startY: 613, stepX: 17.05 };
+
+    const wrapper = document.getElementById('template-wrapper');
+    const fieldList = document.getElementById('field-list');
+    const jsonOutput = document.getElementById('json-output');
+
+    function updateJson() {
+        const result = { ...initialData };
+        result.vinArea = { x: vinSettings.startX, y: vinSettings.startY, width: 290, height: 16 };
+        result.vinSettings = { ...vinSettings };
+        jsonOutput.textContent = JSON.stringify(result, null, 2);
+    }
+
+    function updateVinSpacing(val) {
+        vinSettings.stepX = parseFloat(val);
+        document.getElementById('vin-step-value').textContent = val;
+        renderVinBoxes();
+        updateJson();
+    }
+
+    function renderVinBoxes() {
+        // Remove existing VIN boxes
+        document.querySelectorAll('.vin-box').forEach(el => el.remove());
+        
+        for(let i=0; i<17; i++) {
+            const box = document.createElement('div');
+            box.className = 'field-box vin-box';
+            box.style.borderColor = '#ff00ff';
+            box.style.background = 'rgba(255, 0, 255, 0.1)';
+            box.style.color = '#ff00ff';
+            box.textContent = (i + 1).toString();
+            
+            const x = vinSettings.startX + (i * vinSettings.stepX);
+            const y = vinSettings.startY;
+            const h = 16;
+            const w = vinSettings.stepX;
+
+            box.style.left = x + 'px';
+            box.style.top = (PAGE_HEIGHT - y - h) + 'px';
+            box.style.width = w + 'px';
+            box.style.height = h + 'px';
+
+            wrapper.appendChild(box);
+            if (i === 0) makeVinDraggable(box);
+        }
+    }
+
+    function makeVinDraggable(el) {
+        let isDragging = false;
+        let startX, startY, initX, initY;
+
+        el.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            initX = vinSettings.startX;
+            initY = vinSettings.startY;
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            vinSettings.startX = Math.round(initX + dx);
+            vinSettings.startY = Math.round(initY - dy);
+            renderVinBoxes();
+            updateJson();
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+    }
+
+    function createFields() {
+        wrapper.innerHTML = '';
+        fieldList.innerHTML = '';
+
+        for (const [name, field] of Object.entries(initialData)) {
+            const box = document.createElement('div');
+            box.className = 'field-box';
+            box.textContent = name;
+            box.style.left = field.x + 'px';
+            box.style.top = (PAGE_HEIGHT - field.y - field.height) + 'px';
+            box.style.width = field.width + 'px';
+            box.style.height = field.height + 'px';
+            wrapper.appendChild(box);
+
+            const item = document.createElement('div');
+            item.className = 'field-item';
+            item.innerHTML = `<strong>${name}</strong> <span>X: ${field.x}, Y: ${field.y}</span>`;
+            fieldList.appendChild(item);
+
+            makeDraggable(box, name);
+        }
+        renderVinBoxes();
+        updateJson();
+    }
+
+    function makeDraggable(el, name) {
+        let isDragging = false;
+        let startX, startY, initialX, initialY;
+        el.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            el.classList.add('active');
+            startX = e.clientX;
+            startY = e.clientY;
+            initialX = initialData[name].x;
+            initialY = initialData[name].y;
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            initialData[name].x = Math.round(initialX + dx);
+            initialData[name].y = Math.round(initialY - dy);
+            el.style.left = initialData[name].x + 'px';
+            el.style.top = (PAGE_HEIGHT - initialData[name].y - initialData[name].height) + 'px';
+            updateJson();
+            const sidebarItem = fieldList.children[Object.keys(initialData).indexOf(name)];
+            sidebarItem.querySelector('span').textContent = `X: ${initialData[name].x}, Y: ${initialData[name].y}`;
+        }
+        function onMouseUp() {
+            isDragging = false;
+            el.classList.remove('active');
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+    }
+
+    function copyJson() {
+        const text = jsonOutput.textContent;
+        navigator.clipboard.writeText(text).then(() => alert('JSON copied to clipboard!'));
+    }
+
+    function downloadJson() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonOutput.textContent);
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "pdfFieldMap.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    createFields();
+</script>
+
+</body>
+</html>

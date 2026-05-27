@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Auto Profit Hub</title>
+    <meta name="description" content="Professional Vehicle Inventory and Sales Management System" />
+    <meta name="author" content="Auto Profit Hub" />
+    <meta name="theme-color" content="#1e1b4b" />
+
+    <!-- Performance: preconnect to font origins for faster font loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- DNS prefetch for API server (separate port) -->
+    <link rel="dns-prefetch" href="//localhost:3001">
+    <!-- Single font request with display=swap for instant text rendering -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <meta property="og:title" content="Auto Profit Hub" />
+    <meta property="og:description" content="Professional Vehicle Inventory and Sales Management System" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Inline critical styles for instant first paint (no FOUC) -->
+    <style>
+      #root { min-height: 100vh; }
+      body { margin: 0; background: #f8fafc; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
