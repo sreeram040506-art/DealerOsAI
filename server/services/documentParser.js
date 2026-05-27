@@ -1504,6 +1504,15 @@ function extractFallbackInfo(text, purpose) {
   if (vin) fallback.vin = vin;
   const titleNumber = extractTitleFromText(text);
   if (titleNumber) fallback.titleNumber = titleNumber;
+
+  // Try parsing make, model, and year from text using regex heuristics
+  const heuristic = parseMakeModelYearFromText(text);
+  if (heuristic) {
+    if (heuristic.make) fallback.make = heuristic.make;
+    if (heuristic.model) fallback.model = heuristic.model;
+    if (heuristic.year) fallback.year = heuristic.year;
+  }
+
   const inferredPurpose = normalizeExtractionPurpose(purpose) || inferDocumentDirection(text, purpose);
   const totalValue = extractTotalFromText(text, inferredPurpose);
   if (totalValue) {

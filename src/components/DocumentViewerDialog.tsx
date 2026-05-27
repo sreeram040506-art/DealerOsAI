@@ -13,12 +13,17 @@ interface DocumentViewerDialogProps {
 export default function DocumentViewerDialog({ open, onOpenChange, documentBase64, vehicleName, documentType }: DocumentViewerDialogProps) {
   if (!documentBase64) return null;
 
-  // Determine if the base64 is a PDF or image
-  const isPdf = documentBase64.startsWith('JVBER') || documentBase64.startsWith('data:application/pdf');
+  // Determine if the base64 is a PDF or image, handling both raw base64 and data URLs
+  const isDataUrl = documentBase64.startsWith('data:');
+  const isPdf = isDataUrl
+    ? documentBase64.includes('application/pdf')
+    : (documentBase64.startsWith('JVBER') || documentBase64.startsWith('%PDF'));
   
-  const dataUrl = isPdf
-    ? `data:application/pdf;base64,${documentBase64}`
-    : `data:image/jpeg;base64,${documentBase64}`;
+  const dataUrl = isDataUrl
+    ? documentBase64
+    : (isPdf
+        ? `data:application/pdf;base64,${documentBase64}`
+        : `data:image/jpeg;base64,${documentBase64}`);
 
   const handleDownload = () => {
     const link = document.createElement('a');
