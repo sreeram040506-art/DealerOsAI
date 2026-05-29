@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { authenticateToken, authorizeSuperAdmin } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
 // All routes here require Super Admin privileges
 router.use(authenticateToken, authorizeSuperAdmin);
@@ -77,13 +78,14 @@ router.get('/dealerships', async (req, res, next) => {
 // 3. Create a new Dealership + Admin User
 router.post('/dealerships', async (req, res, next) => {
   const { dealershipName, adminName, email, password } = req.body;
+  const normalizedEmail = normalizeEmail(email);
 
-  if (!dealershipName || !adminName || !email || !password) {
+  if (!dealershipName || !adminName || !normalizedEmail || !password) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
   try {
-    const existingUser = await prisma.user.findFirst({ where: { email } });
+    const existingUser = await prisma.user.findFirst({ where: { email: normalizedEmail } });
     if (existingUser) {
       return res.status(400).json({ message: 'User with this email already exists' });
     }
@@ -98,7 +100,7 @@ router.post('/dealerships', async (req, res, next) => {
       const user = await tx.user.create({
         data: {
           name: adminName,
-          email,
+          email: normalizedEmail,
           password: hashedPassword,
           role: 'ADMIN',
           dealershipId: dealership.id

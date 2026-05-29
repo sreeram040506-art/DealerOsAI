@@ -31,6 +31,7 @@ import complianceRoutes from './routes/complianceRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import marketingRoutes from './routes/marketingRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import attendanceRoutes from './routes/attendanceRoutes.js';
 
 
 const app = express();
@@ -160,6 +161,7 @@ app.use('/api', healthRoutes);
 app.use('/api/marketing', authenticateToken, injectTenant, marketingRoutes);
 app.use('/api/payments', authenticateToken, injectTenant, paymentRoutes);
 app.use('/api/super-admin', superAdminRoutes);
+app.use('/api/attendance', authenticateToken, injectTenant, attendanceRoutes);
 
 
 // Document routes also need protection and tenant context

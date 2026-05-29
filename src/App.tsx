@@ -24,10 +24,11 @@ const Registry = lazy(() => import("./pages/Registry"));
 const RMVCompliance = lazy(() => import("./pages/RMVCompliance"));
 const TeamAnalytics = lazy(() => import("./pages/TeamAnalytics"));
 const Reports = lazy(() => import("./pages/Reports"));
-const ModuleHub = lazy(() => import("./pages/ModuleHub"));
+const Accounting = lazy(() => import("./pages/Accounting"));
 const EnterpriseModuleCrud = lazy(() => import("./pages/EnterpriseModuleCrud"));
+const Auctions = lazy(() => import("./pages/Auctions"));
 const AIInsights = lazy(() => import("./pages/AIInsights"));
-const MobileScanner = lazy(() => import("./pages/MobileScanner"));
+const Attendance = lazy(() => import("./pages/Attendance"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -117,16 +118,6 @@ export default function App() {
                     <RMVCompliance />
                   </ProtectedRoute>
                 } />
-                <Route path="/insurance" element={
-                  <ProtectedRoute>
-                    <EnterpriseModuleCrud />
-                  </ProtectedRoute>
-                } />
-                <Route path="/warranty" element={
-                  <ProtectedRoute>
-                    <EnterpriseModuleCrud />
-                  </ProtectedRoute>
-                } />
                 <Route path="/marketing" element={
                   <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
                     <Advertising />
@@ -139,22 +130,17 @@ export default function App() {
                 } />
                 <Route path="/accounting" element={
                   <ProtectedRoute roles={['ADMIN']}>
-                    <ModuleHub />
+                    <Accounting />
                   </ProtectedRoute>
                 } />
                 <Route path="/employees" element={
-                  <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
-                    <ModuleHub />
+                  <ProtectedRoute roles={['ADMIN', 'MANAGER', 'STAFF']}>
+                    <Attendance />
                   </ProtectedRoute>
                 } />
                 <Route path="/auctions" element={
                   <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
-                    <EnterpriseModuleCrud />
-                  </ProtectedRoute>
-                } />
-                <Route path="/mobile-scanner" element={
-                  <ProtectedRoute>
-                    <MobileScanner />
+                    <Auctions />
                   </ProtectedRoute>
                 } />
                 <Route path="/notifications" element={

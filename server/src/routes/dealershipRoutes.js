@@ -7,18 +7,20 @@ import { injectTenant } from '../middlewares/tenantMiddleware.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
 // Public endpoint to register a new dealership and its first admin
 router.post('/register', async (req, res, next) => {
   const { dealershipName, adminName, email, password } = req.body;
+  const normalizedEmail = normalizeEmail(email);
 
-  if (!dealershipName || !adminName || !email || !password) {
+  if (!dealershipName || !adminName || !normalizedEmail || !password) {
     return res.status(400).json({ message: 'All fields are required' });
   }
 
   try {
     // Check if email already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await prisma.user.findFirst({ where: { email: normalizedEmail } });
     if (existingUser) {
       return res.status(400).json({ message: 'User with this email already exists' });
     }
@@ -35,7 +37,7 @@ router.post('/register', async (req, res, next) => {
       const user = await tx.user.create({
         data: {
           name: adminName,
-          email,
+          email: normalizedEmail,
           password: hashedPassword,
           role: 'ADMIN',
           dealershipId: dealership.id

@@ -1,27 +1,36 @@
 const rawApiOrigin = import.meta.env.VITE_API_ORIGIN?.trim();
 
+function isLocalHost(hostname: string) {
+  return ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
+}
+
 function getDefaultApiOrigin() {
   if (typeof window === 'undefined') {
     return 'http://127.0.0.1:3001';
   }
 
-  // Use port 3001 only for local development
-  if (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1' ||
-    window.location.hostname === '[::1]'
-  ) {
+  if (isLocalHost(window.location.hostname)) {
     return `${window.location.protocol}//${window.location.hostname}:3001`;
   }
 
-  // In production/deployment, use same-origin to let vercel/proxy rewrites work
   return window.location.origin;
 }
 
-// In production, always use same-origin (ignoring VITE_API_ORIGIN)
-// This ensures Vercel proxy rewrites work correctly
-const isProduction = import.meta.env.MODE === 'production';
-export const API_ORIGIN = (isProduction ? getDefaultApiOrigin() : (rawApiOrigin || getDefaultApiOrigin())).replace(/\/+$/, '');
+function resolveApiOrigin() {
+  if (typeof window === 'undefined') {
+    return 'http://127.0.0.1:3001';
+  }
+
+  // Deployed apps should always use same-origin so Vercel rewrites /api/* to Render.
+  if (!isLocalHost(window.location.hostname)) {
+    return window.location.origin;
+  }
+
+  // Local development can use VITE_API_ORIGIN when provided; otherwise fall back to port 3001.
+  return rawApiOrigin || getDefaultApiOrigin();
+}
+
+export const API_ORIGIN = resolveApiOrigin().replace(/\/+$/, '');
 export const API_BASE_URL = `${API_ORIGIN}/api`;
 
 export function apiUrl(path: string) {

@@ -1,10 +1,12 @@
 import AppLayout from '@/components/AppLayout';
 import { useTeam, TeamMember } from '@/hooks/useTeam';
 import QueryErrorState from '@/components/QueryErrorState';
-import { Users, Car, ShoppingCart, UserPlus, Shield, Mail, Lock, Trash2, Edit2, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Users, ShoppingCart, UserPlus, Shield, Mail, Lock, Trash2, Edit2, CheckCircle2, CalendarDays, UserCheck, UserX, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { apiUrl } from '@/lib/api';
+import { useAuth } from '@/context/auth-hooks';
 import {
   Dialog,
   DialogContent,
@@ -23,8 +25,24 @@ import {
 } from "@/components/ui/select";
 import { toast } from 'sonner';
 
+type AttendanceStatus = 'PRESENT' | 'ABSENT';
+type AttendanceRecord = { date: string; status: AttendanceStatus | null };
+type AttendanceUser = {
+  userId: string;
+  name: string;
+  role: string;
+  attendancePercent: number;
+  records: AttendanceRecord[];
+};
+type AttendanceResponse = {
+  users?: AttendanceUser[];
+  message?: string;
+};
+
 export default function TeamAnalytics() {
   const { team, isLoading, isError, addMember, updateMember, deleteMember } = useTeam();
+  const { token, user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [formData, setFormData] = useState({
@@ -33,28 +51,6 @@ export default function TeamAnalytics() {
     password: '',
     role: 'STAFF'
   });
-
-  if (isLoading) return (
-    <AppLayout>
-      <div className="flex h-[60vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-full border-4 border-primary/20 border-t-profit animate-spin" />
-          <p className="text-muted-foreground font-bold tracking-widest text-[10px] uppercase">Fetching Team...</p>
-        </div>
-      </div>
-    </AppLayout>
-  );
-
-  if (isError) {
-    return (
-      <AppLayout>
-        <QueryErrorState
-          title="Could not load team data"
-          description="Failed to fetch team members and analytics."
-        />
-      </AppLayout>
-    );
-  }
 
   const handleOpenAdd = () => {
     setEditingMember(null);
@@ -96,6 +92,129 @@ export default function TeamAnalytics() {
   const staffCount = team.filter(m => m.role === 'STAFF').length;
   const managerCount = team.filter(m => m.role === 'MANAGER').length;
   const adminCount = team.filter(m => m.role === 'ADMIN').length;
+
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }, []);
+
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [rangeFrom, setRangeFrom] = useState<string>(todayStr);
+  const [rangeTo, setRangeTo] = useState<string>(todayStr);
+
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
+
+  const [attendanceUsers, setAttendanceUsers] = useState<AttendanceUser[]>([]);
+
+  const [draftStatusByUserId, setDraftStatusByUserId] = useState<Record<string, AttendanceStatus>>({});
+
+  const fetchAttendance = async () => {
+    if (!token) return;
+    setAttendanceLoading(true);
+    setAttendanceError(null);
+    try {
+      const res = await fetch(apiUrl(`/attendance?from=${rangeFrom}&to=${rangeTo}`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data: AttendanceResponse = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to load attendance');
+
+      setAttendanceUsers(data.users || []);
+      // init drafts from selectedDate
+      const nextDraft: Record<string, AttendanceStatus> = {};
+      for (const u of data.users || []) {
+        const rec = (u.records || []).find((r) => r.date === selectedDate);
+        if (rec?.status) nextDraft[u.userId] = rec.status;
+      }
+      setDraftStatusByUserId(nextDraft);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to load attendance';
+      setAttendanceError(message);
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAttendance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, rangeFrom, rangeTo, selectedDate]);
+
+  const getStatusForUserOnSelectedDate = (userId: string): AttendanceStatus | undefined => {
+    return draftStatusByUserId[userId];
+  };
+
+  const handleEmployeeMark = async (status: AttendanceStatus) => {
+    if (!token || !user) return;
+    try {
+      const res = await fetch(apiUrl('/attendance/mark'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ date: selectedDate, status })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.message || 'Failed to mark attendance');
+        return;
+      }
+      toast.success('Attendance submitted');
+      await fetchAttendance();
+    } catch {
+      toast.error('Connection error');
+    }
+  };
+
+  const handleAdminSaveForUser = async (userId: string, status: AttendanceStatus) => {
+    if (!token) return;
+    try {
+      const res = await fetch(apiUrl(`/attendance/${userId}/${selectedDate}`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.message || 'Failed to update attendance');
+        return;
+      }
+      toast.success('Attendance updated');
+      await fetchAttendance();
+    } catch {
+      toast.error('Connection error');
+    }
+  };
+
+  if (isLoading) return (
+    <AppLayout>
+      <div className="flex h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-full border-4 border-primary/20 border-t-profit animate-spin" />
+          <p className="text-muted-foreground font-bold tracking-widest text-[10px] uppercase">Fetching Team...</p>
+        </div>
+      </div>
+    </AppLayout>
+  );
+
+  if (isError) {
+    return (
+      <AppLayout>
+        <QueryErrorState
+          title="Could not load team data"
+          description="Failed to fetch team members and analytics."
+        />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -229,12 +348,12 @@ export default function TeamAnalytics() {
             )}
           </div>
 
-          {/* Right Sidebar: Analytics Summary */}
+          {/* Right Sidebar: Analytics Summary + Attendance */}
           <aside className="space-y-6">
             <div className="rounded-[28px] border border-border bg-white p-6 shadow-sm overflow-hidden relative">
                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                 <ShoppingCart className="w-24 h-24" />
-               </div>
+                  <ShoppingCart className="w-24 h-24" />
+                </div>
                <h3 className="text-sm font-black text-foreground uppercase tracking-widest mb-6 flex items-center gap-2">
                  <CheckCircle2 className="w-4 h-4 text-primary" />
                  Quick Statistics
@@ -269,7 +388,138 @@ export default function TeamAnalytics() {
                  </div>
                </div>
             </div>
-          </aside>
+
+            {/* Attendance Section */}
+            <div className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
+              <h3 className="text-sm font-black text-foreground uppercase tracking-widest mb-4 flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-primary" />
+                Attendance
+              </h3>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+                  Select Date
+                </label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full h-12 rounded-xl border-border bg-muted/30 px-3 text-sm font-medium focus-visible:ring-primary/20"
+                />
+              </div>
+
+              <div className="mt-5">
+                {attendanceLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading attendance...</div>
+                ) : attendanceError ? (
+                  <div className="text-sm text-destructive/80">{attendanceError}</div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        Attendance % (range)
+                      </p>
+                      <span className="text-xs font-bold text-primary">{rangeFrom} to {rangeTo}</span>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <input
+                          type="date"
+                          value={rangeFrom}
+                          onChange={(e) => setRangeFrom(e.target.value)}
+                          className="w-full h-10 rounded-xl border-border bg-muted/30 px-3 text-sm font-medium focus-visible:ring-primary/20"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <input
+                          type="date"
+                          value={rangeTo}
+                          onChange={(e) => setRangeTo(e.target.value)}
+                          className="w-full h-10 rounded-xl border-border bg-muted/30 px-3 text-sm font-medium focus-visible:ring-primary/20"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(isAdmin
+                        ? attendanceUsers
+                        : attendanceUsers.filter(u => u.userId === user?.id)
+                      ).map(u => {
+                        const rec = u.records?.find(r => r.date === selectedDate);
+                        const currentStatus = (rec?.status || null) as AttendanceStatus | null;
+                        const draft = getStatusForUserOnSelectedDate(u.userId) || currentStatus || 'PRESENT';
+
+                        return (
+                          <div key={u.userId} className="p-4 rounded-2xl bg-muted/20 border border-border/60">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-black text-foreground truncate">{u.name}</p>
+                                <p className="text-[10px] text-muted-foreground uppercase font-bold">
+                                  {u.role}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-black text-primary">{u.attendancePercent}%</p>
+                                <p className="text-[10px] text-muted-foreground uppercase font-bold">
+                                  Avg
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 flex gap-2">
+                              <Button
+                                type="button"
+                                variant={draft === 'PRESENT' ? 'default' : 'outline'}
+                                className={cn("flex-1 rounded-xl h-10 font-black uppercase tracking-widest text-xs gap-2",
+                                  draft === 'PRESENT' ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "border-border")}
+                                onClick={() =>
+                                  setDraftStatusByUserId(prev => ({ ...prev, [u.userId]: 'PRESENT' }))
+                                }
+                              >
+                                <UserCheck className="w-4 h-4" /> Present
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={draft === 'ABSENT' ? 'default' : 'outline'}
+                                className={cn("flex-1 rounded-xl h-10 font-black uppercase tracking-widest text-xs gap-2",
+                                  draft === 'ABSENT' ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "border-border")}
+                                onClick={() =>
+                                  setDraftStatusByUserId(prev => ({ ...prev, [u.userId]: 'ABSENT' }))
+                                }
+                              >
+                                <UserX className="w-4 h-4" /> Absent
+                              </Button>
+                            </div>
+
+                            <div className="mt-3">
+                              {isAdmin ? (
+                                <Button
+                                  type="button"
+                                  className="w-full rounded-xl h-10 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-widest text-xs gap-2"
+                                  onClick={() => handleAdminSaveForUser(u.userId, draft)}
+                                >
+                                  <Save className="w-4 h-4" /> Save
+                                </Button>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  className="w-full rounded-xl h-10 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-widest text-xs gap-2"
+                                  onClick={() => handleEmployeeMark(draft)}
+                                >
+                                  <Save className="w-4 h-4" /> Submit
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+           </aside>
         </div>
 
         {/* Create/Edit Dialog */}
@@ -325,7 +575,7 @@ export default function TeamAnalytics() {
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    placeholder="••••••••"
+                    placeholder="********"
                     className="pl-11 bg-muted/30 border-border rounded-xl h-12 text-sm font-medium focus-visible:ring-primary/20"
                   />
                 </div>

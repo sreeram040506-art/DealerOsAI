@@ -39,6 +39,7 @@ model Dealership {
   customerDocuments   CustomerDocument[]
   marketingListings   MarketingListing[]
   marketingLeads      MarketingLead[]
+  attendanceRecords   AttendanceRecord[]
 }
 
 model User {
@@ -56,6 +57,7 @@ model User {
   // Relations for tracking activity
   vehiclesAdded Vehicle[]
   salesMade     Sale[]
+  attendanceRecords AttendanceRecord[]
 
   @@unique([email, dealershipId])
 }
@@ -382,14 +384,29 @@ model WarrantyContract {
 model AuctionVehicle {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   auctionSource     String
+  sourceProvider    String?
+  sourceItemId      String?
+  lotNumber         String?
   laneNumber        String?
   vin               String?
+  year              Int?
+  make              String?
+  model             String?
+  mileage           Float?
+  condition         String?
+  seller            String?
+  auctionDate       DateTime?
   estimatedValue    Float?
+  marketValue       Float?
+  localDemandScore  Float?
   maxBid            Float?
+  winningBid        Float?
   transportEstimate Float?
   recommendedMaxBid Float?
+  bidStatus         String?  @default("PENDING")
   status            String   @default("WATCHLIST")
   notes             String?
+  sourceRaw         Json?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -397,6 +414,8 @@ model AuctionVehicle {
   dealership    Dealership @relation(fields: [dealershipId], references: [id])
 
   @@index([dealershipId])
+  @@index([lotNumber])
+  @@index([vin])
 }
 
 model ComplianceRecord {
@@ -534,4 +553,24 @@ model IntegrationConnection {
   dealership    Dealership @relation(fields: [dealershipId], references: [id])
 
   @@index([dealershipId])
+}
+
+model AttendanceRecord {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  dealershipId  String   @db.ObjectId
+  dealership    Dealership @relation(fields: [dealershipId], references: [id])
+
+  userId       String   @db.ObjectId
+  user         User     @relation(fields: [userId], references: [id])
+
+  // Stored as DateTime but treated as day-granularity (UTC midnight) by the API
+  date         DateTime
+  // 'PRESENT' | 'ABSENT'
+  status       String
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([dealershipId, userId, date])
+  @@index([dealershipId, date])
 }

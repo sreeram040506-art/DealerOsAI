@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Car, ShoppingCart, 
-  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck, Brain, Shield, BadgeCheck, Megaphone, Calculator, UserCog, Gavel, ScanLine, Bell, Plug
+  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck, Brain, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Bell, Plug
 } from 'lucide-react';
 import { useState, useCallback, memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -22,16 +22,13 @@ const drawerItems = [
   { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/customers', icon: Users, label: 'Customers', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/documents-forms', icon: FileText, label: 'Documents & Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  { to: '/rmv-compliance', icon: Shield, label: 'RMV Compliance', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/rmv-compliance', icon: Shield, label: 'Compliance & Coverage', roles: ['ADMIN', 'MANAGER'] },
   { to: '/registry', icon: FileArchive, label: 'Registry', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  { to: '/insurance', icon: BadgeCheck, label: 'Insurance', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  { to: '/warranty', icon: FileText, label: 'Warranty', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/marketing', icon: Megaphone, label: 'Marketing', roles: ['ADMIN', 'MANAGER'] },
-  { to: '/ai-insights', icon: Brain, label: 'AI Insights', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/ai-insights', icon: Brain, label: 'AI Insights / Ask', roles: ['ADMIN', 'MANAGER'] },
   { to: '/accounting', icon: Calculator, label: 'Accounting', roles: ['ADMIN'] },
-  { to: '/employees', icon: UserCog, label: 'Employees', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/employees', icon: BadgeCheck, label: 'Attendance', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/auctions', icon: Gavel, label: 'Auctions', roles: ['ADMIN', 'MANAGER'] },
-  { to: '/mobile-scanner', icon: ScanLine, label: 'Mobile Scanner', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/notifications', icon: Bell, label: 'Notifications', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/api-integrations', icon: Plug, label: 'API Integrations', roles: ['ADMIN'] },
   { to: '/expenses', icon: Receipt, label: 'Expenses', roles: ['ADMIN'] },

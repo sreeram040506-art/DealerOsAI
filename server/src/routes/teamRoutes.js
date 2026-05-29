@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { authenticateToken, authorizeAdmin } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
 // Get all team members and their activity
 router.get('/', authorizeAdmin, async (req, res, next) => {
@@ -58,20 +59,21 @@ router.get('/', authorizeAdmin, async (req, res, next) => {
 // Create a new team member
 router.post('/', authorizeAdmin, async (req, res, next) => {
   const { name, email, password, role } = req.body;
+  const normalizedEmail = normalizeEmail(email);
   
-  if (!name || !email || !password || !role) {
+  if (!name || !normalizedEmail || !password || !role) {
     return res.status(400).json({ message: 'All fields are required' });
   }
 
   try {
-    const existing = await prisma.user.findFirst({ where: { email } });
+    const existing = await prisma.user.findFirst({ where: { email: normalizedEmail, dealershipId: req.dealershipId } });
     if (existing) return res.status(400).json({ message: 'User already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: { 
         name, 
-        email, 
+        email: normalizedEmail, 
         password: hashedPassword, 
         role,
         dealershipId: req.dealershipId
@@ -88,9 +90,13 @@ router.post('/', authorizeAdmin, async (req, res, next) => {
 router.patch('/:id', authorizeAdmin, async (req, res, next) => {
   const { name, email, password, role } = req.body;
   const { id } = req.params;
+  const normalizedEmail = email ? normalizeEmail(email) : undefined;
 
   try {
-    const data = { name, email, role };
+    const data = { name, role };
+    if (normalizedEmail) {
+      data.email = normalizedEmail;
+    }
     if (password) {
       data.password = await bcrypt.hash(password, 10);
     }

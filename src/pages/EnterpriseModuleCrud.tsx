@@ -11,45 +11,21 @@ type Field = { key: string; label: string; type?: "text" | "number" | "date" };
 type Config = { title: string; endpoint: string; queryKey: string; fields: Field[]; supportsDocumentUpload?: boolean };
 
 const configs: Record<string, Config> = {
-  "/insurance": {
-    title: "Insurance",
-    endpoint: "/insurance",
-    queryKey: "insurance",
-    fields: [
-      { key: "provider", label: "Provider" },
-      { key: "policyNumber", label: "Policy Number" },
-      { key: "effectiveDate", label: "Effective Date", type: "date" },
-      { key: "expirationDate", label: "Expiration Date", type: "date" },
-      { key: "customerName", label: "Customer" },
-      { key: "vin", label: "VIN" },
-    ],
-    supportsDocumentUpload: true,
-  },
-  "/warranty": {
-    title: "Warranty",
-    endpoint: "/warranty",
-    queryKey: "warranty",
-    fields: [
-      { key: "warrantyCompany", label: "Company" },
-      { key: "coverageType", label: "Coverage Type" },
-      { key: "expirationMiles", label: "Expiration Miles", type: "number" },
-      { key: "expirationDate", label: "Expiration Date", type: "date" },
-      { key: "customerName", label: "Customer" },
-      { key: "vin", label: "VIN" },
-    ],
-    supportsDocumentUpload: true,
-  },
   "/auctions": {
     title: "Auctions",
     endpoint: "/auctions",
     queryKey: "auctions",
     fields: [
       { key: "auctionSource", label: "Auction Source" },
+      { key: "lotNumber", label: "Lot Number" },
       { key: "laneNumber", label: "Lane Number" },
       { key: "vin", label: "VIN" },
+      { key: "condition", label: "Condition" },
       { key: "estimatedValue", label: "Estimated Value", type: "number" },
       { key: "maxBid", label: "Max Bid", type: "number" },
       { key: "transportEstimate", label: "Transport", type: "number" },
+      { key: "recommendedMaxBid", label: "Recommended Max Bid", type: "number" },
+      { key: "bidStatus", label: "Bid Status" },
     ],
   },
   "/notifications": {

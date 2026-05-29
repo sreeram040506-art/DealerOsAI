@@ -128,10 +128,10 @@ export default function RMVCompliance() {
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground">
             <Shield className="h-8 w-8 text-primary" />
-            RMV / DMV Compliance Engine
+            Compliance, Insurance & Warranty
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Track title/registration/inspection/insurance/tax/temporary plate compliance with rule-engine warnings, deadlines, and risks.
+            Track title, registration, inspection, insurance, warranty, tax, and document compliance from one combined workflow.
           </p>
         </div>
 

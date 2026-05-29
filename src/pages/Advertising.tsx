@@ -11,6 +11,7 @@ import { useInventory } from '@/hooks/useInventory';
 import { useAdvertising } from '@/hooks/useAdvertising';
 import { useAuth } from '@/context/auth-hooks';
 import AddAdvertisingDialog from '@/components/AddAdvertisingDialog';
+import { apiUrl } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
 interface AdvertisingProps {
@@ -106,7 +107,7 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
 
   const fetchLeads = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_ORIGIN}/api/marketing/leads/list`, {
+      const response = await fetch(apiUrl('/marketing/leads/list'), {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -157,21 +158,165 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
   const content = (
     <div className="space-y-8">
       {!isSubpage && (
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">Multi-Channel Distribution</h1>
-            <p className="text-muted-foreground mt-1 text-sm font-medium">AI-powered listing generation, scheduling, analytics, and lead attribution.</p>
+        <>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">Multi-Channel Distribution</h1>
+              <p className="text-muted-foreground mt-1 text-sm font-medium">AI-powered listing generation, scheduling, analytics, and lead attribution.</p>
+            </div>
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search VIN or title..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full border-border bg-muted/50 pl-10 text-foreground focus-visible:ring-primary/50"
+              />
+            </div>
           </div>
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search VIN or title..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border-border bg-muted/50 pl-10 text-foreground focus-visible:ring-primary/50"
-            />
+
+          {/* MARKETING ARCHITECTURE SECTION */}
+          <div className="border-t border-border pt-8">
+            <h2 className="text-2xl font-bold font-display tracking-tight mb-6">Marketing Architecture</h2>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Core Marketing Ledgers */}
+              <div className="stat-card">
+                <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
+                  <div className="w-1 h-6 bg-primary rounded-full"></div>
+                  Core Marketing Ledgers
+                </h3>
+                <ul className="space-y-2">
+                  <li className="flex items-start gap-3">
+                    <span className="text-primary font-bold text-lg">•</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Listing Registry</p>
+                      <p className="text-xs text-muted-foreground">Vehicle specs, photos, pricing per channel</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-primary font-bold text-lg">•</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Channel Ledger</p>
+                      <p className="text-xs text-muted-foreground">Facebook, Instagram, TikTok, Craigslist, YouTube, etc.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-primary font-bold text-lg">•</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Analytics Ledger</p>
+                      <p className="text-xs text-muted-foreground">Impressions, clicks, conversions by channel</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-primary font-bold text-lg">•</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Lead Attribution</p>
+                      <p className="text-xs text-muted-foreground">Capture source, campaign, contact info</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-primary font-bold text-lg">•</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Campaign Tracking</p>
+                      <p className="text-xs text-muted-foreground">Schedule, publish, monitor performance</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Automatic Marketing Events */}
+              <div className="stat-card">
+                <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
+                  <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+                  Automatic Marketing Events
+                </h3>
+                <ul className="space-y-2">
+                  <li className="flex items-start gap-3">
+                    <span className="text-blue-500 font-bold text-lg">→</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Listing Generation</p>
+                      <p className="text-xs text-muted-foreground">AI creates SEO titles, descriptions, hashtags</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-blue-500 font-bold text-lg">→</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Channel Publication</p>
+                      <p className="text-xs text-muted-foreground">Schedule posts across all platforms</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-blue-500 font-bold text-lg">→</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Performance Tracking</p>
+                      <p className="text-xs text-muted-foreground">Monitor impressions, clicks, conversions</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-blue-500 font-bold text-lg">→</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Lead Capture</p>
+                      <p className="text-xs text-muted-foreground">Collect buyer inquiries from all sources</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-blue-500 font-bold text-lg">→</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Attribution Analysis</p>
+                      <p className="text-xs text-muted-foreground">Track which channels convert best</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Marketing AI Analysis */}
+              <div className="stat-card">
+                <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
+                  <div className="w-1 h-6 bg-green-500 rounded-full"></div>
+                  Marketing AI Analysis
+                </h3>
+                <ul className="space-y-2">
+                  <li className="flex items-start gap-3">
+                    <span className="text-green-500 font-bold text-lg">✓</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Content Optimization</p>
+                      <p className="text-xs text-muted-foreground">AI generates compelling titles & descriptions</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-green-500 font-bold text-lg">✓</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Pricing Recommendations</p>
+                      <p className="text-xs text-muted-foreground">Market-based pricing optimization</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-green-500 font-bold text-lg">✓</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Channel Selection</p>
+                      <p className="text-xs text-muted-foreground">Recommend best-performing platforms</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-green-500 font-bold text-lg">✓</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">Performance Anomalies</p>
+                      <p className="text-xs text-muted-foreground">Flag underperforming campaigns</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-green-500 font-bold text-lg">✓</span>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">ROI Analysis</p>
+                      <p className="text-xs text-muted-foreground">Calculate return on ad spend per channel</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Advertising Campaigns Section */}

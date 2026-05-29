@@ -120,7 +120,7 @@ export default function AIChatAssistant() {
   };
 
   return (
-    <div className="fixed top-20 md:top-6 right-6 z-40 flex flex-col items-end pointer-events-none">
+    <div className="fixed top-20 right-6 z-40 flex flex-col items-end pointer-events-none">
       {/* Chat Window */}
       {isOpen && (
         <div className="bg-card/90 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl w-80 sm:w-96 h-[500px] max-h-[80vh] flex flex-col mt-4 overflow-hidden animate-in slide-in-from-top-5 fade-in duration-300 pointer-events-auto ring-1 ring-black/5">
