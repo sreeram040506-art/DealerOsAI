@@ -40,6 +40,7 @@ model Dealership {
   marketingListings   MarketingListing[]
   marketingLeads      MarketingLead[]
   attendanceRecords   AttendanceRecord[]
+  channels            Channel[]
 }
 
 model User {
@@ -58,6 +59,8 @@ model User {
   vehiclesAdded Vehicle[]
   salesMade     Sale[]
   attendanceRecords AttendanceRecord[]
+  channelMemberships  ChannelMember[]
+  messagesSent        Message[]
 
   @@unique([email, dealershipId])
 }
@@ -72,6 +75,7 @@ model Vehicle {
   color             String
   purchaseDate      DateTime
   status            String   @default("Available")
+  reconStage        String   @default("None") // None, Acquired, Detailing, Inspection, Repairing, Ready
   titleNumber       String?
   daysInInventory   Int      @default(0)
   createdAt         DateTime @default(now())
@@ -573,4 +577,46 @@ model AttendanceRecord {
 
   @@unique([dealershipId, userId, date])
   @@index([dealershipId, date])
+}
+
+model Channel {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name         String?
+  type         String   @default("INTERNAL") // INTERNAL, INTER_DEALERSHIP, DIRECT
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dealershipId String?    @db.ObjectId // Optional for inter-dealership
+  dealership   Dealership? @relation(fields: [dealershipId], references: [id])
+
+  members      ChannelMember[]
+  messages     Message[]
+
+  @@index([dealershipId])
+}
+
+model ChannelMember {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  channelId    String   @db.ObjectId
+  channel      Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId       String   @db.ObjectId
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt     DateTime @default(now())
+  lastReadAt   DateTime @default(now())
+
+  @@unique([channelId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  channelId    String   @db.ObjectId
+  channel      Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  senderId     String   @db.ObjectId
+  sender       User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([channelId, createdAt])
 }

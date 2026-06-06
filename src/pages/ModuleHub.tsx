@@ -22,12 +22,6 @@ const modules: Record<string, ModuleDefinition> = {
     sections: ["Buyer Agreement", "RMV Forms", "Insurance", "Warranty", "Registration", "Signatures"],
     aiFeatures: ["Document type detection", "Field extraction with confidence", "VIN/customer match checks"],
   },
-  "/rmv-compliance": {
-    title: "Compliance & Coverage",
-    purpose: "Combine RMV compliance, insurance coverage, and warranty tracking into a single operational workflow.",
-    sections: ["Title & Registration", "Insurance Verification", "Warranty Coverage", "Deadlines & Risks"],
-    aiFeatures: ["Compliance alert feed", "Coverage expiration alerts", "Warranty gap detection", "Missing document prioritization"],
-  },
   "/marketing": {
     title: "Marketing",
     purpose: "Track multi-channel listing performance and source-level conversions across all marketing channels.",
@@ -52,23 +46,11 @@ const modules: Record<string, ModuleDefinition> = {
     sections: ["Lead Volume", "Sold Units", "Conversion Rate", "Commissions", "Performance Trends"],
     aiFeatures: ["Lead-source performance ranking", "Coaching recommendations", "Commission forecasting"],
   },
-  "/auctions": {
-    title: "Auctions",
-    purpose: "Auction sourcing and acquisition operations for both live feeds and physical lots.",
-    sections: ["Feed Import", "Auction Normalization", "Bid Strategy", "Acquisition Capture", "AI Valuation"],
-    aiFeatures: ["Smart bid limits", "Demand-aware acquisition advice", "Physical auction capture", "Provider data standardization"],
-  },
   "/notifications": {
     title: "Notifications",
     purpose: "Actionable alerts across compliance, finance, inventory aging, and documentation.",
     sections: ["RMV Alerts", "Insurance Expiry", "Payment Due", "Aging Inventory", "Missing Docs"],
     aiFeatures: ["Priority scoring", "Role-based routing", "Escalation recommendations"],
-  },
-  "/api-integrations": {
-    title: "API Integrations",
-    purpose: "Integration hub for DMS, finance providers, listing channels, and messaging systems.",
-    sections: ["Lead Sources", "Finance", "Listing Feeds", "Communication APIs", "Webhook Monitoring"],
-    aiFeatures: ["Integration health monitoring", "Sync anomaly detection", "Data mapping suggestions"],
   },
 };
 

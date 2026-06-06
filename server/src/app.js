@@ -32,6 +32,7 @@ import healthRoutes from './routes/healthRoutes.js';
 import marketingRoutes from './routes/marketingRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
+import communicationRoutes from './routes/communicationRoutes.js';
 
 
 const app = express();
@@ -162,6 +163,7 @@ app.use('/api/marketing', authenticateToken, injectTenant, marketingRoutes);
 app.use('/api/payments', authenticateToken, injectTenant, paymentRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/attendance', authenticateToken, injectTenant, attendanceRoutes);
+app.use('/api/communication', authenticateToken, injectTenant, communicationRoutes);
 
 
 // Document routes also need protection and tenant context

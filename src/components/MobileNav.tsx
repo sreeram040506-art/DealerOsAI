@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Car, ShoppingCart, 
-  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck, Brain, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Bell, Plug
+  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck, Brain, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Bell, Plug, MessageSquare, CalendarDays
 } from 'lucide-react';
 import { useState, useCallback, memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -22,19 +22,17 @@ const drawerItems = [
   { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/customers', icon: Users, label: 'Customers', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/documents-forms', icon: FileText, label: 'Documents & Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  { to: '/rmv-compliance', icon: Shield, label: 'Compliance & Coverage', roles: ['ADMIN', 'MANAGER'] },
   { to: '/registry', icon: FileArchive, label: 'Registry', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/marketing', icon: Megaphone, label: 'Marketing', roles: ['ADMIN', 'MANAGER'] },
   { to: '/ai-insights', icon: Brain, label: 'AI Insights / Ask', roles: ['ADMIN', 'MANAGER'] },
   { to: '/accounting', icon: Calculator, label: 'Accounting', roles: ['ADMIN'] },
-  { to: '/employees', icon: BadgeCheck, label: 'Attendance', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  { to: '/auctions', icon: Gavel, label: 'Auctions', roles: ['ADMIN', 'MANAGER'] },
   { to: '/notifications', icon: Bell, label: 'Notifications', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  { to: '/api-integrations', icon: Plug, label: 'API Integrations', roles: ['ADMIN'] },
+  { to: '/communication', icon: MessageSquare, label: 'Communication', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/expenses', icon: Receipt, label: 'Expenses', roles: ['ADMIN'] },
   { to: '/used-vehicle-forms', icon: FileText, label: 'Used Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['ADMIN', 'MANAGER'] },
-  { to: '/team-analytics', icon: Users, label: 'Team', roles: ['ADMIN'] },
+  { to: '/team-analytics', icon: Users, label: 'Team Management', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/attendance', icon: CalendarDays, label: 'Attendance Log', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/settings', icon: Settings, label: 'Settings', roles: ['ADMIN'] },
   { to: '/super-admin', icon: ShieldCheck, label: 'Platform Admin', roles: ['SUPER_ADMIN'] },
 ] as const;

@@ -339,6 +339,7 @@ router.get('/', async (req, res, next) => {
           mileage: v.mileage,
           color: v.color,
           status: v.status,
+          reconStage: v.reconStage,
           purchaseDate: v.purchaseDate,
           createdAt: v.createdAt,
           updatedAt: v.updatedAt,
@@ -438,7 +439,8 @@ router.post('/', validate(vehicleSchema), async (req, res, next) => {
     vin, make, model, year, mileage, color, purchaseDate,
     purchasedFrom, sellerAddress, sellerCity, sellerState, sellerZip,
     purchasePrice, paymentMethod, transportCost, buyerFee,
-    inspectionCost, registrationCost, repairCost, titleNumber, documentBase64, sourceDocumentBase64
+    inspectionCost, registrationCost, repairCost, titleNumber, documentBase64, sourceDocumentBase64,
+    reconStage
   } = req.body;
 
   try {
@@ -468,6 +470,7 @@ router.post('/', validate(vehicleSchema), async (req, res, next) => {
         titleNumber: titleNumber || null,
         purchaseDate: new Date(purchaseDate),
         status: 'Available',
+        reconStage: reconStage || 'None',
         createdById: req.user.id,
         dealershipId: req.dealershipId,
         purchase: {
@@ -520,7 +523,8 @@ router.patch('/:id', async (req, res, next) => {
       vin, make, model, year, mileage, color, status, purchaseDate,
       purchasedFrom, purchasePrice, paymentMethod, transportCost, buyerFee,
       inspectionCost, registrationCost, titleNumber,
-      sellerAddress, sellerCity, sellerState, sellerZip
+      sellerAddress, sellerCity, sellerState, sellerZip,
+      reconStage
     } = req.body;
 
     const vehicleId = req.params.id;
@@ -549,6 +553,7 @@ router.patch('/:id', async (req, res, next) => {
           ...(mileage !== undefined && { mileage: Number(mileage) }),
           ...(color !== undefined && { color }),
           ...(status !== undefined && { status }),
+          ...(reconStage !== undefined && { reconStage }),
           ...(titleNumber !== undefined && { titleNumber: titleNumber || null }),
           ...(purchaseDate && { purchaseDate: new Date(purchaseDate) }),
         }

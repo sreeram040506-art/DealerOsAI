@@ -21,19 +21,18 @@ const Expenses = lazy(() => import("./pages/Expenses"));
 const CashFlow = lazy(() => import("./pages/CashFlow"));
 const UsedVehicleForms = lazy(() => import("./pages/UsedVehicleForms"));
 const Registry = lazy(() => import("./pages/Registry"));
-const RMVCompliance = lazy(() => import("./pages/RMVCompliance"));
 const TeamAnalytics = lazy(() => import("./pages/TeamAnalytics"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Accounting = lazy(() => import("./pages/Accounting"));
 const EnterpriseModuleCrud = lazy(() => import("./pages/EnterpriseModuleCrud"));
-const Auctions = lazy(() => import("./pages/Auctions"));
 const AIInsights = lazy(() => import("./pages/AIInsights"));
-const Attendance = lazy(() => import("./pages/Attendance"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const Settings = lazy(() => import("./pages/Settings"));
 const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Communication = lazy(() => import("./pages/Communication"));
+const Attendance = lazy(() => import("./pages/Attendance"));
 
 // Preload manager — memoized to prevent re-renders from parent
 const PreloadManager = memo(function PreloadManager() {
@@ -113,11 +112,6 @@ export default function App() {
                     <UsedVehicleForms />
                   </ProtectedRoute>
                 } />
-                <Route path="/rmv-compliance" element={
-                  <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
-                    <RMVCompliance />
-                  </ProtectedRoute>
-                } />
                 <Route path="/marketing" element={
                   <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
                     <Advertising />
@@ -133,23 +127,8 @@ export default function App() {
                     <Accounting />
                   </ProtectedRoute>
                 } />
-                <Route path="/employees" element={
-                  <ProtectedRoute roles={['ADMIN', 'MANAGER', 'STAFF']}>
-                    <Attendance />
-                  </ProtectedRoute>
-                } />
-                <Route path="/auctions" element={
-                  <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
-                    <Auctions />
-                  </ProtectedRoute>
-                } />
                 <Route path="/notifications" element={
                   <ProtectedRoute>
-                    <EnterpriseModuleCrud />
-                  </ProtectedRoute>
-                } />
-                <Route path="/api-integrations" element={
-                  <ProtectedRoute roles={['ADMIN']}>
                     <EnterpriseModuleCrud />
                   </ProtectedRoute>
                 } />
@@ -184,8 +163,18 @@ export default function App() {
                   </ProtectedRoute>
                 } />
                 <Route path="/team-analytics" element={
-                  <ProtectedRoute roles={['ADMIN']}>
+                  <ProtectedRoute roles={['ADMIN', 'MANAGER', 'STAFF']}>
                     <TeamAnalytics />
+                  </ProtectedRoute>
+                } />
+                <Route path="/attendance" element={
+                  <ProtectedRoute roles={['ADMIN', 'MANAGER', 'STAFF']}>
+                    <Attendance />
+                  </ProtectedRoute>
+                } />
+                <Route path="/communication" element={
+                  <ProtectedRoute roles={['ADMIN', 'MANAGER', 'STAFF']}>
+                    <Communication />
                   </ProtectedRoute>
                 } />
                 <Route path="/settings" element={

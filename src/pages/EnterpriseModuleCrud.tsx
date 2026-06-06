@@ -11,23 +11,6 @@ type Field = { key: string; label: string; type?: "text" | "number" | "date" };
 type Config = { title: string; endpoint: string; queryKey: string; fields: Field[]; supportsDocumentUpload?: boolean };
 
 const configs: Record<string, Config> = {
-  "/auctions": {
-    title: "Auctions",
-    endpoint: "/auctions",
-    queryKey: "auctions",
-    fields: [
-      { key: "auctionSource", label: "Auction Source" },
-      { key: "lotNumber", label: "Lot Number" },
-      { key: "laneNumber", label: "Lane Number" },
-      { key: "vin", label: "VIN" },
-      { key: "condition", label: "Condition" },
-      { key: "estimatedValue", label: "Estimated Value", type: "number" },
-      { key: "maxBid", label: "Max Bid", type: "number" },
-      { key: "transportEstimate", label: "Transport", type: "number" },
-      { key: "recommendedMaxBid", label: "Recommended Max Bid", type: "number" },
-      { key: "bidStatus", label: "Bid Status" },
-    ],
-  },
   "/notifications": {
     title: "Notifications",
     endpoint: "/notifications",
@@ -38,18 +21,6 @@ const configs: Record<string, Config> = {
       { key: "message", label: "Message" },
       { key: "severity", label: "Severity" },
       { key: "dueAt", label: "Due Date", type: "date" },
-    ],
-  },
-  "/api-integrations": {
-    title: "API Integrations",
-    endpoint: "/integrations",
-    queryKey: "integrations",
-    fields: [
-      { key: "name", label: "Name" },
-      { key: "provider", label: "Provider" },
-      { key: "status", label: "Status" },
-      { key: "webhookUrl", label: "Webhook URL" },
-      { key: "errorMessage", label: "Error Message" },
     ],
   },
 };

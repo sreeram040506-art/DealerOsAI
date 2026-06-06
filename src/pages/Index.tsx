@@ -2,7 +2,7 @@ import AppLayout from '@/components/AppLayout';
 import StatCard from '@/components/StatCard';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useAuth } from '@/context/auth-hooks';
-import { Car, ShoppingCart, DollarSign, TrendingUp, Package, Megaphone, Users } from 'lucide-react';
+import { Car, ShoppingCart, DollarSign, TrendingUp, Package, Megaphone, Users, CalendarDays } from 'lucide-react';
 import QueryErrorState from '@/components/QueryErrorState';
 import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -105,7 +105,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3" role="region" aria-label="Key metrics">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3" role="region" aria-label="Key metrics">
           <StatCard label="Inventory" value={isLoading ? "..." : String(vehicles.length)} icon={Car} />
           <StatCard label="Units Sold" value={isLoading ? "..." : String(sales.length)} icon={ShoppingCart} />
           {!isStaff && (
@@ -126,6 +126,14 @@ export default function Dashboard() {
               <StatCard label="Net Profit" value={isLoading ? "..." : `$${totalProfit.toLocaleString()}`} icon={TrendingUp} iconClassName="bg-primary/15 text-primary" />
             </>
           )}
+          <StatCard 
+            label="Attendance" 
+            value="Open Log" 
+            icon={CalendarDays} 
+            iconClassName="bg-primary/10 text-primary border border-primary/20" 
+            onClick={() => navigate('/attendance')}
+            className="cursor-pointer transition-all hover:scale-105 active:scale-95"
+          />
         </div>
 
         {/* Charts */}

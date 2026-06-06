@@ -1,6 +1,6 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
-import { authenticateToken, authorizeAdmin } from '../middlewares/authMiddleware.js';
+import { authorizeAdmin } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
@@ -23,7 +23,7 @@ function formatPercent(numerator, denominator) {
  * Returns attendance records grouped by user plus computed attendance %.
  * Present/Absent inputs are based on stored status.
  */
-router.get('/', authenticateToken, async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const { from, to } = req.query;
 
@@ -126,7 +126,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
  * Body: { date: 'YYYY-MM-DD', status: 'PRESENT'|'ABSENT' }
  * Employees can mark their own attendance for a date.
  */
-router.post('/mark', authenticateToken, async (req, res, next) => {
+router.post('/mark', async (req, res, next) => {
   try {
     const { date, status } = req.body || {};
     const d = parseDateOnly(date);
