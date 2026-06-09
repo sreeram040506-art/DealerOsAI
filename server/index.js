@@ -10,6 +10,9 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 import app from './src/app.js';
+import cron from 'node-cron';
+import { train } from './scripts/trainDemandModel.mjs';
+import { runSwapCampaign } from './src/services/interDealershipCampaign.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -31,6 +34,42 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     }, 300000); // 5 minutes
   } else {
     console.warn('[Self-Ping] VITE_API_ORIGIN not set, self-ping disabled');
+  }
+
+  // Schedule weekly retraining of demand model (Sunday 03:00 UTC)
+  try {
+    cron.schedule('0 3 * * 0', async () => {
+      console.log('[Predictor] Weekly retrain starting');
+      try {
+        const model = await train({ lookbackDays: Number(process.env.PREDICTOR_LOOKBACK_DAYS) || 365 });
+        console.log(`[Predictor] Retrain completed. Items: ${model.itemCount}`);
+      } catch (e) {
+        console.error('[Predictor] Retrain failed', e);
+      }
+    }, { timezone: process.env.PREDICTOR_CRON_TZ || 'UTC' });
+
+    cron.schedule(process.env.SWAP_CAMPAIGN_CRON || '0 9 * * 1', async () => {
+      console.log('[Predictor] Inter-dealership swap campaign starting');
+      try {
+        const campaignResult = await runSwapCampaign();
+        console.log('[Predictor] Swap campaign result', campaignResult);
+      } catch (e) {
+        console.error('[Predictor] Swap campaign failed', e);
+      }
+    }, { timezone: process.env.SWAP_CAMPAIGN_CRON_TZ || process.env.PREDICTOR_CRON_TZ || 'UTC' });
+
+    // Run an initial training on server start (non-blocking)
+    (async () => {
+      try {
+        console.log('[Predictor] Running initial model training...');
+        const model = await train({ lookbackDays: Number(process.env.PREDICTOR_LOOKBACK_DAYS) || 365 });
+        console.log(`[Predictor] Initial training completed: ${model.itemCount} items`);
+      } catch (e) {
+        console.error('[Predictor] Initial training failed', e);
+      }
+    })();
+  } catch (e) {
+    console.error('[Predictor] Failed to schedule retrain job', e);
   }
 });
 

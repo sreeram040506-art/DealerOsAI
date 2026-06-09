@@ -1,6 +1,7 @@
 import AppLayout from '@/components/AppLayout';
 import { MessageSquare, Phone, Users, Hash, Search, Send, Plus, MoreVertical, Paperclip, Image as ImageIcon, Smile, Bell, ChevronLeft, Video, Loader2, WifiOff, X } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -25,6 +26,8 @@ export default function Communication() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const newChannelInputRef = useRef<HTMLInputElement>(null);
 
+  const location = useLocation();
+
   // Auto scroll on new messages
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -32,12 +35,24 @@ export default function Communication() {
     }
   }, [messages, showChatMobile]);
 
+  // Read channelId from URL if present
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const channelId = params.get('channelId');
+    if (channelId) {
+      setActiveChat(channelId);
+      setShowChatMobile(true);
+    }
+  }, [location.search]);
+
   // Auto-select first channel on desktop
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('channelId')) return; // Don't override URL param
     if (channels.length > 0 && !activeChat && window.innerWidth >= 768) {
       setActiveChat(channels[0].id);
     }
-  }, [channels, activeChat]);
+  }, [channels, activeChat, location.search]);
 
   // Focus new channel input
   useEffect(() => {

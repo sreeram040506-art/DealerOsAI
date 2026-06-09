@@ -12,6 +12,8 @@
     "nodemon": "^3.0.2"
   },
   "dependencies": {
+    "jimp": "^0.22.10",
+    "node-cron": "^3.0.2",
     "@napi-rs/canvas": "^0.1.97",
     "@prisma/client": "^5.10.2",
     "@sendgrid/mail": "^8.1.0",

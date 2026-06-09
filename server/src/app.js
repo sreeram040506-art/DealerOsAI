@@ -33,6 +33,7 @@ import marketingRoutes from './routes/marketingRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
 import communicationRoutes from './routes/communicationRoutes.js';
+import predictorRoutes from './routes/predictorRoutes.js';
 
 
 const app = express();
@@ -164,6 +165,21 @@ app.use('/api/payments', authenticateToken, injectTenant, paymentRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/attendance', authenticateToken, injectTenant, attendanceRoutes);
 app.use('/api/communication', authenticateToken, injectTenant, communicationRoutes);
+app.use('/api/predictor', authenticateToken, injectTenant, predictorRoutes);
+
+// DEV-ONLY: Unauthenticated predictor mount for local testing.
+// Usage: /api/dev/predictor/scores?dealershipId=<DEALERSHIP_ID>
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/dev/predictor', (req, res, next) => {
+    // Allow overriding dealershipId for testing via query param.
+    if (req.query.dealershipId) {
+      req.dealershipId = req.query.dealershipId;
+      return next();
+    }
+    return res.status(400).json({ message: 'Dev test route requires ?dealershipId=<id> query param' });
+  }, predictorRoutes);
+  app.get('/api/dev/predictor/ping', (req, res) => res.json({ message: 'dev predictor route ready' }));
+}
 
 
 // Document routes also need protection and tenant context

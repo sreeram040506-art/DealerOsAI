@@ -42,6 +42,168 @@ router.get('/vin-decode/:vin', async (req, res, next) => {
   }
 });
 
+// GET /vehicles/swap-network - fetch aging vehicles from other dealerships
+router.get('/swap-network', async (req, res, next) => {
+  try {
+    const vehicles = await prisma.vehicle.findMany({
+      where: {
+        dealershipId: { not: req.dealershipId },
+        status: 'Available',
+      },
+      include: {
+        dealership: {
+          select: { id: true, name: true, phone: true, email: true, slug: true }
+        },
+        purchase: {
+          select: { totalPurchaseCost: true, purchasePrice: true, transportCost: true }
+        },
+        repairs: true
+      }
+    });
+
+    const now = new Date();
+    const swapVehicles = vehicles.map(v => {
+      const purchaseDate = v.purchaseDate ? new Date(v.purchaseDate) : new Date(v.createdAt);
+      const days = v.daysInInventory || Math.max(0, Math.floor((now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const purchasePrice = v.purchase?.purchasePrice || 0;
+      const transportCost = v.purchase?.transportCost || 0;
+      const partsCost = v.repairs?.reduce((sum, r) => sum + (r.partsCost || 0), 0) || 0;
+      const laborCost = v.repairs?.reduce((sum, r) => sum + (r.laborCost || 0), 0) || 0;
+      const totalCostBasis = purchasePrice + transportCost + partsCost + laborCost;
+
+      return {
+        id: v.id,
+        vin: v.vin,
+        make: v.make,
+        model: v.model,
+        year: v.year,
+        mileage: v.mileage,
+        color: v.color,
+        status: v.status,
+        reconStage: v.reconStage,
+        daysInInventory: days,
+        purchasePrice,
+        totalCostBasis,
+        dealership: v.dealership
+      };
+    }).filter(v => v.daysInInventory >= 90);
+
+    res.json(swapVehicles);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /vehicles/swap-network/propose - propose a trade
+router.post('/swap-network/propose', async (req, res, next) => {
+  try {
+    const { targetVehicleId, myVehicleId } = req.body;
+    if (!targetVehicleId) {
+      return res.status(400).json({ message: 'Target vehicle ID is required.' });
+    }
+
+    const myDealershipId = req.dealershipId;
+
+    // Fetch target vehicle and target dealership
+    const targetVehicle = await prisma.vehicle.findUnique({
+      where: { id: targetVehicleId },
+      include: { dealership: true, purchase: true, repairs: true }
+    });
+
+    if (!targetVehicle) {
+      return res.status(404).json({ message: 'Target vehicle not found.' });
+    }
+
+    const targetDealershipId = targetVehicle.dealershipId;
+    if (targetDealershipId === myDealershipId) {
+      return res.status(400).json({ message: 'Cannot propose a swap with your own dealership.' });
+    }
+
+    // Fetch my vehicle if provided
+    let myVehicle = null;
+    if (myVehicleId) {
+      myVehicle = await prisma.vehicle.findUnique({
+        where: { id: myVehicleId }
+      });
+    }
+
+    // Fetch my dealership details
+    const myDealership = await prisma.dealership.findUnique({
+      where: { id: myDealershipId }
+    });
+
+    // Gather admins and managers of both dealerships
+    const [myStaff, partnerStaff] = await Promise.all([
+      prisma.user.findMany({
+        where: { dealershipId: myDealershipId, role: { in: ['ADMIN', 'MANAGER'] } },
+        select: { id: true }
+      }),
+      prisma.user.findMany({
+        where: { dealershipId: targetDealershipId, role: { in: ['ADMIN', 'MANAGER'] } },
+        select: { id: true }
+      })
+    ]);
+
+    const allMembers = [...myStaff, ...partnerStaff];
+
+    // Find if a shared channel already exists between these two dealerships for trades
+    const channelName = `swap-${myDealership.slug}-${targetVehicle.dealership.slug}`.toLowerCase();
+    
+    let channel = await prisma.channel.findFirst({
+      where: {
+        name: channelName,
+        type: 'INTER_DEALERSHIP',
+        dealershipId: null // Shared across tenants
+      }
+    });
+
+    if (!channel) {
+      channel = await prisma.channel.create({
+        data: {
+          name: channelName,
+          type: 'INTER_DEALERSHIP',
+          dealershipId: null, // Shared across tenants
+          members: {
+            create: allMembers.map(u => ({ userId: u.id }))
+          }
+        }
+      });
+    }
+
+    // Send the automated trade offer message
+    // Compute daysInInventory and cost basis for the target vehicle (fall back to createdAt)
+    const now = new Date();
+    const purchaseDate = targetVehicle.purchaseDate ? new Date(targetVehicle.purchaseDate) : (targetVehicle.purchase?.purchaseDate ? new Date(targetVehicle.purchase.purchaseDate) : new Date(targetVehicle.createdAt));
+    const days = targetVehicle.daysInInventory || Math.max(0, Math.floor((now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    const partsCost = (targetVehicle.repairs || []).reduce((sum, r) => sum + (r.partsCost || 0), 0);
+    const laborCost = (targetVehicle.repairs || []).reduce((sum, r) => sum + (r.laborCost || 0), 0);
+    const purchasePrice = targetVehicle.purchase?.purchasePrice || 0;
+    const transportCost = targetVehicle.purchase?.transportCost || 0;
+    const totalCostBasis = purchasePrice + transportCost + partsCost + laborCost;
+
+    // Compute my vehicle brief info (if provided)
+    let myVehicleInfo = 'Open for discussion / cash purchase offer';
+    if (myVehicle) {
+      myVehicleInfo = `${myVehicle.year} ${myVehicle.make} ${myVehicle.model} (VIN: ${myVehicle.vin ? myVehicle.vin.slice(-6) : 'n/a'})`;
+    }
+
+    const tradeMsg = `⚠️ STOCK SWAP PROPOSAL ⚠️\nDealership **${myDealership.name}** has proposed a vehicle trade!\n- **Targeting your aging stock:** ${targetVehicle.year} ${targetVehicle.make} ${targetVehicle.model} (VIN: ${targetVehicle.vin ? targetVehicle.vin.slice(-6) : 'n/a'}, ${days} days in stock)\n- **Offering in trade:** ${myVehicleInfo}\nLet's discuss details and negotiate terms here!`;
+
+    await prisma.message.create({
+      data: {
+        channelId: channel.id,
+        senderId: req.user.id,
+        text: tradeMsg
+      }
+    });
+
+    res.status(201).json({ channelId: channel.id, channelName: channel.name });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Document download - accepts token via query param for direct browser navigation
 router.get('/:id/document', async (req, res, next) => {
   try {

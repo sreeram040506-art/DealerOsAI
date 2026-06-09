@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import PredictorPanel from '@/components/PredictorPanel';
 import { useLocation } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 
@@ -95,6 +96,10 @@ export default function ModuleHub() {
                 </li>
               ))}
             </ul>
+          </section>
+          <section className="stat-card">
+            <h2 className="text-lg font-semibold mb-3">Predictor</h2>
+            <PredictorPanel />
           </section>
         </div>
       </div>

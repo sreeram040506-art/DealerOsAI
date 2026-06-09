@@ -4,7 +4,7 @@ import { useAuth } from '@/context/auth-hooks';
 import { Vehicle } from '@/types/inventory';
 import { cn } from '@/lib/utils';
 // Consolidated icon imports — avoids duplicate module references
-import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, ShoppingCart, LayoutGrid, List, Receipt, Download, ArrowUpDown } from 'lucide-react';
+import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, ShoppingCart, LayoutGrid, List, Receipt, Download, ArrowUpDown, Kanban } from 'lucide-react';
 import { useState, useMemo, useDeferredValue } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import QueryErrorState from '@/components/QueryErrorState';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import VinDecoderDialog from '@/components/VinDecoderDialog';
+import ReconKanbanBoard from '@/components/ReconKanbanBoard';
 import { apiUrl } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 import { 
@@ -44,12 +45,12 @@ export default function Inventory() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
-  const { vehicles, isLoading, isError, deleteVehicle } = useInventory();
+  const { vehicles, isLoading, isError, deleteVehicle, updateVehicle } = useInventory();
   const { token, user } = useAuth();
   const [vinDecoderOpen, setVinDecoderOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'board'>('list');
   const [sortBy, setSortBy] = useState<'date' | 'status'>('date');
   const isStaff = user?.role === 'STAFF';
 
@@ -169,18 +170,27 @@ export default function Inventory() {
                 <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
                 Sort: {sortBy === 'status' ? 'Status' : 'Date'}
               </Button>
-              <div className="hidden md:flex bg-muted p-1 rounded-xl border border-border/50 mr-2">
+              <div className="flex bg-muted p-1 rounded-xl border border-border/50 mr-2">
                 <button 
                   onClick={() => setViewMode('list')}
                   className={cn("p-2 rounded-lg transition-all", viewMode === 'list' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                  title="List View"
                 >
                   <List className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => setViewMode('grid')}
                   className={cn("p-2 rounded-lg transition-all", viewMode === 'grid' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                  title="Grid View"
                 >
                   <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setViewMode('board')}
+                  className={cn("p-2 rounded-lg transition-all", viewMode === 'board' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                  title="Recon Board"
+                >
+                  <Kanban className="w-4 h-4" />
                 </button>
               </div>
               <Button 
@@ -236,7 +246,13 @@ export default function Inventory() {
 
         {/* Mobile View: Cards - Premium Design */}
         <div className="grid grid-cols-1 gap-4 md:hidden pb-6">
-          {filtered.length > 0 ? (
+          {viewMode === 'board' ? (
+            <ReconKanbanBoard 
+              vehicles={filtered} 
+              updateVehicle={updateVehicle} 
+              onSelectVehicle={setSelectedVehicle} 
+            />
+          ) : filtered.length > 0 ? (
             filtered.map((vehicle) => (
               <div 
                 key={vehicle.id} 
@@ -462,7 +478,7 @@ export default function Inventory() {
                 </table>
               </div>
             </div>
-          ) : (
+          ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filtered.map((vehicle) => (
                 <div 
@@ -518,6 +534,12 @@ export default function Inventory() {
                 </div>
               ))}
             </div>
+          ) : (
+            <ReconKanbanBoard 
+              vehicles={filtered} 
+              updateVehicle={updateVehicle} 
+              onSelectVehicle={setSelectedVehicle} 
+            />
           )}
 
           <AlertDialog open={!!vehicleToDelete} onOpenChange={(open) => !open && setVehicleToDelete(null)}>
