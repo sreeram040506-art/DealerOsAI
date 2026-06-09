@@ -4,35 +4,35 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%; /* Pure white */
-    --foreground: 0 0% 9%;   /* Almost black */
+    --background: 228 33% 98%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 230 60% 50%;  /* Premium Deep Blue */
+    --primary: 230 72% 48%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 9%;
+    --secondary: 220 20% 96%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 220 20% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 9%;
+    --accent: 220 20% 96%;
+    --accent-foreground: 222 47% 11%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 0% 9%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 230 72% 48%;
 
-    --radius: 0.5rem; /* Sharper modern corners */
+    --radius: 1rem;
 
     /* Semantic tokens - Premium SaaS Palette */
     --profit: 142 70% 45%;
@@ -45,58 +45,58 @@
     --info-foreground: 0 0% 100%;
 
     /* Sidebar */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 0 0% 9%;
-    --sidebar-primary: 230 60% 50%;
+    --sidebar-background: 225 30% 97%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 230 72% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 94%;
-    --sidebar-accent-foreground: 0 0% 9%;
-    --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 0 0% 9%;
-    --sidebar-muted: 0 0% 45%;
+    --sidebar-accent: 220 20% 94%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 88%;
+    --sidebar-ring: 230 72% 48%;
+    --sidebar-muted: 215 16% 47%;
 
     --font-display: 'Outfit', sans-serif;
     --font-body: 'Inter', sans-serif;
   }
 
   .dark {
-    --background: 0 0% 4%; /* Near black */
-    --foreground: 0 0% 98%;
+    --background: 223 47% 6%;
+    --foreground: 210 40% 98%;
 
-    --card: 0 0% 6%;
-    --card-foreground: 0 0% 98%;
+    --card: 223 47% 8%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 0 0% 6%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 223 47% 8%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 230 75% 65%; /* Premium Soft Blue */
-    --primary-foreground: 230 100% 10%;
+    --primary: 229 84% 66%;
+    --primary-foreground: 223 47% 10%;
 
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 223 32% 14%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 223 32% 14%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 0 0% 12%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 223 32% 14%;
+    --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62% 40%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 15%;
-    --input: 0 0% 15%;
-    --ring: 0 0% 98%;
+    --border: 223 32% 18%;
+    --input: 223 32% 18%;
+    --ring: 229 84% 66%;
 
-    --sidebar-background: 0 0% 4%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 230 75% 65%;
-    --sidebar-primary-foreground: 230 100% 10%;
-    --sidebar-accent: 0 0% 12%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 0 0% 15%;
-    --sidebar-ring: 0 0% 98%;
-    --sidebar-muted: 0 0% 50%;
+    --sidebar-background: 223 47% 7%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 229 84% 66%;
+    --sidebar-primary-foreground: 223 47% 10%;
+    --sidebar-accent: 223 32% 14%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 223 32% 18%;
+    --sidebar-ring: 229 84% 66%;
+    --sidebar-muted: 215 20% 65%;
   }
 }
 
@@ -110,6 +110,10 @@
     font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background:
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.08), transparent 32%),
+      radial-gradient(circle at top right, hsl(160 84% 39% / 0.06), transparent 28%),
+      linear-gradient(to bottom, hsl(var(--background)), hsl(var(--background)));
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -120,15 +124,15 @@
 
 @layer components {
   .stat-card {
-    @apply bg-card rounded-lg border border-border p-6 shadow-sm transition-all duration-200;
+    @apply bg-card/95 rounded-2xl border border-border/70 p-6 shadow-sm backdrop-blur-sm transition-all duration-200;
   }
 
   .stat-card:hover {
-    @apply shadow-md border-primary/20 -translate-y-[2px];
+    @apply shadow-lg border-primary/20 -translate-y-[2px];
   }
 
   .glass-panel {
-    @apply bg-card/95 backdrop-blur-md border border-border shadow-sm;
+    @apply bg-card/90 backdrop-blur-xl border border-border/70 shadow-sm;
   }
 
   .stat-value {

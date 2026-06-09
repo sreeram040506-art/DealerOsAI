@@ -9,6 +9,7 @@ import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RevenueReportDialog from '@/components/RevenueReportDialog';
 import SwapNetworkDialog from '@/components/SwapNetworkDialog';
+import { cn } from '@/lib/utils';
 
 // Lazy load charts — recharts is ~200KB and only shown for non-staff users
 const ChartsSection = lazy(() => import('./ChartsSection'));
