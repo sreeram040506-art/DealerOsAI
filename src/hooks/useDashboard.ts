@@ -13,7 +13,7 @@ export interface DashboardSummary {
 }
 
 export function useDashboard() {
-  const { token, logout } = useAuth();
+  const { token, logout, user } = useAuth();
 
   const dashboardQuery = useQuery({
     queryKey: ['dashboard-summary'],
@@ -21,7 +21,7 @@ export function useDashboard() {
       const response = await apiFetch('/dashboard/summary', token);
       return handleApiResponse<DashboardSummary>(response, logout);
     },
-    enabled: !!token,
+    enabled: !!token && user?.role !== 'SUPER_ADMIN',
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
