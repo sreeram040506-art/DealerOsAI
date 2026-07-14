@@ -2,13 +2,18 @@ import AppLayout from '@/components/AppLayout';
 import StatCard from '@/components/StatCard';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useAuth } from '@/context/auth-hooks';
-import { Car, ShoppingCart, DollarSign, TrendingUp, Package, Megaphone, Users, CalendarDays, Sparkles, Clock, AlertTriangle, ArrowLeftRight } from 'lucide-react';
+import { Car, ShoppingCart, DollarSign, TrendingUp, Package, Megaphone, Users, CalendarDays, Sparkles, Clock, AlertTriangle, ArrowLeftRight, FileText, Receipt, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import QueryErrorState from '@/components/QueryErrorState';
 import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RevenueReportDialog from '@/components/RevenueReportDialog';
 import SwapNetworkDialog from '@/components/SwapNetworkDialog';
+import VehicleDetailDialog from '@/components/VehicleDetailDialog';
+import DocumentViewerDialog from '@/components/DocumentViewerDialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { apiUrl } from '@/lib/api';
+import { toast } from '@/components/ui/toast-utils';
 import { cn } from '@/lib/utils';
 
 // Lazy load charts — recharts is ~200KB and only shown for non-staff users
@@ -20,7 +25,10 @@ export default function Dashboard() {
   const { data, isLoading, isError } = useDashboard();
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [swapNetworkOpen, setSwapNetworkOpen] = useState(false);
-  const { user } = useAuth();
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
+  const { user, token } = useAuth();
   const navigate = useNavigate();
   
   const isAdmin = user?.role === 'ADMIN';
@@ -32,6 +40,59 @@ export default function Dashboard() {
       navigate('/super-admin', { replace: true });
     }
   }, [isSuperAdmin, navigate]);
+
+  const handleViewDocument = async (vehicle: any, type: 'report' | 'source' | 'bill_of_sale') => {
+    if (!token) return;
+    try {
+      const resp = await fetch(apiUrl(`/vehicles/${vehicle.id}/data`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!resp.ok) throw new Error('Failed to fetch document');
+      const data = await resp.json();
+      
+      let base64 = '';
+      let label = '';
+      
+      if (type === 'report') {
+        base64 = data.documentBase64;
+        label = 'Used Vehicle Record';
+      } else if (type === 'source') {
+        base64 = data.sourceDocumentBase64;
+        label = 'Original Source';
+      } else if (type === 'bill_of_sale') {
+        base64 = data.billOfSaleBase64;
+        label = 'Bill of Sale';
+      }
+
+      if (base64) {
+        setViewerDoc({ 
+          base64, 
+          name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+          type: label
+        });
+        setViewerOpen(true);
+      } else {
+        toast.error(`No ${label} available for this vehicle.`);
+      }
+    } catch (e) {
+      toast.error('Error loading document.');
+    }
+  };
+
+  const handleDownloadDocument = (vehicle: any, type: 'report' | 'source' | 'bill_of_sale' = 'report') => {
+    if (!token) return;
+    let typeParam = '';
+    if (type === 'source') typeParam = '&type=source';
+    else if (type === 'bill_of_sale') typeParam = '&type=bill_of_sale';
+    
+    const downloadUrl = apiUrl(`/vehicles/${vehicle.id}/document?token=${encodeURIComponent(token)}${typeParam}`);
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = downloadUrl;
+    document.body.appendChild(iframe);
+    setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 60000);
+    toast.success(`Downloading ${type.replace('_', ' ')} for ${vehicle.make} ${vehicle.model}...`);
+  };
 
   // Map data with fallbacks
   const vehicles = data?.vehicles || [];
@@ -210,18 +271,68 @@ export default function Dashboard() {
                 return (
                   <div 
                     key={vehicle.id} 
-                    className="p-4 rounded-xl border border-border/60 bg-card hover:border-primary/20 hover:shadow-md transition-all flex flex-col justify-between"
+                    className="p-4 rounded-xl border border-border/60 bg-card hover:border-primary/20 hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group"
+                    onClick={() => setSelectedVehicle(vehicle)}
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2 mb-2.5">
                         <span className={cn("px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border", badgeClass)}>
                           {badgeLabel}
                         </span>
-                        {!isStaff && (
-                          <span className="text-[10px] font-semibold text-muted-foreground tabular-nums">
-                            Holding: ${holdingCost.toLocaleString()}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {(vehicle.hasDocument || vehicle.hasSourceDocument || vehicle.hasBillOfSale) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button 
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="p-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20 shadow-sm active:scale-95 transition-transform opacity-0 group-hover:opacity-100"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-white border-border min-w-[200px]" onClick={(e) => e.stopPropagation()}>
+                                <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/50 mb-1">Preview Documents</div>
+                                {vehicle.hasDocument && (
+                                  <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                    <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
+                                  </DropdownMenuItem>
+                                )}
+                                {vehicle.hasSourceDocument && (
+                                  <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                    <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
+                                  </DropdownMenuItem>
+                                )}
+                                {vehicle.hasBillOfSale && (
+                                  <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-foreground cursor-pointer hover:bg-muted/50">
+                                    <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                                  </DropdownMenuItem>
+                                )}
+                                
+                                <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-t border-border/50 my-1">Download Files</div>
+                                {vehicle.hasDocument && (
+                                  <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                    <Download className="w-3.5 h-3.5 mr-2 text-primary" /> Download Record
+                                  </DropdownMenuItem>
+                                )}
+                                {vehicle.hasSourceDocument && (
+                                  <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                    <Download className="w-3.5 h-3.5 mr-2 text-primary" /> Download Source
+                                  </DropdownMenuItem>
+                                )}
+                                {vehicle.hasBillOfSale && (
+                                  <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-foreground cursor-pointer hover:bg-muted/50">
+                                    <Download className="w-3.5 h-3.5 mr-2" /> Download Bill of Sale
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                          {!isStaff && (
+                            <span className="text-[10px] font-semibold text-muted-foreground tabular-nums">
+                              Holding: ${holdingCost.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       
                       <h3 className="font-bold text-sm text-foreground leading-tight tracking-tight">
@@ -347,6 +458,18 @@ export default function Dashboard() {
         open={swapNetworkOpen}
         onOpenChange={setSwapNetworkOpen}
         myVehicles={vehicles}
+      />
+      <VehicleDetailDialog 
+        vehicle={selectedVehicle} 
+        open={!!selectedVehicle} 
+        onOpenChange={(open) => !open && setSelectedVehicle(null)} 
+      />
+      <DocumentViewerDialog
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        documentBase64={viewerDoc?.base64 || null}
+        vehicleName={viewerDoc?.name || ''}
+        documentType={viewerDoc?.type || ''}
       />
     </AppLayout>
   );

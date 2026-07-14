@@ -79,7 +79,7 @@ const MobileNav = memo(function MobileNav() {
 
       {/* Drawer overlay */}
       {isOpen && (
-        <div className="fixed inset-0 z-[60] md:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
+        <div className="fixed inset-0 z-[110] md:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
           <div 
             className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
             onClick={closeDrawer}
