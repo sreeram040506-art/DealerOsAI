@@ -10,7 +10,7 @@ import {
   ArrowUpRight, Globe, CheckCircle2, XCircle, TrendingUp, PieChart as PieChartIcon,
   Activity, Settings2, HardDrive, MapPin, Phone, Mail
 } from 'lucide-react';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, handleApiResponse } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 import { 
   Dialog, DialogContent, DialogHeader, 
@@ -54,7 +54,7 @@ interface Dealership {
 const COLORS = ['#6366f1', '#f43f5e', '#fbbf24', '#10b981'];
 
 const SuperAdmin = () => {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
   const [stats, setStats] = useState<DealershipStats | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [dealerships, setDealerships] = useState<Dealership[]>([]);
@@ -78,13 +78,15 @@ const SuperAdmin = () => {
         fetch(apiUrl('/super-admin/analytics'), { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
-      if (statsRes.ok && dealsRes.ok && analyticsRes.ok) {
-        setStats(await statsRes.json());
-        setDealerships(await dealsRes.json());
-        setAnalytics(await analyticsRes.json());
-      }
-    } catch (error) {
-      toast.error('Failed to load super admin data');
+      const statsData = await handleApiResponse<DealershipStats>(statsRes, logout);
+      const dealsData = await handleApiResponse<Dealership[]>(dealsRes, logout);
+      const analyticsData = await handleApiResponse<Analytics>(analyticsRes, logout);
+
+      setStats(statsData);
+      setDealerships(dealsData);
+      setAnalytics(analyticsData);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load super admin data');
     } finally {
       setIsLoading(false);
     }

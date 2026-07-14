@@ -5,7 +5,7 @@ interface User {
   id: string;
   email: string;
   name: string;
-  role: 'ADMIN' | 'MANAGER' | 'STAFF';
+  role: 'ADMIN' | 'MANAGER' | 'STAFF' | 'SUPER_ADMIN';
   dealership?: {
     id: string;
     name: string;
