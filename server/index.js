@@ -13,11 +13,15 @@ import app from './src/app.js';
 import cron from 'node-cron';
 import { train } from './scripts/trainDemandModel.mjs';
 import { runSwapCampaign } from './src/services/interDealershipCampaign.js';
+import { ensureSuperAdmin } from './src/seeds/ensureSuperAdmin.js';
 
 const PORT = process.env.PORT || 3001;
 
-const server = app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+
+  // Ensure super admin accounts exist on every boot
+  await ensureSuperAdmin();
   
   // Self-ping logic to prevent Render sleep (every 5 minutes)
   const renderUrl = process.env.VITE_API_ORIGIN;
