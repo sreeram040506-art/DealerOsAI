@@ -12,7 +12,7 @@ import { useRepairs } from '@/hooks/useRepairs';
 import { useAdvertising } from '@/hooks/useAdvertising';
 import { useSales } from '@/hooks/useSales';
 import { toast } from '@/components/ui/toast-utils';
-import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart, Trash2, AlertTriangle, FileUp, CheckCircle2, Copy, Users, MessageSquare } from 'lucide-react';
+import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart, Trash2, AlertTriangle, FileUp, CheckCircle2, Copy, Users, MessageSquare, Loader2 } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
