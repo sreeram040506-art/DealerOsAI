@@ -12,9 +12,10 @@ import SwapNetworkDialog from '@/components/SwapNetworkDialog';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, apiFetch, handleApiResponse } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
 
 // Lazy load charts — recharts is ~200KB and only shown for non-staff users
 const ChartsSection = lazy(() => import('./ChartsSection'));
@@ -34,6 +35,16 @@ export default function Dashboard() {
   const isAdmin = user?.role === 'ADMIN';
   const isStaff = user?.role === 'STAFF';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  const { data: insightsData } = useQuery({
+    queryKey: ["ai-insights-dashboard"],
+    enabled: Boolean(token && !isSuperAdmin),
+    queryFn: async () => {
+      const res = await apiFetch("/ai-insights", token);
+      return handleApiResponse<{ agingRecommendations: Record<string, string> }>(res, logout);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   useEffect(() => {
     if (isSuperAdmin) {
@@ -256,17 +267,21 @@ export default function Dashboard() {
                 
                 let badgeClass = "bg-warning/10 text-warning border-warning/20";
                 let badgeLabel = `Warning (${days} Days)`;
-                let recommendation = "Suggest launching a targeted Facebook ad or offering a test-drive promotion.";
                 
                 if (days >= 90) {
                   badgeClass = "bg-destructive/10 text-destructive border-destructive/20";
                   badgeLabel = `Critical (${days} Days)`;
-                  recommendation = "Critical age reached. Suggest moving to auction or dropping price by 10% immediately to free up cash flow.";
                 } else if (days >= 60) {
                   badgeClass = "bg-orange-500/10 text-orange-500 border-orange-500/20";
                   badgeLabel = `High Risk (${days} Days)`;
-                  recommendation = "This vehicle is at 60 days. Suggest dropping price by 5% or launching a targeted Facebook ad campaign.";
                 }
+
+                const recommendation = insightsData?.agingRecommendations?.[vehicle.vin] || 
+                  (days >= 90 
+                    ? "Critical age reached. Suggest moving to auction or dropping price by 10% immediately to free up cash flow."
+                    : days >= 60
+                    ? "This vehicle is at 60 days. Suggest dropping price by 5% or launching a targeted Facebook ad campaign."
+                    : "Suggest launching a targeted Facebook ad or offering a test-drive promotion.");
 
                 return (
                   <div 

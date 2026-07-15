@@ -551,6 +551,318 @@ When image attachments are present, include their scores and the reason for each
   }
 }
 
+function generateVehicleRecommendation(vehicle, allVehicles, sales) {
+  const days = safeNumber(vehicle.daysInInventory);
+  const holdingCost = days * 35;
+  const label = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+  const purchase = vehicle.purchase;
+  const purchasePrice = purchase ? safeNumber(purchase.purchasePrice) : 0;
+  const totalCost = purchase ? safeNumber(purchase.totalPurchaseCost) : 0;
+  const repairCost = (vehicle.repairs || []).reduce((s, r) => s + safeNumber(r.partsCost) + safeNumber(r.laborCost), 0);
+  const totalInvested = totalCost + repairCost;
+
+  // Check how well this make/model sells
+  const sameMakeSales = sales.filter(s => s.vehicle && s.vehicle.make === vehicle.make);
+  const sameModelSales = sales.filter(s => s.vehicle && s.vehicle.make === vehicle.make && s.vehicle.model === vehicle.model);
+  const avgModelProfit = sameModelSales.length
+    ? sameModelSales.reduce((sum, s) => sum + safeNumber(s.profit), 0) / sameModelSales.length
+    : null;
+
+  // Count how many of same make are on lot
+  const sameMakeOnLot = allVehicles.filter(v => v.status !== 'Sold' && v.make === vehicle.make).length;
+
+  if (days >= 120) {
+    const lossEstimate = holdingCost + repairCost;
+    return `URGENT: ${label} has been on lot ${days} days with ${money(holdingCost)} in holding costs alone. Total invested: ${money(totalInvested)}. At this age, auction liquidation is recommended — every additional day adds $35 in losses. Consider wholesale or dealer-to-dealer swap immediately.`;
+  }
+
+  if (days >= 90) {
+    let rec = `${label} is at ${days} days (${money(holdingCost)} holding cost). This unit has crossed the critical threshold.`;
+    if (avgModelProfit !== null && avgModelProfit > 0) {
+      rec += ` Similar ${vehicle.make} ${vehicle.model} units sold at avg ${money(avgModelProfit)} profit — a 10-15% price reduction could still recover margin.`;
+    } else {
+      rec += ` No recent comparable sales found for this model. Consider aggressive repricing (10%+ drop) or move to auction.`;
+    }
+    rec += ` List on 3+ platforms simultaneously to maximize exposure.`;
+    return rec;
+  }
+
+  if (days >= 60) {
+    let rec = `${label} at ${days} days — approaching critical territory (${money(holdingCost)} holding cost so far).`;
+    if (sameMakeOnLot > 2) {
+      rec += ` You have ${sameMakeOnLot} ${vehicle.make} units on lot — oversaturation may slow turnover. Consider a 5% price drop on this unit to differentiate.`;
+    } else if (sameMakeSales.length > 0) {
+      rec += ` ${vehicle.make} models have moved well (${sameMakeSales.length} sold) — a targeted Facebook/Instagram ad campaign could accelerate this sale.`;
+    } else {
+      rec += ` Suggest dropping price by 5% and launching targeted social media ads. Feature this unit prominently on your website.`;
+    }
+    return rec;
+  }
+
+  // 45-59 days
+  let rec = `${label} entering the aging zone at ${days} days.`;
+  if (purchasePrice > 0 && totalInvested > purchasePrice * 1.25) {
+    rec += ` Total investment (${money(totalInvested)}) is 25%+ above purchase price due to repairs — price aggressively to avoid further losses.`;
+  } else if (sameMakeSales.length > 2) {
+    rec += ` Good news: ${vehicle.make} sells well at your lot (${sameMakeSales.length} units sold). Refresh listing photos, add a test-drive promotion, and prioritize in showroom rotation.`;
+  } else {
+    rec += ` Schedule fresh listing photos, activate social ads, and consider a limited-time promotion to drive showroom traffic.`;
+  }
+  return rec;
+}
+
+function calculateHealthScore(context) {
+  const { summary, highlights } = context;
+  let score = 70; // baseline
+
+  // Inventory turnover factor (higher avg days = lower score)
+  if (summary.avgDaysOnLot <= 25) score += 12;
+  else if (summary.avgDaysOnLot <= 40) score += 6;
+  else if (summary.avgDaysOnLot >= 60) score -= 12;
+  else if (summary.avgDaysOnLot >= 45) score -= 6;
+
+  // Aging inventory penalty
+  const activeVehicles = summary.activeInventory || 1;
+  const agingCount = (highlights.oldestInventory || []).filter(v => v.daysInInventory >= 45).length;
+  const agingRatio = agingCount / activeVehicles;
+  if (agingRatio > 0.4) score -= 15;
+  else if (agingRatio > 0.2) score -= 8;
+  else if (agingRatio === 0) score += 8;
+
+  // Profit margin factor
+  if (summary.marginPct >= 18) score += 10;
+  else if (summary.marginPct >= 10) score += 5;
+  else if (summary.marginPct < 5 && summary.soldUnits > 0) score -= 8;
+
+  // Sales activity
+  if (summary.soldUnits >= 10) score += 5;
+  else if (summary.soldUnits === 0) score -= 10;
+
+  // Compliance penalty
+  const pendingCount = (highlights.pendingCompliance || []).length;
+  if (pendingCount > 3) score -= 10;
+  else if (pendingCount > 0) score -= 4;
+
+  // Document coverage
+  if (summary.documentCount > summary.activeInventory) score += 3;
+
+  return clamp(Math.round(score), 0, 100);
+}
+
+function generateDynamicInsights(context) {
+  const { summary, highlights, vehicles, sales, purchases, expenses, advertisingExpenses, complianceRecords, auctions } = context;
+  const insights = [];
+
+  // --- CRITICAL AGING (90+ days) ---
+  const activeVehicles = (vehicles || []).filter(v => v.status !== 'Sold');
+  const critical = activeVehicles.filter(v => safeNumber(v.daysInInventory) >= 90);
+  const highRisk = activeVehicles.filter(v => safeNumber(v.daysInInventory) >= 60 && safeNumber(v.daysInInventory) < 90);
+  const warning = activeVehicles.filter(v => safeNumber(v.daysInInventory) >= 45 && safeNumber(v.daysInInventory) < 60);
+
+  if (critical.length > 0) {
+    const totalHoldingCost = critical.reduce((sum, v) => sum + safeNumber(v.daysInInventory) * 35, 0);
+    const worstUnit = critical.sort((a, b) => safeNumber(b.daysInInventory) - safeNumber(a.daysInInventory))[0];
+    insights.push({
+      category: 'Critical Aging',
+      severity: 'critical',
+      icon: '🔴',
+      title: `${critical.length} vehicle${critical.length > 1 ? 's' : ''} past 90-day mark`,
+      description: `${worstUnit.year} ${worstUnit.make} ${worstUnit.model} is the oldest at ${safeNumber(worstUnit.daysInInventory)} days. Combined holding cost for all critical units: ${money(totalHoldingCost)}. Immediate action required — consider auction, wholesale, or aggressive price cuts.`,
+      actionable: `Price drop or auction ${worstUnit.year} ${worstUnit.make} ${worstUnit.model}`,
+      vehicleIds: critical.map(v => v.vin),
+    });
+  }
+
+  if (highRisk.length > 0) {
+    const totalHoldingCost = highRisk.reduce((sum, v) => sum + safeNumber(v.daysInInventory) * 35, 0);
+    insights.push({
+      category: 'High-Risk Aging',
+      severity: 'warning',
+      icon: '🟠',
+      title: `${highRisk.length} vehicle${highRisk.length > 1 ? 's' : ''} in 60–89 day zone`,
+      description: `These units are approaching critical territory with ${money(totalHoldingCost)} combined holding costs. Targeted marketing and 5% price reductions recommended before they cross 90 days.`,
+      actionable: 'Launch targeted ads for high-risk inventory',
+      vehicleIds: highRisk.map(v => v.vin),
+    });
+  }
+
+  if (warning.length > 0) {
+    insights.push({
+      category: 'Aging Watch',
+      severity: 'info',
+      icon: '🟡',
+      title: `${warning.length} vehicle${warning.length > 1 ? 's' : ''} entering aging zone (45–59 days)`,
+      description: `These units just crossed the 45-day threshold. Refresh listing photos, activate social media campaigns, and consider promotional pricing to accelerate turnover.`,
+      actionable: 'Refresh listings and boost marketing',
+      vehicleIds: warning.map(v => v.vin),
+    });
+  }
+
+  // --- PROFIT TRENDS ---
+  if (summary.soldUnits > 0) {
+    const marginStatus = summary.marginPct >= 15 ? 'healthy' : summary.marginPct >= 8 ? 'moderate' : 'thin';
+    let profitDesc = `Gross margin is at ${percent(summary.marginPct)} across ${summary.soldUnits} sales (${money(summary.totalRevenue)} revenue, ${money(summary.totalProfit)} profit).`;
+    if (highlights.highestProfitSale) {
+      profitDesc += ` Best deal: ${highlights.highestProfitSale.vehicle} at ${money(highlights.highestProfitSale.profit)} profit.`;
+    }
+    if (highlights.lowestProfitSale && highlights.lowestProfitSale.profit < 0) {
+      profitDesc += ` ⚠️ Loss detected: ${highlights.lowestProfitSale.vehicle} at ${money(highlights.lowestProfitSale.profit)}.`;
+    }
+    insights.push({
+      category: 'Profit Trends',
+      severity: marginStatus === 'thin' ? 'warning' : 'success',
+      icon: '💰',
+      title: `${marginStatus === 'healthy' ? 'Strong' : marginStatus === 'moderate' ? 'Moderate' : 'Thin'} margins at ${percent(summary.marginPct)}`,
+      description: profitDesc,
+      actionable: marginStatus === 'thin' ? 'Review pricing strategy' : 'Maintain current strategy',
+    });
+  } else {
+    insights.push({
+      category: 'Profit Trends',
+      severity: 'info',
+      icon: '💰',
+      title: 'No closed sales yet',
+      description: 'Focus on competitive pricing and marketing to close your first deals. Every unit sitting on the lot costs $35/day.',
+      actionable: 'Set competitive prices and launch ads',
+    });
+  }
+
+  // --- INVENTORY HEALTH ---
+  if (summary.activeInventory > 0) {
+    const makeCounts = {};
+    activeVehicles.forEach(v => {
+      makeCounts[v.make] = (makeCounts[v.make] || 0) + 1;
+    });
+    const topMake = Object.entries(makeCounts).sort((a, b) => b[1] - a[1])[0];
+    const topMakePercent = topMake ? Math.round((topMake[1] / summary.activeInventory) * 100) : 0;
+
+    let invDesc = `${summary.activeInventory} vehicles on lot, averaging ${summary.avgDaysOnLot} days. Inventory value: ${money(summary.totalInventoryCost)}.`;
+    if (topMakePercent > 50) {
+      invDesc += ` ⚠️ ${topMake[0]} makes up ${topMakePercent}% of inventory — consider diversifying to reduce concentration risk.`;
+    } else if (topMake) {
+      invDesc += ` Top make: ${topMake[0]} (${topMake[1]} units, ${topMakePercent}%).`;
+    }
+
+    insights.push({
+      category: 'Inventory Health',
+      severity: summary.avgDaysOnLot > 50 ? 'warning' : 'success',
+      icon: '📦',
+      title: `${summary.avgDaysOnLot} avg days on lot — ${summary.avgDaysOnLot <= 35 ? 'Excellent turnover' : summary.avgDaysOnLot <= 50 ? 'Healthy turnover' : 'Slow turnover'}`,
+      description: invDesc,
+      actionable: summary.avgDaysOnLot > 50 ? 'Focus on moving aged units' : 'Maintain sourcing cadence',
+    });
+  }
+
+  // --- PURCHASE INTELLIGENCE ---
+  if (purchases && purchases.length > 0) {
+    const recentPurchases = [...purchases].sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate)).slice(0, 5);
+    const avgRecentCost = recentPurchases.reduce((sum, p) => sum + safeNumber(p.totalPurchaseCost), 0) / recentPurchases.length;
+    const allAvgCost = purchases.reduce((sum, p) => sum + safeNumber(p.totalPurchaseCost), 0) / purchases.length;
+    const costTrend = allAvgCost > 0 ? Math.round(((avgRecentCost - allAvgCost) / allAvgCost) * 100) : 0;
+
+    let purchDesc = `${purchases.length} total purchases at ${money(summary.totalPurchasesCost)} total spend.`;
+    if (highlights.topSources.length > 0) {
+      purchDesc += ` Top source: ${highlights.topSources[0].source} (${highlights.topSources[0].count} vehicles).`;
+    }
+    if (Math.abs(costTrend) > 5) {
+      purchDesc += ` Recent purchase costs trending ${costTrend > 0 ? 'up' : 'down'} ${Math.abs(costTrend)}% vs. overall average.`;
+    }
+
+    insights.push({
+      category: 'Purchase Intelligence',
+      severity: costTrend > 15 ? 'warning' : 'info',
+      icon: '🏷️',
+      title: `Avg purchase cost: ${money(avgRecentCost)}${Math.abs(costTrend) > 5 ? ` (${costTrend > 0 ? '↑' : '↓'}${Math.abs(costTrend)}%)` : ''}`,
+      description: purchDesc,
+      actionable: costTrend > 15 ? 'Negotiate harder or find new sources' : 'Continue sourcing strategy',
+    });
+  }
+
+  // --- COMPLIANCE ALERTS ---
+  const pendingCompliance = (highlights.pendingCompliance || []);
+  if (pendingCompliance.length > 0) {
+    const details = pendingCompliance.slice(0, 3).map(r => r.vin).join(', ');
+    insights.push({
+      category: 'Compliance Alerts',
+      severity: pendingCompliance.length > 3 ? 'critical' : 'warning',
+      icon: '⚠️',
+      title: `${pendingCompliance.length} vehicle${pendingCompliance.length > 1 ? 's' : ''} with pending compliance items`,
+      description: `VINs affected: ${details}${pendingCompliance.length > 3 ? ` and ${pendingCompliance.length - 3} more` : ''}. Address pending title transfers, registration, insurance, or tax submissions before regulatory deadlines.`,
+      actionable: 'Review compliance dashboard',
+    });
+  }
+
+  // --- EXPENSE ANALYSIS ---
+  if (summary.totalBusinessExpenses > 0 || summary.totalAdSpend > 0) {
+    const adToRevenueRatio = summary.totalRevenue > 0 ? Math.round((summary.totalAdSpend / summary.totalRevenue) * 100) : 0;
+    let expDesc = `Business expenses: ${money(summary.totalBusinessExpenses)}. Ad spend: ${money(summary.totalAdSpend)}.`;
+    if (summary.totalRevenue > 0) {
+      expDesc += ` Ad-to-revenue ratio: ${adToRevenueRatio}%.`;
+      if (adToRevenueRatio > 20) {
+        expDesc += ' This is high — review ad campaign performance to ensure ROI.';
+      } else if (adToRevenueRatio < 5 && summary.avgDaysOnLot > 40) {
+        expDesc += ' Consider increasing ad spend to accelerate slow-moving inventory.';
+      }
+    }
+    if (highlights.expenseByCategory && highlights.expenseByCategory.length > 0) {
+      expDesc += ` Largest category: ${highlights.expenseByCategory[0].category} (${money(highlights.expenseByCategory[0].amount)}).`;
+    }
+    insights.push({
+      category: 'Expense Analysis',
+      severity: adToRevenueRatio > 20 ? 'warning' : 'info',
+      icon: '📊',
+      title: `${money(summary.totalBusinessExpenses + summary.totalAdSpend)} total expenditure`,
+      description: expDesc,
+      actionable: adToRevenueRatio > 20 ? 'Audit ad campaign ROI' : 'Monitor spending trends',
+    });
+  }
+
+  // --- AUCTION OPPORTUNITIES ---
+  const auctionOpps = (highlights.auctionOpportunities || []);
+  if (auctionOpps.length > 0) {
+    const best = auctionOpps[0];
+    insights.push({
+      category: 'Auction Opportunities',
+      severity: 'info',
+      icon: '🎯',
+      title: `${auctionOpps.length} active auction opportunit${auctionOpps.length > 1 ? 'ies' : 'y'}`,
+      description: `Best value: ${best.vehicle} at ${money(best.marketValue)} market value (recommended max bid: ${money(best.recommendedMaxBid)}).`,
+      actionable: `Evaluate ${best.vehicle} auction bid`,
+    });
+  }
+
+  // --- ZERO-AGING CELEBRATION ---
+  if (critical.length === 0 && highRisk.length === 0 && warning.length === 0 && summary.activeInventory > 0) {
+    insights.push({
+      category: 'Inventory Health',
+      severity: 'success',
+      icon: '✅',
+      title: 'Zero aging vehicles — excellent lot turnover!',
+      description: `All ${summary.activeInventory} active vehicles have been on lot less than 45 days. Your sourcing and pricing strategy is working. Keep it up.`,
+      actionable: 'Maintain current strategy',
+    });
+  }
+
+  // Sort by severity priority
+  const severityOrder = { critical: 0, warning: 1, info: 2, success: 3 };
+  insights.sort((a, b) => (severityOrder[a.severity] ?? 99) - (severityOrder[b.severity] ?? 99));
+
+  return insights;
+}
+
+function generateAgingRecommendations(context) {
+  const { vehicles, sales } = context;
+  const activeVehicles = (vehicles || []).filter(v => v.status !== 'Sold' && v.status !== 'Returned');
+  const agingVehicles = activeVehicles.filter(v => safeNumber(v.daysInInventory) >= 45);
+  const recommendations = {};
+
+  for (const vehicle of agingVehicles) {
+    recommendations[vehicle.vin] = generateVehicleRecommendation(vehicle, vehicles, sales || []);
+  }
+
+  return recommendations;
+}
+
 async function loadContext(dealershipId) {
   const [
     dealership,
@@ -571,6 +883,7 @@ async function loadContext(dealershipId) {
     prisma.vehicle.findMany({
       where: { dealershipId },
       select: {
+        id: true,
         vin: true,
         make: true,
         model: true,
@@ -685,19 +998,22 @@ router.get('/', async (req, res, next) => {
     const context = await loadContext(req.dealershipId);
     const summary = context.summary;
 
-    const insights = [
-      `You have ${summary.activeInventory} active vehicles and ${summary.soldUnits} closed sales.`,
-      `Purchases total ${money(summary.totalPurchasesCost)} and gross margin sits at ${percent(summary.marginPct)}.`,
-      context.highlights.oldestInventory?.length
-        ? `${context.highlights.oldestInventory[0].label} is the oldest active unit at ${context.highlights.oldestInventory[0].daysInInventory} days.`
-        : 'No active inventory is currently on the lot.',
-    ];
+    // Generate dynamic, data-driven insights
+    const dynamicInsights = generateDynamicInsights(context);
+
+    // Generate per-vehicle aging recommendations
+    const agingRecommendations = generateAgingRecommendations(context);
+
+    // Calculate overall health score
+    const healthScore = calculateHealthScore(context);
 
     res.json({
       summary,
       highlights: context.highlights,
       dealership: context.dealership,
-      insights,
+      insights: dynamicInsights,
+      agingRecommendations,
+      healthScore,
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
