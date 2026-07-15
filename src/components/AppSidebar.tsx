@@ -21,7 +21,6 @@ const navItems = [
   { to: '/notifications', icon: Bell, label: 'Notifications', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/communication', icon: MessageSquare, label: 'Communication', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/expenses', icon: Receipt, label: 'Expenses', roles: ['ADMIN'] },
-  { to: '/used-vehicle-forms', icon: FileCheck2, label: 'Used Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['ADMIN', 'MANAGER'] },
   { to: '/team-analytics', icon: Users, label: 'Team Management', roles: ['ADMIN', 'MANAGER'] },
   { to: '/attendance', icon: CalendarDays, label: 'Attendance Log', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
