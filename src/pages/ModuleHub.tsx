@@ -47,12 +47,6 @@ const modules: Record<string, ModuleDefinition> = {
     sections: ["Lead Volume", "Sold Units", "Conversion Rate", "Commissions", "Performance Trends"],
     aiFeatures: ["Lead-source performance ranking", "Coaching recommendations", "Commission forecasting"],
   },
-  "/notifications": {
-    title: "Notifications",
-    purpose: "Actionable alerts across compliance, finance, inventory aging, and documentation.",
-    sections: ["RMV Alerts", "Insurance Expiry", "Payment Due", "Aging Inventory", "Missing Docs"],
-    aiFeatures: ["Priority scoring", "Role-based routing", "Escalation recommendations"],
-  },
 };
 
 export default function ModuleHub() {

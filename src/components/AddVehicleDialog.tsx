@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useInventory } from '@/hooks/useInventory';
 import { toast } from '@/components/ui/toast-utils';
 import { useAuth } from '@/context/auth-hooks';
@@ -249,9 +250,15 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {/* Vehicle Details */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
+          <Tabs defaultValue="details" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsTrigger value="details">Vehicle Details</TabsTrigger>
+              <TabsTrigger value="purchase">Purchase Info</TabsTrigger>
+              <TabsTrigger value="costs">Costs & Docs</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="details" className="space-y-4">
+              <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-sm text-primary uppercase tracking-wider">Vehicle Details</h3>
               {pdfData && (
                 <div className="flex gap-2">
@@ -321,12 +328,11 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
                 <Input name="titleNumber" value={formData.titleNumber} onChange={handleInputChange} placeholder="e.g. TITLE123456" className="bg-muted/50 border-border text-foreground" />
               </div>
             </div>
-          </div>
+            </TabsContent>
 
-          {/* Purchase Details */}
-          <div>
-            <h3 className="font-semibold text-sm text-primary uppercase tracking-wider mb-3">Purchase Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <TabsContent value="purchase" className="space-y-4">
+              <h3 className="font-semibold text-sm text-primary uppercase tracking-wider mb-3">Purchase Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Purchase Date<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="purchaseDate" value={formData.purchaseDate} onChange={handleInputChange} type="date" required className="bg-muted/50 border-border text-foreground" />
@@ -380,12 +386,11 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
                 </Select>
               </div>
             </div>
-          </div>
+            </TabsContent>
 
-          {/* Additional Costs */}
-          <div>
-            <h3 className="font-semibold text-sm text-primary uppercase tracking-wider mb-3">Additional Costs</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <TabsContent value="costs" className="space-y-4">
+              <h3 className="font-semibold text-sm text-primary uppercase tracking-wider mb-3">Additional Costs</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Transport Cost ($)</Label>
                 <Input name="transportCost" value={formData.transportCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-muted/50 border-border text-foreground" />
@@ -403,9 +408,10 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
                 <Input name="registrationCost" value={formData.registrationCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-muted/50 border-border text-foreground" />
               </div>
             </div>
-          </div>
+            </TabsContent>
+          </Tabs>
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
             <Button type="button" variant="outline" onClick={() => handleDialogChange(false)} className="border-border text-muted-foreground">Cancel</Button>
             <Button type="submit" disabled={loading} className="bg-primary hover:bg-primary-hover text-black">
               {loading ? 'Adding...' : 'Add Vehicle'}

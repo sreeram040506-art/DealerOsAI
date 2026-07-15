@@ -24,7 +24,6 @@ const Registry = lazy(() => import("./pages/Registry"));
 const TeamAnalytics = lazy(() => import("./pages/TeamAnalytics"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Accounting = lazy(() => import("./pages/Accounting"));
-const EnterpriseModuleCrud = lazy(() => import("./pages/EnterpriseModuleCrud"));
 const AIInsights = lazy(() => import("./pages/AIInsights"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
@@ -125,11 +124,6 @@ export default function App() {
                 <Route path="/accounting" element={
                   <ProtectedRoute roles={['ADMIN']}>
                     <Accounting />
-                  </ProtectedRoute>
-                } />
-                <Route path="/notifications" element={
-                  <ProtectedRoute>
-                    <EnterpriseModuleCrud />
                   </ProtectedRoute>
                 } />
                 <Route path="/used-vehicle-forms" element={

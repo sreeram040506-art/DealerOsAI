@@ -106,7 +106,7 @@ export default function Registry() {
       }
       
       if (base64) {
-        let vehicleName = [log.year, log.make, log.model].filter(Boolean).join(' ') || 'Document';
+        const vehicleName = [log.year, log.make, log.model].filter(Boolean).join(' ') || 'Document';
         setViewerDoc({ base64, name: vehicleName, type: label });
         setViewerOpen(true);
       } else {

@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Car, ShoppingCart, 
-  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck, Brain, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Bell, Plug, MessageSquare, CalendarDays
+  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck, Brain, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare, CalendarDays
 } from 'lucide-react';
 import { useState, useCallback, memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -26,7 +26,6 @@ const drawerItems = [
   { to: '/marketing', icon: Megaphone, label: 'Marketing', roles: ['ADMIN', 'MANAGER'] },
   { to: '/ai-insights', icon: Brain, label: 'AI Insights / Ask', roles: ['ADMIN', 'MANAGER'] },
   { to: '/accounting', icon: Calculator, label: 'Accounting', roles: ['ADMIN'] },
-  { to: '/notifications', icon: Bell, label: 'Notifications', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/communication', icon: MessageSquare, label: 'Communication', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/expenses', icon: Receipt, label: 'Expenses', roles: ['ADMIN'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['ADMIN', 'MANAGER'] },

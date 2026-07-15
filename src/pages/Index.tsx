@@ -105,12 +105,12 @@ export default function Dashboard() {
     toast.success(`Downloading ${type.replace('_', ' ')} for ${vehicle.make} ${vehicle.model}...`);
   };
 
-  // Map data with fallbacks
-  const vehicles = data?.vehicles || [];
-  const sales = data?.sales || [];
-  const ads = data?.advertising || [];
-  const expenses = data?.expenses || [];
-  const team = data?.team || [];
+  // Map data with fallbacks (memoized to avoid stale closures / infinite re-renders)
+  const vehicles = useMemo(() => data?.vehicles || [], [data?.vehicles]);
+  const sales = useMemo(() => data?.sales || [], [data?.sales]);
+  const ads = useMemo(() => data?.advertising || [], [data?.advertising]);
+  const expenses = useMemo(() => data?.expenses || [], [data?.expenses]);
+  const team = useMemo(() => data?.team || [], [data?.team]);
 
   // Memoize all derived computations
   const inventoryStatusData = useMemo(() => [
@@ -222,6 +222,48 @@ export default function Dashboard() {
             className="cursor-pointer transition-all hover:scale-105 active:scale-95"
           />
         </div>
+
+        {/* Quick Actions */}
+        <section className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center gap-2 border-b border-border/50 pb-4">
+            <Sparkles className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-black text-foreground tracking-tight">Quick Actions</h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Button
+              onClick={() => navigate('/inventory')}
+              className="h-auto flex-col gap-2 py-4 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
+              variant="outline"
+            >
+              <Car className="w-6 h-6 text-primary" />
+              <span className="font-bold">Add Vehicle</span>
+            </Button>
+            <Button
+              onClick={() => navigate('/sales')}
+              className="h-auto flex-col gap-2 py-4 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
+              variant="outline"
+            >
+              <ShoppingCart className="w-6 h-6 text-success" />
+              <span className="font-bold">New Deal</span>
+            </Button>
+            <Button
+              onClick={() => navigate('/customers')}
+              className="h-auto flex-col gap-2 py-4 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
+              variant="outline"
+            >
+              <Users className="w-6 h-6 text-info" />
+              <span className="font-bold">Add Customer</span>
+            </Button>
+            <Button
+              onClick={() => navigate('/ai-insights')}
+              className="h-auto flex-col gap-2 py-4 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
+              variant="outline"
+            >
+              <Sparkles className="w-6 h-6 text-warning" />
+              <span className="font-bold">Ask AI</span>
+            </Button>
+          </div>
+        </section>
 
         {/* Aging Inventory Alert System */}
         <section className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4">
