@@ -632,19 +632,19 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Purchase Price</span>
-                    <span className="font-bold text-foreground">${vehicle.purchasePrice.toLocaleString()}</span>
+                    <span className="font-bold text-foreground">${(vehicle.purchasePrice || vehicle.purchase?.purchasePrice || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Transport</span>
-                    <span className="font-bold text-foreground">${vehicle.transportCost.toLocaleString()}</span>
+                    <span className="font-bold text-foreground">${(vehicle.transportCost || vehicle.purchase?.transportCost || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Inspection</span>
-                    <span className="font-bold text-foreground">${vehicle.inspectionCost.toLocaleString()}</span>
+                    <span className="font-bold text-foreground">${(vehicle.inspectionCost || vehicle.purchase?.inspectionCost || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Fees</span>
-                    <span className="font-bold text-foreground">${vehicle.registrationCost.toLocaleString()}</span>
+                    <span className="font-bold text-foreground">${(vehicle.registrationCost || vehicle.purchase?.registrationCost || 0).toLocaleString()}</span>
                   </div>
                   <div className="pt-2 border-t border-border/40 flex justify-between text-sm">
                     <span className="font-black uppercase tracking-widest text-[10px] text-primary">Initial Total</span>
