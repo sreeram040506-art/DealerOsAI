@@ -11,7 +11,7 @@ import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import EditSaleDialog from '@/components/EditSaleDialog';
 import { Vehicle } from '@/types/inventory';
-import { FileText, Trash2, Loader2, Receipt, ShoppingCart, Download, Upload, Pencil, CreditCard, CheckCircle2 } from 'lucide-react';
+import { FileText, Trash2, Loader2, Receipt, ShoppingCart, Download, Upload, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { apiUrl } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
@@ -32,46 +32,14 @@ export default function Sales() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [payingId, setPayingId] = useState<string | null>(null);
+
   const [saleToEdit, setSaleToEdit] = useState<any | null>(null);
   const isStaff = user?.role === 'STAFF';
   const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('payment') === 'success') {
-      toast.success('Stripe Payment completed successfully! Deposit received.');
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (params.get('payment') === 'cancelled') {
-      toast.error('Payment checkout session was cancelled.');
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
 
-  const handleProcessPayment = async (saleId: string, amount: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!token) return;
-    setPayingId(saleId);
-    try {
-      const resp = await fetch(apiUrl('/payments/create-checkout-session'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ dealId: saleId, amount })
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.message || 'Failed to create checkout session');
-      
-      toast.success('Redirecting to Stripe payment checkout...');
-      window.location.href = data.url;
-    } catch (err: any) {
-      toast.error(err.message || 'Error starting checkout session.');
-    } finally {
-      setPayingId(null);
-    }
-  };
+
+
 
   if (salesLoading || vehiclesLoading) return <div className="p-8 text-center text-muted-foreground">Loading sales...</div>;
   if (salesError || vehiclesError) {
@@ -289,30 +257,7 @@ export default function Sales() {
                           </button>
                         </>
                       )}
-                      <span className={cn(
-                        "px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border shadow-sm",
-                        sale.paymentMethod === 'Cash' ? 'bg-primary/10 text-primary border-primary/20' :
-                        sale.paymentMethod === 'Loan' ? 'bg-foreground/10 text-foreground border-foreground/20' :
-                        'bg-muted text-muted-foreground border-border'
-                      )}>
-                        {sale.paymentMethod}
-                      </span>
-                      <span className={cn(
-                        "px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border shadow-sm flex items-center gap-1",
-                        sale.paymentStatus === 'PAID' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
-                        'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                      )}>
-                        {sale.paymentStatus === 'PAID' ? 'Paid' : 'Pending'}
-                      </span>
-                      {sale.paymentStatus !== 'PAID' && (
-                        <button
-                          onClick={(e) => handleProcessPayment(sale.id, sale.downPayment || 500, e)}
-                          disabled={payingId === sale.id}
-                          className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase border border-primary/30 text-primary bg-primary/5 active:scale-95 transition-transform flex items-center gap-1"
-                        >
-                          {payingId === sale.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Pay Deposit'}
-                        </button>
-                      )}
+
                     </div>
                   </div>
                   
@@ -361,7 +306,7 @@ export default function Sales() {
                   <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Customer</th>
                   <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
                   <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Price</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Payment</th>
+
                   {!isStaff && <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Profit</th>}
                   {isManagerOrAdmin && <th className="text-right px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>}
                 </tr>
@@ -386,101 +331,59 @@ export default function Sales() {
                       <td className="px-4 py-3 text-sm text-foreground">{formatSafeDate(sale.saleDate)}</td>
                       <td className="px-4 py-3 text-sm font-semibold text-foreground tabular-nums">${sale.salePrice.toLocaleString()}</td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className={cn(
-                            "px-2 py-0.5 rounded text-[10px] font-semibold border",
-                            sale.paymentMethod === 'Cash' ? 'bg-primary/10 text-primary border-primary/20' :
-                            sale.paymentMethod === 'Loan' ? 'bg-foreground/10 text-foreground border-foreground/20' :
-                            'bg-muted text-muted-foreground border-border'
-                          )}>
-                            {sale.paymentMethod}
-                          </span>
-                          <span className={cn(
-                            "px-2 py-0.5 rounded text-[10px] font-semibold border flex items-center gap-1",
-                            sale.paymentStatus === 'PAID' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
-                            'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                          )}>
-                            {sale.paymentStatus === 'PAID' ? (
-                              <>
-                                <CheckCircle2 className="w-3 h-3" /> Paid
-                              </>
-                            ) : (
-                              'Pending'
-                            )}
-                          </span>
-                          {sale.paymentStatus !== 'PAID' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => handleProcessPayment(sale.id, sale.downPayment || 500, e)}
-                              disabled={payingId === sale.id}
-                              className="h-7 px-2 text-[10px] font-black uppercase flex items-center gap-1 border-primary/30 text-primary hover:bg-primary/5"
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button 
+                              onClick={(e) => e.stopPropagation()}
+                              className={cn(
+                                "p-1 rounded-md transition-colors",
+                                (vehicle?.hasBillOfSale || sale.hasBillOfSale)
+                                  ? "text-primary/60 hover:text-primary hover:bg-primary/10"
+                                  : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted"
+                              )}
                             >
-                              {payingId === sale.id ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : (
-                                <>
-                                  <CreditCard className="w-3 h-3" /> Pay Deposit
-                                </>
-                              )}
-                            </Button>
-                          )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button 
-                                onClick={(e) => e.stopPropagation()}
-                                className={cn(
-                                  "p-1 rounded-md transition-colors",
-                                  (vehicle?.hasBillOfSale || sale.hasBillOfSale)
-                                    ? "text-primary/60 hover:text-primary hover:bg-primary/10"
-                                    : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted"
-                                )}
-                              >
-                                <FileText className="w-3.5 h-3.5" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="bg-white border-border min-w-[200px]">
-                              <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/50 mb-1">Preview Documents</div>
-                              {vehicle?.hasDocument && (
-                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
-                                  <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
-                                </DropdownMenuItem>
-                              )}
-                              {vehicle?.hasSourceDocument && (
-                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
-                                  <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
-                                </DropdownMenuItem>
-                              )}
-                              
-                              {(vehicle?.hasBillOfSale || sale.hasBillOfSale) ? (
-                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle || { id: sale.vehicleId, year: 0, make: 'Vehicle', model: 'Record' } as any, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-foreground cursor-pointer hover:bg-muted/50">
-                                  <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
-                                </DropdownMenuItem>
-                              ) : (
-                                    <DropdownMenuItem onClick={() => handleUploadBillOfSale(vehicle?.vin)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic cursor-pointer hover:bg-muted/50">
-                                      <Upload className="w-3.5 h-3.5 mr-2" /> Upload Bill of Sale
-                                </DropdownMenuItem>
-                              )}
-                              
-                              <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-t border-border/50 my-1">Download Files</div>
-                              {vehicle?.hasDocument && (
-                                <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
-                                  <Download className="w-3.5 h-3.5 mr-2 text-primary" /> Download Record
-                                </DropdownMenuItem>
-                              )}
-                              {vehicle?.hasSourceDocument && (
-                                <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
-                                  <Download className="w-3.5 h-3.5 mr-2 text-primary" /> Download Source
-                                </DropdownMenuItem>
-                              )}
-                              {(vehicle?.hasBillOfSale || sale.hasBillOfSale) && (
-                                <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle || { id: sale.vehicleId, make: 'Vehicle', model: 'Record' } as any, 'sale')} className="text-[10px] font-black uppercase py-2 text-foreground cursor-pointer hover:bg-muted/50">
-                                  <Download className="w-3.5 h-3.5 mr-2" /> Download Bill of Sale
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                              <FileText className="w-3.5 h-3.5" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-white border-border min-w-[200px]">
+                            <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/50 mb-1">Preview Documents</div>
+                            {vehicle?.hasDocument && (
+                              <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
+                              </DropdownMenuItem>
+                            )}
+                            {vehicle?.hasSourceDocument && (
+                              <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
+                              </DropdownMenuItem>
+                            )}
+                            {(vehicle?.hasBillOfSale || sale.hasBillOfSale) ? (
+                              <DropdownMenuItem onClick={() => handleViewDocument(vehicle || { id: sale.vehicleId, year: 0, make: 'Vehicle', model: 'Record' } as any, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-foreground cursor-pointer hover:bg-muted/50">
+                                <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => handleUploadBillOfSale(vehicle?.vin)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic cursor-pointer hover:bg-muted/50">
+                                <Upload className="w-3.5 h-3.5 mr-2" /> Upload Bill of Sale
+                              </DropdownMenuItem>
+                            )}
+                            <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-t border-border/50 my-1">Download Files</div>
+                            {vehicle?.hasDocument && (
+                              <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                <Download className="w-3.5 h-3.5 mr-2 text-primary" /> Download Record
+                              </DropdownMenuItem>
+                            )}
+                            {vehicle?.hasSourceDocument && (
+                              <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                <Download className="w-3.5 h-3.5 mr-2 text-primary" /> Download Source
+                              </DropdownMenuItem>
+                            )}
+                            {(vehicle?.hasBillOfSale || sale.hasBillOfSale) && (
+                              <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle || { id: sale.vehicleId, make: 'Vehicle', model: 'Record' } as any, 'sale')} className="text-[10px] font-black uppercase py-2 text-foreground cursor-pointer hover:bg-muted/50">
+                                <Download className="w-3.5 h-3.5 mr-2" /> Download Bill of Sale
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                       {!isStaff && (
                         <td className="px-4 py-3">
