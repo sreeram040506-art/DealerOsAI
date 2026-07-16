@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
+import { DealershipProvider } from "./context/DealershipContext";
 import { lazy, Suspense, useEffect, memo } from "react";
 
 // Preload critical routes
@@ -79,6 +80,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
+          <DealershipProvider>
           <TooltipProvider delayDuration={300}>
             <Suspense fallback={<PageLoader />}>
               <PreloadManager />
@@ -188,6 +190,7 @@ export default function App() {
             <Toaster />
             <Sonner />
           </TooltipProvider>
+          </DealershipProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

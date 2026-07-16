@@ -7,6 +7,7 @@ import {
 import { useState, memo, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-hooks';
+import { useDealership } from '@/context/DealershipContext';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -32,6 +33,7 @@ const AppSidebar = memo(function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { profile: dealershipProfile } = useDealership();
 
   const toggleCollapsed = useCallback(() => setCollapsed(prev => !prev), []);
 
@@ -51,9 +53,17 @@ const AppSidebar = memo(function AppSidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-        <div className="h-8 px-2 rounded-md bg-sidebar-primary/90 flex items-center justify-center shrink-0" aria-hidden="true">
-          <span className="text-[10px] font-black tracking-wider text-sidebar-primary-foreground">AI</span>
-        </div>
+        {dealershipProfile?.logoBase64 ? (
+          <img
+            src={dealershipProfile.logoBase64}
+            alt="Dealership Logo"
+            className="h-8 w-8 rounded-md object-contain shrink-0 bg-card/50"
+          />
+        ) : (
+          <div className="h-8 px-2 rounded-md bg-sidebar-primary/90 flex items-center justify-center shrink-0" aria-hidden="true">
+            <span className="text-[10px] font-black tracking-wider text-sidebar-primary-foreground">AI</span>
+          </div>
+        )}
         {!collapsed && (
           <div className="overflow-hidden">
             <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">

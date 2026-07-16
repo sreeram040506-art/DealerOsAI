@@ -6,6 +6,7 @@ import {
 import { useState, useCallback, memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-hooks';
+import { useDealership } from '@/context/DealershipContext';
 import { Button } from './ui/button';
 
 const navItems = [
@@ -39,6 +40,7 @@ const MobileNav = memo(function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { profile: dealershipProfile } = useDealership();
 
   const openDrawer = useCallback(() => setIsOpen(true), []);
   const closeDrawer = useCallback(() => setIsOpen(false), []);
@@ -58,9 +60,17 @@ const MobileNav = memo(function MobileNav() {
       {/* Top bar */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 bg-sidebar border-b border-sidebar-border sticky top-0 z-50">
         <div className="flex items-center gap-2">
-          <div className="h-7 px-2 rounded-md bg-sidebar-primary/90 flex items-center justify-center" aria-hidden="true">
-            <span className="text-[9px] font-black tracking-wider text-sidebar-primary-foreground">AI</span>
-          </div>
+          {dealershipProfile?.logoBase64 ? (
+            <img
+              src={dealershipProfile.logoBase64}
+              alt="Dealership Logo"
+              className="h-7 w-7 rounded-md object-contain shrink-0 bg-card/50"
+            />
+          ) : (
+            <div className="h-7 px-2 rounded-md bg-sidebar-primary/90 flex items-center justify-center" aria-hidden="true">
+              <span className="text-[9px] font-black tracking-wider text-sidebar-primary-foreground">AI</span>
+            </div>
+          )}
           <h1 className="text-sm font-bold text-sidebar-accent-foreground tracking-tight">
             {user?.dealership?.name || 'Synex'}
           </h1>

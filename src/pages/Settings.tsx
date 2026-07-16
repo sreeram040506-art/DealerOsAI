@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/auth-hooks';
+import { useDealership } from '@/context/DealershipContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +12,7 @@ import AppLayout from '@/components/AppLayout';
 
 const Settings = () => {
   const { token, user } = useAuth();
+  const { refreshProfile } = useDealership();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [profile, setProfile] = useState({
@@ -63,8 +65,8 @@ const Settings = () => {
 
       if (response.ok) {
         toast.success('Dealership profile updated successfully');
-        // Optional: reload page to update logo in sidebar
-        // window.location.reload();
+        // Refresh dealership context so sidebar/navbar logo updates immediately
+        await refreshProfile();
       } else {
         const data = await response.json();
         toast.error(data.message || 'Update failed');
