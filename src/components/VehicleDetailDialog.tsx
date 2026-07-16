@@ -930,20 +930,6 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     />
                   </div>
                   <div className="space-y-2 col-span-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Payment Method</Label>
-                    <select
-                      value={saleForm.paymentMethod}
-                      onChange={e => setSaleForm({...saleForm, paymentMethod: e.target.value})}
-                      className="flex h-10 w-full rounded-md border border-border bg-muted px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
-                      required
-                    >
-                      <option value="Cash">Cash</option>
-                      <option value="Bank Transfer">Bank Transfer</option>
-                      <option value="Loan">Loan / Finance</option>
-                      <option value="Check">Check</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2 col-span-2">
                     <Label className="text-xs font-bold uppercase text-muted-foreground">Bill of Sale Document (Optional)</Label>
                     <div 
                       onClick={() => document.getElementById('sale-file-upload')?.click()}
@@ -1128,10 +1114,6 @@ function BuyerInfoSection({ vehicleId }: { vehicleId: string }) {
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">Sale Date</span>
         <span className="font-bold text-foreground">{formatSafeDate(sale.saleDate)}</span>
-      </div>
-      <div className="flex justify-between text-xs">
-        <span className="text-muted-foreground">Payment Method</span>
-        <span className="font-bold text-foreground">{sale.paymentMethod}</span>
       </div>
       <div className="flex justify-between items-center text-xs pt-2 border-t border-border/40">
         <span className="font-black uppercase tracking-widest text-[10px] text-foreground">Net Profit</span>
