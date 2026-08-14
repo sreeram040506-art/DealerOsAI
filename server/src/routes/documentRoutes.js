@@ -596,7 +596,12 @@ router.post(
 
       // Prefer deterministic auction/facility details over AI seller/consignor guesses.
       const warnings = {};
-      
+
+      if (info.vinChecksumInvalid) {
+        warnings.vinChecksumInvalid = true;
+        console.warn(`[UserForm] VIN failed checksum validation and could not be auto-corrected: ${info.vin}. Flagging for manual review.`);
+      }
+
       // ── OPTIMIZATION: Bypass heavy local OCR if Vision successfully extracted the VIN ──
       const hasCompleteAcquisition = !!info.vin;
       

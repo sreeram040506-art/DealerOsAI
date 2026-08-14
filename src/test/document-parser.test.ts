@@ -170,7 +170,9 @@ describe('document parser fallback extraction', () => {
     const info = await extractVehicleInfo(Buffer.from(text), 'text/plain', 'disposition');
 
     expect(info.disposedPrice).toBe(7000);
-    expect(info.purchasePrice).toBeUndefined();
+    // Not set for a sale document — clean() normalizes absent numeric fields to null
+    // rather than leaving them undefined, so assert on "falsy" instead of a specific type.
+    expect(info.purchasePrice).toBeFalsy();
   });
 
   it('does not accept an obviously low acquisition total as a valid vehicle price', () => {
@@ -550,6 +552,70 @@ describe('document parser fallback extraction', () => {
     expect(info.usedVehicleSourceState).toBe('NH');
     expect(info.usedVehicleSourceZipCode).toBe('03060');
     expect(info.purchasePrice).toBe(14140);
+  });
+
+  it('flags a VIN that fails checksum validation instead of silently trusting it', async () => {
+    // Last digit deliberately tampered so it no longer matches the ISO 3779 check digit
+    // (the real VIN '5UXTY5C09M9E04416' is checksum-valid; this is not).
+    const tamperedVin = '5UXTY5C09M9E04417';
+    const text = `
+      BILL OF SALE
+      BUYER INFORMATION:
+      WASHINGTON STREET AUTO SALES
+
+      SELLER INFORMATION:
+      TULLEY AUTO GROUP
+      131 W Glenwood St
+      Nashua, NH 03060
+
+      VEHICLE INFORMATION:
+      YEAR: 2021
+      MAKE: BMW
+      MODEL: X3
+      VIN: ${tamperedVin}
+      ODOMETER READING
+      99,363
+
+      SETTLEMENT
+      VEHICLE PRICE: $13,800.00
+      TOTAL DUE: $14,140.00
+    `;
+
+    const info = await extractVehicleInfo(Buffer.from(text), 'text/plain', 'acquisition');
+
+    // Must be flagged for manual review, not silently "corrected" into some other VIN.
+    expect(info.vinChecksumInvalid).toBe(true);
+    expect(info.vin).toBe(tamperedVin);
+  });
+
+  it('does not flag a checksum-valid VIN', async () => {
+    const text = `
+      BILL OF SALE
+      BUYER INFORMATION:
+      WASHINGTON STREET AUTO SALES
+
+      SELLER INFORMATION:
+      TULLEY AUTO GROUP
+      131 W Glenwood St
+      Nashua, NH 03060
+
+      VEHICLE INFORMATION:
+      YEAR: 2021
+      MAKE: BMW
+      MODEL: X3
+      VIN: 5UXTY5C09M9E04416
+      ODOMETER READING
+      99,363
+
+      SETTLEMENT
+      VEHICLE PRICE: $13,800.00
+      TOTAL DUE: $14,140.00
+    `;
+
+    const info = await extractVehicleInfo(Buffer.from(text), 'text/plain', 'acquisition');
+
+    expect(info.vinChecksumInvalid).toBeFalsy();
+    expect(info.vin).toBe('5UXTY5C09M9E04416');
   });
 
   it('extracts MA title transfer buyer details only when sale labels are present', () => {

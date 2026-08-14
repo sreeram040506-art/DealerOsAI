@@ -19,6 +19,14 @@ interface GenerateUsedVehicleResponse {
   registryAdded?: boolean;
   inventoryAdded?: boolean;
   message?: string;
+  warnings?: {
+    addressMissing?: boolean;
+    makeMissing?: boolean;
+    modelMissing?: boolean;
+    yearMissing?: boolean;
+    priceMissing?: boolean;
+    vinChecksumInvalid?: boolean;
+  };
 }
 
 export default function UsedVehicleFormGenerator({
@@ -75,7 +83,11 @@ export default function UsedVehicleFormGenerator({
         }
         
         if (data.warnings?.addressMissing) {
-          toast.warn(`${file.name}: Address could not be reliably extracted. Review before adding to inventory.`);
+          toast.warning(`${file.name}: Address could not be reliably extracted. Review before adding to inventory.`);
+        }
+
+        if (data.warnings?.vinChecksumInvalid) {
+          toast.warning(`${file.name}: VIN "${data.info?.vin}" failed checksum validation — please double-check it against the source document before saving.`);
         }
 
         onScanComplete({ 

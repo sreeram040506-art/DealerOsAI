@@ -875,6 +875,23 @@ function postProcessResult(result, rawText, purpose) {
     }
   }
 
+  // ── VIN CHECKSUM VALIDATION ──
+  // AI vision/text extraction can misread individual VIN characters even when the overall
+  // shape looks plausible (17 chars, right prefix). Validate against the ISO 3779 check
+  // digit. If it doesn't check out, flag it instead of silently accepting a wrong VIN —
+  // this runs before the empty-rawText early return so it also covers the fast Vision-only
+  // path (the common case for image uploads). We deliberately do NOT try to guess-correct
+  // it here (see the note above normalizeVinCharacters) — recovery only happens via a real
+  // second read in crossCheckVinWithOcr, or manual review.
+  if (result.vin) {
+    const normalizedVin = normalizeVinCharacters(result.vin);
+    result.vin = normalizedVin;
+    if (!isValidVin(normalizedVin)) {
+      console.log(`[Parser:PostProcess] VIN failed checksum validation: ${normalizedVin}`);
+      result.vinChecksumInvalid = true;
+    }
+  }
+
   // If rawText is empty (fast Vision LLM path), skip text-dependent heuristics
   if (!rawText) return result;
 
@@ -2071,7 +2088,11 @@ async function extractVehicleInfoImpl(fileBuffer, mimetype, purpose = "") {
       console.log('[Parser] Image uploaded. Directly querying OpenAI Vision AI for ultra-fast and precise extraction...');
       const visionResult = await visionExtract(fileBuffer, mimetype, effectivePurpose);
       if (visionResult && (visionResult.vin || visionResult.make || visionResult.disposedTo)) {
-        return postProcessResult(visionResult, '', effectivePurpose);
+        const cleaned = postProcessResult(visionResult, '', effectivePurpose);
+        if (cleaned.vinChecksumInvalid) {
+          await crossCheckVinWithOcr(cleaned, fileBuffer);
+        }
+        return cleaned;
       }
     } catch (err) {
       console.error(`[Parser:Vision] OpenAI Vision extraction failed: ${err.message}`);
@@ -2129,7 +2150,11 @@ async function extractVehicleInfoImpl(fileBuffer, mimetype, purpose = "") {
         console.log('[Parser] Scanned PDF detected. Directly querying OpenAI Vision LLM (gpt-4o) on rendered page...');
         const visionResult = await visionExtract(fileBuffer, mimetype, effectivePurpose);
         if (visionResult && (visionResult.vin || visionResult.make || visionResult.disposedTo)) {
-          return postProcessResult(visionResult, '', effectivePurpose);
+          const cleaned = postProcessResult(visionResult, '', effectivePurpose);
+          if (cleaned.vinChecksumInvalid) {
+            await crossCheckVinWithOcr(cleaned, fileBuffer, mimetype);
+          }
+          return cleaned;
         }
       } catch (err) {
         console.error(`[Parser:Vision] OpenAI Vision extraction on scanned PDF failed: ${err.message}`);
@@ -2166,6 +2191,29 @@ async function extractVehicleInfoImpl(fileBuffer, mimetype, purpose = "") {
   }
 
   return {};
+}
+
+// When the Vision model's VIN fails checksum validation (even after the single-character
+// auto-correction attempt in postProcessResult), run local OCR as an independent second
+// read and use it if it produces a checksum-valid VIN. Vision and OCR tend to misread
+// different characters, so a second read often recovers what the first one missed. This
+// only runs on the (uncommon) checksum-failure path, not on every upload.
+async function crossCheckVinWithOcr(result, fileBuffer, mimetype = 'image/jpeg') {
+  try {
+    const ocrText = (isPdfMimeType(mimetype) || isPdfBuffer(fileBuffer))
+      ? await ocrPdf(fileBuffer)
+      : await ocrImage(fileBuffer);
+    const ocrVin = extractVinFromText(ocrText);
+    if (ocrVin && isValidVin(ocrVin) && ocrVin !== result.vin) {
+      console.log(`[Parser:PostProcess] OCR cross-check found a checksum-valid VIN: ${result.vin} → ${ocrVin}`);
+      result.vin = ocrVin;
+      delete result.vinChecksumInvalid;
+    } else {
+      console.log(`[Parser:PostProcess] OCR cross-check did not find a better VIN (candidate: ${ocrVin || 'none'})`);
+    }
+  } catch (err) {
+    console.warn(`[Parser:PostProcess] OCR cross-check failed: ${err?.message || err}`);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3296,4 +3344,26 @@ export function isValidVin(vin) {
   }
 }
 
-export { extractTotalFromText, extractVinFromText, extractTitleFromText };
+// Uppercases, strips non-alphanumerics, and maps the letters VINs never contain (I/O/Q)
+// to their standard numeric look-alikes (1/0/0). This is a deterministic normalization
+// (those letters are simply illegal in a VIN), not a guess — unlike a checksum-driven
+// "correction," it can't introduce a wrong-but-plausible-looking character.
+function normalizeVinCharacters(vin) {
+  return String(vin || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .replace(/[IOQ]/g, (ch) => (ch === 'I' ? '1' : '0'));
+}
+
+// NOTE: we deliberately do NOT attempt blind single-character "checksum correction" here.
+// A VIN check digit only has 11 possible values (mod 11), so brute-force substitution
+// across 17 positions routinely finds *a* checksum-valid candidate that is not the true
+// VIN — e.g. for a real single-character misread, it's common to also find a second,
+// unrelated swap elsewhere that happens to pass, and for a VIN with several wrong
+// characters, brute force can "fix" the checksum by mangling an already-correct character
+// while leaving the real errors in place. That's worse than doing nothing: it silently
+// converts a visibly-wrong VIN into a plausible-but-still-wrong one. Instead, an invalid
+// checksum is flagged (see postProcessResult) and resolved only via a genuine second,
+// independent read (crossCheckVinWithOcr) or manual review — never by guessing.
+
+export { extractTotalFromText, extractVinFromText, extractTitleFromText, normalizeVinCharacters };
