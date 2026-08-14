@@ -88,6 +88,9 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
       }
       
       const data = await response.json();
+      if (data.duplicateVehicle) {
+        toast.info(`${file.name}: Logged to registry (Already in inventory)`);
+      }
       
       if (data.info) {
         onScanComplete(

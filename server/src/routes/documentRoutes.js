@@ -725,13 +725,15 @@ router.post(
         const existingVehicle = await findFuzzyVehicle(normalizedVin, req.dealershipId);
         
         if (existingVehicle) {
-          return res.status(409).json({ 
-            status: 'error', 
-            message: `Vehicle with VIN ${normalizedVin} already exists in inventory (matched existing VIN: ${existingVehicle.vin}).`,
+          return res.status(200).json({
+            status: 'success',
+            duplicateVehicle: true,
+            message: `Vehicle with VIN ${normalizedVin} already exists in inventory (matched existing VIN: ${existingVehicle.vin}). Registry updated, inventory entry left unchanged.`,
             existingId: existingVehicle.id,
             info, // Return info anyway so UI can see it
             pdfBase64: pdfBase64Str,
             registryAdded: !!registryId,
+            inventoryAdded: false,
             warnings: warnings || {}
           });
         }
@@ -811,10 +813,14 @@ router.post(
          const existing = await prisma.vehicle.findFirst({ 
            where: { vin, dealershipId: req.dealershipId } 
          });
-         return res.status(409).json({ 
-           status: 'error',
-           message: err.message, 
-           existingId: existing?.id 
+         return res.status(200).json({
+           status: 'success',
+           duplicateVehicle: true,
+           message: err.message,
+           existingId: existing?.id,
+           registryAdded: !!registryId,
+           inventoryAdded: false,
+           info,
          });
       }
       next(err);

@@ -15,6 +15,10 @@ interface GenerateUsedVehicleResponse {
   info: ExtractedVehicleDocumentInfo;
   fileName: string;
   pdfBase64: string;
+  duplicateVehicle?: boolean;
+  registryAdded?: boolean;
+  inventoryAdded?: boolean;
+  message?: string;
 }
 
 export default function UsedVehicleFormGenerator({
@@ -55,8 +59,8 @@ export default function UsedVehicleFormGenerator({
         let data;
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          
-          // If it's a 409 conflict but registry was added/updated, we treat it as a success for the record generation
+
+          // Keep backward compatibility with older servers that still used 409 for partial success.
           if (response.status === 409 && errorData.registryAdded) {
             data = errorData;
             toast.info(`${file.name}: Logged to registry (Vehicle already in inventory)`);
@@ -64,7 +68,10 @@ export default function UsedVehicleFormGenerator({
             throw new Error(errorData.message || 'Failed to generate form');
           }
         } else {
-          data = (await response.json()) as GenerateUsedVehicleResponse & { inventoryAdded?: boolean };
+          data = (await response.json()) as GenerateUsedVehicleResponse;
+          if (data.duplicateVehicle) {
+            toast.info(`${file.name}: Logged to registry (Vehicle already in inventory)`);
+          }
         }
         
         if (data.warnings?.addressMissing) {
