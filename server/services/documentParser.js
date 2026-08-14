@@ -132,6 +132,10 @@ function isPdfBuffer(fileBuffer) {
 function determineDocumentPurpose(text) {
   if (!text) return null;
   const normalized = text.replace(/\s+/g, ' ').trim();
+
+  if (/\bBUYER\s+INFORMATION\b/i.test(normalized) && /\bSELLER\s+INFORMATION\b/i.test(normalized)) {
+    return 'acquisition';
+  }
   
   // CMAA and CarMax are ALWAYS acquisition documents (we buy from them)
   if (/\b(?:CMAA|Central Mass(?:achusetts)? Auto Auction|CarMax|America'?s\s+(?:AA|Auto Auction))\b/i.test(normalized)) {
@@ -158,6 +162,10 @@ function inferDocumentDirection(text, purpose = '') {
   const normalizedPurpose = normalizeExtractionPurpose(purpose);
   if (!text) return normalizedPurpose;
   if (normalizedPurpose === 'sale' || normalizedPurpose === 'acquisition') return normalizedPurpose;
+
+  if (/\bBUYER\s+INFORMATION\b/i.test(text) && /\bSELLER\s+INFORMATION\b/i.test(text)) {
+    return 'acquisition';
+  }
 
   const saleSignal = /\b(?:Buyer|Purchaser(?:\(s\))?|Sold To|Transferred To|Purchaser\(s\)? Name\(s\)?|Buyer Name|Vehicle Sales Price|Selling Price|Sale Price)\b/i;
   const acquisitionSignal = /\b(?:Obtained From|Seller|Consignor|Auction|Bill of Sale|Invoice to Buyer|Facility|Remit Payment To|Auction Location|Purchase Price|Total Due)\b/i;
@@ -358,6 +366,27 @@ function extractTotalFromText(text, purpose = '') {
     const bestPeer = pickBestAmount(extractAmounts(peer));
     if (bestPeer !== null) {
       addCandidate(bestPeer, 7, 'purchase');
+    }
+  }
+
+  if (purpose === 'acquisition') {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i];
+      if (!/\bSUB\s*TOTAL\b/i.test(line)) continue;
+      if (skipMarkers.test(line)) continue;
+      if (paymentSummaryMarkers.test(line)) continue;
+
+      const directValues = extractAmounts(line);
+      const bestDirect = pickBestAmount(directValues);
+      if (bestDirect !== null && !isLikelyContaminatedAddressRow(line, bestDirect)) {
+        addCandidate(bestDirect, 11, 'subtotal');
+      }
+
+      const peer = [line, lines[i + 1] || '', lines[i - 1] || ''].join(' ');
+      const bestPeer = pickBestAmount(extractAmounts(peer));
+      if (bestPeer !== null) {
+        addCandidate(bestPeer, 10, 'subtotal');
+      }
     }
   }
 
@@ -1231,6 +1260,9 @@ export function extractAcquisitionDetailsFromText(text) {
   const carMax = extractCarMaxAcquisitionDetails(lines);
   if (Object.keys(carMax).length) return carMax;
 
+  const dealerBillOfSale = extractDealerBillOfSaleAcquisitionDetails(lines);
+  if (Object.keys(dealerBillOfSale).length) return dealerBillOfSale;
+
   const cmaa = extractCmaaAcquisitionDetails(lines);
   if (Object.keys(cmaa).length) return cmaa;
 
@@ -1319,6 +1351,47 @@ function extractCarMaxAcquisitionDetails(lines) {
 
   return clean({
     purchasedFrom: name,
+    usedVehicleSourceAddress: address?.address,
+    usedVehicleSourceCity: address?.city,
+    usedVehicleSourceState: address?.state,
+    usedVehicleSourceZipCode: address?.zip,
+  });
+}
+
+function extractDealerBillOfSaleAcquisitionDetails(lines) {
+  const fullText = lines.join(' ');
+  if (!/\bBUYER\s+INFORMATION\b/i.test(fullText) || !/\bSELLER\s+INFORMATION\b/i.test(fullText)) return {};
+
+  const sellerIndex = lines.findIndex((line) => /\bSELLER\s+INFORMATION\b/i.test(line));
+  if (sellerIndex < 0) return {};
+
+  const stopPattern = /\b(BUYER\s+INFORMATION|SELLER\s+INFORMATION|VEHICLE\s+INFORMATION|ODOMETER\s+READING|SETTLEMENT|ANNOUNCEMENTS|PRIOR\s+USE\s+CERTIFICATION|REMARKS|WARRANTY\s+DISCLAIMER|CONTRACTUAL\s+DISCLOSURE\s+STATEMENT|BUYER,?\s+BY\s+SIGNING)\b/i;
+  const sectionLines = [];
+
+  for (let i = sellerIndex + 1; i < Math.min(lines.length, sellerIndex + 10); i++) {
+    const line = lines[i];
+    if (!line) continue;
+    if (stopPattern.test(line) && !/\b[A-Z][A-Z\s.&'-]{2,}\b/.test(line)) break;
+    sectionLines.push(line);
+  }
+
+  const nameCandidate = cleanRoleName(
+    sectionLines.find((line) =>
+      line &&
+      !/\b(?:SELLER\s+INFORMATION|BUYER\s+INFORMATION|VEHICLE\s+INFORMATION|ODOMETER\s+READING|SETTLEMENT|BILL\s+OF\s+SALE|INFORMATION)\b/i.test(line) &&
+      /\s/.test(line) &&
+      !STREET_PATTERN.test(line) &&
+      !CITY_STATE_ZIP_PATTERN.test(line) &&
+      !/\b(?:PHONE|CELL|FAX|EMAIL|@|\d{3}[-.\s]?\d{3}[-.\s]?\d{4})\b/i.test(line) &&
+      !/\bSELLER\b/i.test(line)
+    )
+  );
+
+  const address = findAddressNear(lines, sellerIndex, 1, 8);
+  if (!nameCandidate && !address?.address) return {};
+
+  return clean({
+    purchasedFrom: nameCandidate,
     usedVehicleSourceAddress: address?.address,
     usedVehicleSourceCity: address?.city,
     usedVehicleSourceState: address?.state,
@@ -1616,6 +1689,26 @@ export function extractVehicleInfoFromText(text) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (/\bSELLER\s+INFORMATION\b/i.test(line)) {
+      currentSection = 'source';
+      const nextLine = lines[i + 1] || '';
+      const nextCandidate = cleanRoleName(nextLine);
+      if (nextCandidate) {
+        data.purchasedFrom = nextCandidate;
+      }
+      const sectionAddress = findAddressNear(lines, i + 1, 1, 6);
+      if (sectionAddress?.address) {
+        data.usedVehicleSourceAddress = sectionAddress.address;
+        data.usedVehicleSourceCity = sectionAddress.city || data.usedVehicleSourceCity;
+        data.usedVehicleSourceState = sectionAddress.state || data.usedVehicleSourceState;
+        data.usedVehicleSourceZipCode = sectionAddress.zip || data.usedVehicleSourceZipCode;
+      }
+      continue;
+    }
+    if (/\bBUYER\s+INFORMATION\b/i.test(line)) {
+      currentSection = 'disposed';
+      continue;
+    }
     if (/\b(Obtained From|Seller Name|Seller)\b/i.test(line)) {
       currentSection = 'source';
       let sourceVal = readValue(line, /(?:Obtained From|Seller Name|Seller)(?: \(Source\))?[:\s]+(.+?)(?=\s+Transaction Date:|\s+Address:|$)/i);
@@ -1676,7 +1769,12 @@ export function extractVehicleInfoFromText(text) {
     }
 
     if (/\bOdometer(?: In| Out| Reading)?\b/i.test(line)) {
-      const value = readValue(line, /Odometer(?: In| Out| Reading)?[:\s]+([\d,]+)/i);
+      let value = readValue(line, /Odometer(?: In| Out| Reading)?[:\s]+([\d,]+)/i);
+      if (!value) {
+        const nextLine = lines[i + 1] || '';
+        const nextMatch = nextLine.match(/^\s*([\d,]{4,})\s*$/) || nextLine.match(/(?:^|[^0-9])(\d[\d,]{2,})(?:[^0-9]|$)/);
+        value = nextMatch?.[1] || '';
+      }
       const num = value ? Number(value.replace(/,/g, '')) : null;
       if (Number.isFinite(num)) {
         if (/\bOdometer\s+Out\b/i.test(line)) {
@@ -1979,6 +2077,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
 // ─── Shared system prompt for ALL AI calls (text + vision) ───
 const SYSTEM_PROMPT = `You are a UNIVERSAL vehicle document data extractor. You process ANY automotive document, including but not limited to:
 - Auction Bills of Sale (ADESA, CMAA/Central Mass, Manheim, CarMax, America's AA)
+- Dealer-to-dealer bills of sale with BUYER INFORMATION / SELLER INFORMATION panels
 - MA Title Transfer Forms ("FOR A MOTOR VEHICLE, MOBILE HOME...")
 - Motor Vehicle Purchase Contracts (Carsforsale.com format)
 - Dealer invoices and wholesale receipts
@@ -2058,6 +2157,7 @@ DOCUMENT-SPECIFIC:
 - CMAA: The price MUST be the one beside "TOTAL" or "TOTAL DUE", not "SALE PRICE". The Total is usually at the bottom-right of the table and includes buyer fees. Ignore the "Selling Price" column.
 - CarMax: SELLER address is at the ABSOLUTE BOTTOM-RIGHT (e.g. "170 Turnpike Rd"). Broadway's address is in the middle table — IGNORE the middle table for address extraction. The price MUST be the "TOTAL" at the bottom of the table, not "Selling Price".
 - Manheim: Use the "TRANSACTION LOCATION" or "REMIT PAYMENT TO" as the auction name and source address. Strip " US" from addresses.
+- Dealer-to-dealer bill of sale: If the page has BUYER INFORMATION and SELLER INFORMATION panels, Broadway is the BUYER. Use the SELLER INFORMATION panel for purchasedFrom/source address, and use the SETTLEMENT subtotal as purchasePrice when the final total due is zero.
 
 NEVER use Broadway's address (100 BROADWAY / 2125 REVERE BEACH PKWY / NORWOOD, MA 02062) as the source address. If you see "BROADWAY USED AUTO SALES" in a table, the address beside it is the BUYER, not the seller.${docText}`;
 }
@@ -2175,6 +2275,7 @@ LABEL MAPPING:
 - Odomoter/Mileage: "Odometer", "Miles", "Mileage", "Reading"
 - ODOMETER VS PRICE RULE: Odometer is a vehicle mileage reading. NEVER extract the vehicle's selling price or total price as the odometer reading, or vice versa!
 - Source: Prioritize AUCTION/FACILITY name and address. Look for any company name or address that is NOT Broadway.
+- Dealer-to-dealer bills of sale with BUYER INFORMATION / SELLER INFORMATION panels should be treated as ACQUISITION when Broadway is the buyer. The seller panel is the source.
 - Title: "Title #", "Certificate #", "Cert of Origin"
 - Stock: "Stock #", "Lot #", "Unit ID"
 - Infer state from zip if missing (01xxx/02xxx = MA, 06xxx = CT, etc.).

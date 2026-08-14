@@ -482,6 +482,55 @@ describe('document parser fallback extraction', () => {
     expect(info.usedVehicleSourceZipCode).toBe('01702');
   });
 
+  it('extracts dealer-to-dealer bill of sale acquisitions from buyer and seller panels', () => {
+    const text = `
+      BILL OF SALE
+      BUYER INFORMATION:
+      WASHINGTON STREET AUTO SALES
+
+      SELLER INFORMATION:
+      TULLEY AUTO GROUP
+      131 W Glenwood St
+      Nashua, NH 03060
+
+      VEHICLE INFORMATION:
+      YEAR: 2021
+      MAKE: BMW
+      MODEL: X3
+      VIN: 5UXTY5C09M9E04416
+      ODOMETER READING
+      99,363
+
+      SETTLEMENT
+      VEHICLE PRICE: $13,800.00
+      BUY FEE $315.00
+      Floorplan Processing Fee $25.00
+      SUBTOTAL: $14,140.00
+      TOTAL DUE: $0.00
+    `;
+
+    const acquisition = extractAcquisitionDetailsFromText(text);
+    const info = extractVehicleInfoFromText(text);
+
+    expect(acquisition.purchasedFrom).toBe('TULLEY AUTO GROUP');
+    expect(acquisition.usedVehicleSourceAddress).toBe('131 W Glenwood St');
+    expect(acquisition.usedVehicleSourceCity).toBe('Nashua');
+    expect(acquisition.usedVehicleSourceState).toBe('NH');
+    expect(acquisition.usedVehicleSourceZipCode).toBe('03060');
+
+    expect(info.year).toBe(2021);
+    expect(info.make).toBe('BMW');
+    expect(info.model).toBe('X3');
+    expect(info.vin).toBe('5UXTY5C09M9E04416');
+    expect(info.mileage).toBe(99363);
+    expect(info.purchasedFrom).toBe('TULLEY AUTO GROUP');
+    expect(info.usedVehicleSourceAddress).toBe('131 W Glenwood St');
+    expect(info.usedVehicleSourceCity).toBe('Nashua');
+    expect(info.usedVehicleSourceState).toBe('NH');
+    expect(info.usedVehicleSourceZipCode).toBe('03060');
+    expect(info.purchasePrice).toBe(14140);
+  });
+
   it('extracts MA title transfer buyer details only when sale labels are present', () => {
     const text = `
       Print Name(s) of Purchaser(s) OL State DL Number
