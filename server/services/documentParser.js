@@ -1,6 +1,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import { AsyncLocalStorage } from 'async_hooks';
 import mammoth from 'mammoth';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { createWorker } from 'tesseract.js';
@@ -859,14 +860,14 @@ function postProcessResult(result, rawText, purpose) {
       }
     }
 
-    // Also check if Broadway's own details leaked into the source fields and clear them
-    const broadwayPattern = /\b(?:BROADWAY\s+USED\s+AUTO|AUTO\s+SALES\s+ON\s+BROADWAY|100\s+BROADWAY|2125\s+REVERE\s+BEACH)\b/i;
-    if (broadwayPattern.test(purchasedFrom)) {
-      console.log(`[Parser:PostProcess] Broadway's name detected as purchasedFrom — clearing to prevent self-referencing.`);
+    // Also check if our own dealership's details (current tenant, or a legacy alias) leaked
+    // into the source fields and clear them
+    if (isBroadwayValue(purchasedFrom)) {
+      console.log(`[Parser:PostProcess] Own dealership name detected as purchasedFrom — clearing to prevent self-referencing.`);
       result.purchasedFrom = null;
     }
-    if (broadwayPattern.test(String(result.usedVehicleSourceAddress || ''))) {
-      console.log(`[Parser:PostProcess] Broadway's address detected as source address — clearing.`);
+    if (isBroadwayValue(result.usedVehicleSourceAddress)) {
+      console.log(`[Parser:PostProcess] Own dealership address detected as source address — clearing.`);
       result.usedVehicleSourceAddress = null;
       result.usedVehicleSourceCity = null;
       result.usedVehicleSourceState = null;
@@ -1056,7 +1057,52 @@ function inferAuctionFromText(text) {
   return null;
 }
 
-const BROADWAY_PATTERN = /\b(BROADWAY USED AUTO SALES|AUTO SALES ON BROADWAY|100 BROADWAY|2125 REVERE BEACH|NORWOOD,?\s+MA\s+02062|EVERETT,?\s+MA\s+02149)\b/i;
+// ═══════════════════════════════════════════════════════════════
+// DEALERSHIP IDENTITY — resolved per-request, per-tenant (NOT hardcoded to one dealer).
+// Callers pass the current tenant's { name, address } into extractVehicleInfo(...) /
+// extractAcquisitionDetailsFromText(...) / extractDispositionDetailsFromText(...) /
+// extractVehicleInfoFromText(...). We stash it in AsyncLocalStorage so every helper
+// function deep in the call graph (prompt builders, role filters, address cleaners)
+// can transparently ask "is this value OUR dealership?" without threading a parameter
+// through dozens of function signatures.
+// ═══════════════════════════════════════════════════════════════
+const dealershipContextStore = new AsyncLocalStorage();
+
+function getCurrentDealership() {
+  return dealershipContextStore.getStore() || null;
+}
+
+function normalizeDealershipInput(dealership) {
+  if (!dealership) return null;
+  const name = dealership.name ? String(dealership.name).trim() : '';
+  const address = dealership.address ? String(dealership.address).trim() : '';
+  if (!name && !address) return null;
+  return { name: name || null, address: address || null };
+}
+
+// Runs `fn` with `dealership` available to every downstream call via getCurrentDealership().
+// Works for both sync and async `fn` — AsyncLocalStorage propagates across awaits.
+// When `dealership` is not provided, this is a no-op passthrough so nested calls (e.g. a
+// helper called from inside an already-wrapped entry point) inherit the outer context
+// instead of clobbering it with `null`.
+function runWithDealership(dealership, fn) {
+  const normalized = normalizeDealershipInput(dealership);
+  if (!normalized) return fn();
+  return dealershipContextStore.run(normalized, fn);
+}
+
+function normalizeDealerIdentityText(str) {
+  return String(str || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]+/g, ' ')
+    .replace(/\b(?:INC|LLC|LLP|CORP|CORPORATION|LTD|CO)\b\.?/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Legacy hardcoded names/addresses kept for backward compatibility with older
+// documents/tests that pre-date per-tenant dealership context.
+const BROADWAY_PATTERN = /\b(BROADWAY USED AUTO SALES|AUTO SALES ON BROADWAY|100 BROADWAY|2125 REVERE BEACH|NORWOOD,?\s+MA\s+02062|EVERETT,?\s+MA\s+02149|WASHINGTON STREET AUTO SALES|WASHINGTON ST AUTO SALES)\b/i;
 const AUCTION_NAME_PATTERN = /\b(ADESA|MANHEIM|CARMAX|CMAA|CENTRAL MASS(?:ACHUSETTS)? AUTO AUCTION|AMERICA'?S (?:AA|AUTO AUCTION)|ACV|COPART|IAAI|AUTO AUCTION|AUCTION)\b/i;
 const STREET_PATTERN = /^\d{1,6}\s+.+\b(?:ST|STREET|RD|ROAD|AVE|AVENUE|BLVD|BOULEVARD|DR|DRIVE|LN|LANE|PKWY|PARKWAY|HWY|HIGHWAY|WAY|CT|COURT|PL|PLACE|PIKE|TURNPIKE)\b\.?/i;
 const CITY_STATE_ZIP_PATTERN = /([A-Za-z .'-]+),?\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/i;
@@ -1078,8 +1124,36 @@ function normalizeDocumentLines(text) {
     .filter(Boolean);
 }
 
+// Checks whether `value` refers to OUR OWN dealership — either the current tenant
+// (from AsyncLocalStorage context, set per-request) or one of the legacy hardcoded aliases.
+// Kept as `isBroadwayValue` for minimal diff at call sites; it is no longer Broadway-only.
 function isBroadwayValue(value) {
-  return BROADWAY_PATTERN.test(String(value || ''));
+  const text = String(value || '').trim();
+  if (!text) return false;
+
+  if (BROADWAY_PATTERN.test(text)) return true;
+
+  const dealership = getCurrentDealership();
+  if (!dealership) return false;
+
+  const normalizedValue = normalizeDealerIdentityText(text);
+  if (!normalizedValue) return false;
+
+  if (dealership.name) {
+    const normalizedName = normalizeDealerIdentityText(dealership.name);
+    if (normalizedName && normalizedName.length >= 4 && normalizedValue.includes(normalizedName)) {
+      return true;
+    }
+  }
+
+  if (dealership.address) {
+    const normalizedAddress = normalizeDealerIdentityText(dealership.address);
+    if (normalizedAddress && normalizedAddress.length >= 6 && normalizedValue.includes(normalizedAddress)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function isHeaderishAddress(value) {
@@ -1253,52 +1327,58 @@ function isBoilerplateDispositionLine(line) {
     && !/\b(?:Buyer|Purchaser|Customer|Transferred To|Print Name\(s\)|Purchaser\(s\)? Name\(s\))\b/i.test(line);
 }
 
-export function extractAcquisitionDetailsFromText(text) {
-  const lines = normalizeDocumentLines(text);
-  if (!lines.length) return {};
+// `dealership` (optional): { name, address } for the current tenant. When provided, it is
+// used (via AsyncLocalStorage) to recognize and filter out our own dealership's name/address
+// so it's never mistaken for the acquisition source. Works for any dealership, not just one
+// hardcoded name — see getCurrentDealership()/isBroadwayValue().
+export function extractAcquisitionDetailsFromText(text, dealership = null) {
+  return runWithDealership(dealership, () => {
+    const lines = normalizeDocumentLines(text);
+    if (!lines.length) return {};
 
-  const carMax = extractCarMaxAcquisitionDetails(lines);
-  if (Object.keys(carMax).length) return carMax;
+    const carMax = extractCarMaxAcquisitionDetails(lines);
+    if (Object.keys(carMax).length) return carMax;
 
-  const dealerBillOfSale = extractDealerBillOfSaleAcquisitionDetails(lines);
-  if (Object.keys(dealerBillOfSale).length) return dealerBillOfSale;
+    const dealerBillOfSale = extractDealerBillOfSaleAcquisitionDetails(lines);
+    if (Object.keys(dealerBillOfSale).length) return dealerBillOfSale;
 
-  const cmaa = extractCmaaAcquisitionDetails(lines);
-  if (Object.keys(cmaa).length) return cmaa;
+    const cmaa = extractCmaaAcquisitionDetails(lines);
+    if (Object.keys(cmaa).length) return cmaa;
 
-  const knownAuction = extractKnownAuctionAcquisitionDetails(lines);
-  if (Object.keys(knownAuction).length) return knownAuction;
+    const knownAuction = extractKnownAuctionAcquisitionDetails(lines);
+    if (Object.keys(knownAuction).length) return knownAuction;
 
-  const candidates = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (isBroadwayValue(line)) continue;
+    const candidates = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (isBroadwayValue(line)) continue;
 
-    const isAuctionLine = AUCTION_NAME_PATTERN.test(line);
-    const isFacilityLine = /\b(FACILITY|TRANSACTION LOCATION|REMIT PAYMENT TO|AUCTION LOCATION)\b/i.test(line);
-    const isSellerLine = /\b(SELLER|CONSIGNOR|SOLD BY|FROM)\b/i.test(line);
-    if (!isAuctionLine && !isFacilityLine && !isSellerLine) continue;
+      const isAuctionLine = AUCTION_NAME_PATTERN.test(line);
+      const isFacilityLine = /\b(FACILITY|TRANSACTION LOCATION|REMIT PAYMENT TO|AUCTION LOCATION)\b/i.test(line);
+      const isSellerLine = /\b(SELLER|CONSIGNOR|SOLD BY|FROM)\b/i.test(line);
+      if (!isAuctionLine && !isFacilityLine && !isSellerLine) continue;
 
-    const name = cleanRoleName(
-      line.match(/(?:Facility|Transaction Location|Remit Payment To|Auction Location|Seller|Consignor|Sold By|From)\s*[:#-]?\s*(.+)$/i)?.[1]
-      || (isAuctionLine ? line : '')
-    );
-    const address = findAddressNear(lines, i, 1, 10) || findAddressNear(lines, i, -1, 3);
-    const score = (isAuctionLine ? 10 : 0) + (isFacilityLine ? 8 : 0) + (address?.address ? 4 : 0) + (name ? 2 : 0);
-    candidates.push({ score, name, address });
-  }
+      const name = cleanRoleName(
+        line.match(/(?:Facility|Transaction Location|Remit Payment To|Auction Location|Seller|Consignor|Sold By|From)\s*[:#-]?\s*(.+)$/i)?.[1]
+        || (isAuctionLine ? line : '')
+      );
+      const address = findAddressNear(lines, i, 1, 10) || findAddressNear(lines, i, -1, 3);
+      const score = (isAuctionLine ? 10 : 0) + (isFacilityLine ? 8 : 0) + (address?.address ? 4 : 0) + (name ? 2 : 0);
+      candidates.push({ score, name, address });
+    }
 
-  const best = candidates
-    .filter((candidate) => candidate.name || candidate.address?.address)
-    .sort((a, b) => b.score - a.score)[0];
+    const best = candidates
+      .filter((candidate) => candidate.name || candidate.address?.address)
+      .sort((a, b) => b.score - a.score)[0];
 
-  if (!best) return {};
-  return clean({
-    purchasedFrom: best.name,
-    usedVehicleSourceAddress: best.address?.address,
-    usedVehicleSourceCity: best.address?.city,
-    usedVehicleSourceState: best.address?.state,
-    usedVehicleSourceZipCode: best.address?.zip,
+    if (!best) return {};
+    return clean({
+      purchasedFrom: best.name,
+      usedVehicleSourceAddress: best.address?.address,
+      usedVehicleSourceCity: best.address?.city,
+      usedVehicleSourceState: best.address?.state,
+      usedVehicleSourceZipCode: best.address?.zip,
+    });
   });
 }
 
@@ -1486,40 +1566,45 @@ function extractKnownAuctionAcquisitionDetails(lines) {
   });
 }
 
-export function extractDispositionDetailsFromText(text) {
-  const lines = normalizeDocumentLines(text);
-  if (!lines.length) return {};
+// `dealership` (optional): { name, address } for the current tenant, used the same way as
+// in extractAcquisitionDetailsFromText() — recognizes and excludes our own dealership from
+// the retail customer fields, for any dealership.
+export function extractDispositionDetailsFromText(text, dealership = null) {
+  return runWithDealership(dealership, () => {
+    const lines = normalizeDocumentLines(text);
+    if (!lines.length) return {};
 
-  const maTitleDisposition = extractMaTitleDispositionDetails(lines);
-  if (Object.keys(maTitleDisposition).length) return maTitleDisposition;
+    const maTitleDisposition = extractMaTitleDispositionDetails(lines);
+    if (Object.keys(maTitleDisposition).length) return maTitleDisposition;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!hasDispositionLabel(line)) continue;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!hasDispositionLabel(line)) continue;
 
-    const isBuyerLine = /\b(?:Buyer|Purchaser|Customer|Transferred To|Print Name\(s\)|Purchaser\(s\)? Name\(s\))\b/i.test(line);
-    if (isBoilerplateDispositionLine(line)) continue;
-    if (isBroadwayValue(line) && !isBuyerLine) continue;
+      const isBuyerLine = /\b(?:Buyer|Purchaser|Customer|Transferred To|Print Name\(s\)|Purchaser\(s\)? Name\(s\))\b/i.test(line);
+      if (isBoilerplateDispositionLine(line)) continue;
+      if (isBroadwayValue(line) && !isBuyerLine) continue;
 
-    const name = findNameNear(
-      lines,
-      i,
-      /(?:Print Name\(s\) of Purchaser\(s\)|Purchaser\(s\)? Name\(s\) and Address(?:\(es\)|es)?|Purchaser\(s\)? Name\(s\)|Buyer Name|Buyer|Sold To|Customer|Transferred To)\s*[:#-]?\s*(.+?)(?=\s+Address\b|\s+City\b|\s+State\b|\s+Zip\b|\s+Date\b|$)/i
-    );
-    const address = findAddressNear(lines, i, 1, 8);
+      const name = findNameNear(
+        lines,
+        i,
+        /(?:Print Name\(s\) of Purchaser\(s\)|Purchaser\(s\)? Name\(s\) and Address(?:\(es\)|es)?|Purchaser\(s\)? Name\(s\)|Buyer Name|Buyer|Sold To|Customer|Transferred To)\s*[:#-]?\s*(.+?)(?=\s+Address\b|\s+City\b|\s+State\b|\s+Zip\b|\s+Date\b|$)/i
+      );
+      const address = findAddressNear(lines, i, 1, 8);
 
-    if (name || address?.address) {
-      return clean({
-        disposedTo: name,
-        disposedAddress: address?.address,
-        disposedCity: address?.city,
-        disposedState: address?.state,
-        disposedZip: address?.zip,
-      });
+      if (name || address?.address) {
+        return clean({
+          disposedTo: name,
+          disposedAddress: address?.address,
+          disposedCity: address?.city,
+          disposedState: address?.state,
+          disposedZip: address?.zip,
+        });
+      }
     }
-  }
 
-  return {};
+    return {};
+  });
 }
 
 function hasDispositionLabel(line) {
@@ -1618,7 +1703,13 @@ function extractFallbackInfo(text, purpose) {
   return Object.keys(fallback).length ? fallback : null;
 }
 
-export function extractVehicleInfoFromText(text) {
+// `dealership` (optional): { name, address } for the current tenant — see
+// extractAcquisitionDetailsFromText() for how this drives self-reference filtering.
+export function extractVehicleInfoFromText(text, dealership = null) {
+  return runWithDealership(dealership, () => extractVehicleInfoFromTextImpl(text));
+}
+
+function extractVehicleInfoFromTextImpl(text) {
   if (!text) return {};
 
   const lines = String(text)
@@ -1961,8 +2052,14 @@ function isExtractionComplete(result) {
 // ═══════════════════════════════════════════════════════════════
 // SINGLE ENTRY POINT — Extract everything from any document
 // purpose: "acquisition" | "sale" | "" (unknown)
-// ═══════════════════════════════════════════════════════════════
-export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
+// dealership (optional): { name, address } for the current tenant. This drives role
+// detection and self-reference filtering everywhere downstream (AI prompts, deterministic
+// text parsing) — it is resolved per-request, NOT hardcoded to any single dealership.
+export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "", dealership = null) {
+  return runWithDealership(dealership, () => extractVehicleInfoImpl(fileBuffer, mimetype, purpose));
+}
+
+async function extractVehicleInfoImpl(fileBuffer, mimetype, purpose = "") {
   purpose = normalizeExtractionPurpose(purpose);
   console.log(`[Parser] START | mime=${mimetype} | purpose=${purpose || 'auto'} | llm=${hasLlmKey} | mode=${useOpenAI ? 'openai' : 'nvidia'}`);
 
@@ -2074,8 +2171,27 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
 // ═══════════════════════════════════════════════════════════════
 // PROMPT BUILDERS — Separate focused prompts for acquisition vs sale
 // ═══════════════════════════════════════════════════════════════
+// ─── Dealership identity — resolved dynamically per-tenant via getCurrentDealership() ───
+// NOT hardcoded to any single dealership: the current tenant's name/address (set by the
+// caller through extractVehicleInfo/extractAcquisitionDetailsFromText/etc.) drives role
+// detection and self-reference filtering for every AI prompt below. A couple of legacy
+// dealership names are still recognized as "us" for backward compatibility with older
+// documents, but they are no longer the primary mechanism.
+function buildDealershipPromptIdentity() {
+  const dealership = getCurrentDealership();
+  const name = dealership?.name || null;
+  const address = dealership?.address || null;
+  const label = name || 'our dealership';
+  const identityLines = name
+    ? `Our dealership is "${name}"${address ? ` (address: ${address})` : ''}. It may appear with minor variations (e.g. with "Inc", "LLC", punctuation, or spacing differences) — treat those as the SAME dealership (us). A few older/legacy documents may instead reference the dealership as "Broadway Used Auto Sales" or "Washington Street Auto Sales" — treat those as us too, unless they clearly conflict with the dealership named above.`
+    : `Our dealership's exact name was not supplied with this request. A few legacy documents may reference it as "Broadway Used Auto Sales" or "Washington Street Auto Sales" — treat those as us. Otherwise, infer which party is OUR dealership from context: in a BUYER INFORMATION / SELLER INFORMATION panel layout, the party that looks like a used-car dealership (not an individual or auction house) is typically us; combine this with whether you were asked to extract acquisition fields (we are the BUYER) or sale fields (we are the SELLER).`;
+  return { label, identityLines };
+}
+
 // ─── Shared system prompt for ALL AI calls (text + vision) ───
-const SYSTEM_PROMPT = `You are a UNIVERSAL vehicle document data extractor. You process ANY automotive document, including but not limited to:
+function buildSystemPrompt() {
+  const { identityLines } = buildDealershipPromptIdentity();
+  return `You are a UNIVERSAL vehicle document data extractor. You process ANY automotive document, including but not limited to:
 - Auction Bills of Sale (ADESA, CMAA/Central Mass, Manheim, CarMax, America's AA)
 - Dealer-to-dealer bills of sale with BUYER INFORMATION / SELLER INFORMATION panels
 - MA Title Transfer Forms ("FOR A MOTOR VEHICLE, MOBILE HOME...")
@@ -2086,12 +2202,11 @@ const SYSTEM_PROMPT = `You are a UNIVERSAL vehicle document data extractor. You 
 
 Even if the document format is UNFAMILIAR, you MUST still extract every vehicle detail you can find. NEVER return an empty result if any vehicle data is visible.
 
-Our dealership is "Broadway Used Auto Sales" (also "Broadway Used Auto Sales Inc", "Auto Sales On Broadway").
-Dealership addresses: 2125 REVERE BEACH PKWY, EVERETT, MA 02149 or 100 BROADWAY, NORWOOD, MA 02062.
+${identityLines}
 
 CRITICAL RULES:
-1. ROLE DETECTION: If Broadway appears as BUYER → this is an ACQUISITION. If Broadway appears as SELLER/DEALER → this is a SALE.
-2. ADDRESS FILTERING: NEVER return Broadway's own address as the source or disposed address. Return null instead.
+1. ROLE DETECTION: If our dealership appears as BUYER → this is an ACQUISITION. If our dealership appears as SELLER/DEALER → this is a SALE.
+2. ADDRESS FILTERING: NEVER return our dealership's own address as the source or disposed address. Return null instead.
 3. BODY TYPE vs MODEL: "Body Type" (Sedan, SUV, Hatchback, Coupe) is NOT the model. "Model" is the vehicle name (Corolla, Camry, C250, E350, 328i, Wrangler). For luxury cars (Mercedes-Benz, BMW, Audi), the model is ALWAYS the alphanumeric code (e.g. C250). NEVER put "Sedan" or "SUV" in the model field.
 4. TITLE NUMBER: This is CRITICAL. Extract if labeled "Certificate of Title", "Title No", "Title #", "Certificate No", or "Cert of Origin". It is usually an 8-10 digit alphanumeric code (e.g. BK182936).
 5. PRICE (TOTAL ONLY): ALWAYS extract the ABSOLUTE TOTAL/BALANCE DUE (e.g. 7645.00). NEVER extract the "Sale Price" or "Selling Price" (e.g. 7200.00) if a larger TOTAL exists below it. Fees MUST be included.
@@ -2101,16 +2216,18 @@ JSON_START
 { "vin": "...", ... }
 JSON_END
 No markdown, no explanation outside markers.`;
+}
 
 function buildAcquisitionPrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
-  return `Extract data from this VEHICLE ACQUISITION document. Broadway is the BUYER.
-  
+  const { label } = buildDealershipPromptIdentity();
+  return `Extract data from this VEHICLE ACQUISITION document. Our dealership (${label}) is the BUYER.
+
 CRITICAL ROLE AND SOURCE RULE:
 - ALWAYS prioritize the AUCTION HOUSE/FACILITY name and address (e.g. "ADESA Concord", "ADESA Boston", "Manheim New England", "America's Auto Auction", "CarMax") as the "purchasedFrom" and source address details.
-- DO NOT USE the consignor or individual seller listed in the "SELLER" or "CONSIGNOR" box (e.g. "RON BOUCHARD'S AUTO SALES INC") as the "purchasedFrom" or source address. 
+- DO NOT USE the consignor or individual seller listed in the "SELLER" or "CONSIGNOR" box (e.g. "RON BOUCHARD'S AUTO SALES INC") as the "purchasedFrom" or source address.
 - The auction house itself (usually shown at the top-left or in a big logo like "ADESA Concord", "Manheim") is the authoritative transaction partner. Set "purchasedFrom" to the auction name and use the auction's address (e.g. "77 Hosmer Street, Acton, MA 01720" for ADESA Concord).
-- HEADER / TITLE CONFUSION WARNING: Even if the document has a giant bold header saying "Bill of Sale" at the top center (such as wholesale auction bills of sale from ADESA Concord or Manheim), if this is an Acquisition/Purchase document (Broadway is the BUYER), you MUST strictly parse the Auction details (purchasedFrom, purchasePrice, purchaseDate) and ignore any retail sales/disposition fields!
+- HEADER / TITLE CONFUSION WARNING: Even if the document has a giant bold header saying "Bill of Sale" at the top center (such as wholesale auction bills of sale from ADESA Concord or Manheim), if this is an Acquisition/Purchase document (our dealership is the BUYER), you MUST strictly parse the Auction details (purchasedFrom, purchasePrice, purchaseDate) and ignore any retail sales/disposition fields!
 
 JSON_START
 {
@@ -2155,20 +2272,21 @@ DOCUMENT-SPECIFIC:
 - AMERICA'S AA (America's Auto Auction): Use "AMERICA'S AA BOSTON" and the North Billerica, MA address as the source. The TOTAL is at the absolute bottom of the price table on the right ($4,765.00 in the example). Title # is in the small box on the right (e.g. BJ713930).
 - ADESA: Use the AUCTION FACILITY name and address (usually at the top or labeled "FACILITY") as the source, not the individual seller (e.g. "ADESA Concord", "77 Hosmer Street, Acton, MA 01720").
 - CMAA: The price MUST be the one beside "TOTAL" or "TOTAL DUE", not "SALE PRICE". The Total is usually at the bottom-right of the table and includes buyer fees. Ignore the "Selling Price" column.
-- CarMax: SELLER address is at the ABSOLUTE BOTTOM-RIGHT (e.g. "170 Turnpike Rd"). Broadway's address is in the middle table — IGNORE the middle table for address extraction. The price MUST be the "TOTAL" at the bottom of the table, not "Selling Price".
+- CarMax: SELLER address is at the ABSOLUTE BOTTOM-RIGHT (e.g. "170 Turnpike Rd"). Our dealership's address is in the middle table — IGNORE the middle table for address extraction. The price MUST be the "TOTAL" at the bottom of the table, not "Selling Price".
 - Manheim: Use the "TRANSACTION LOCATION" or "REMIT PAYMENT TO" as the auction name and source address. Strip " US" from addresses.
-- Dealer-to-dealer bill of sale: If the page has BUYER INFORMATION and SELLER INFORMATION panels, Broadway is the BUYER. Use the SELLER INFORMATION panel for purchasedFrom/source address, and use the SETTLEMENT subtotal as purchasePrice when the final total due is zero.
+- Dealer-to-dealer bill of sale (e.g. Frazer-Computing-style forms with "BUYER INFORMATION" and "SELLER INFORMATION" boxes, a "VEHICLE INFORMATION" block, and a "SETTLEMENT" table with VEHICLE PRICE/fees/SUBTOTAL/TOTAL DUE): If the page has BUYER INFORMATION and SELLER INFORMATION panels, our dealership is the BUYER. Use the SELLER INFORMATION panel for purchasedFrom/source address, and use the SETTLEMENT subtotal as purchasePrice when the final total due is zero (e.g. because the purchase was financed via floorplan).
 
-NEVER use Broadway's address (100 BROADWAY / 2125 REVERE BEACH PKWY / NORWOOD, MA 02062) as the source address. If you see "BROADWAY USED AUTO SALES" in a table, the address beside it is the BUYER, not the seller.${docText}`;
+NEVER use our dealership's own name or address as the source address (this includes "${label}" and its address if given above, plus the legacy names "BROADWAY USED AUTO SALES" / "WASHINGTON STREET AUTO SALES"). If you see any of these names in a table, the address beside it is the BUYER, not the seller.${docText}`;
 }
 
 function buildSalePrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
-  return `Extract data from this VEHICLE SALE document. Broadway is the SELLER.
+  const { label } = buildDealershipPromptIdentity();
+  return `Extract data from this VEHICLE SALE document. Our dealership (${label}) is the SELLER.
 
 CRITICAL ROLE AND CUSTOMER RULE:
-- STRICTLY extract details of the retail customer (disposedTo, disposedAddress, etc.) purchasing the car from Broadway.
-- IF Broadway is the BUYER or if the document represents a purchase from an auction house (like ADESA, Manheim, Copart), you MUST return null or 0 for all sales/disposition fields (disposedTo, disposedAddress, disposedPrice, disposedDate). Do NOT extract the auction name or purchase price as sales fields. This is an acquisition document, NOT a sale document!
+- STRICTLY extract details of the retail customer (disposedTo, disposedAddress, etc.) purchasing the car from our dealership.
+- IF our dealership is the BUYER or if the document represents a purchase from an auction house (like ADESA, Manheim, Copart), you MUST return null or 0 for all sales/disposition fields (disposedTo, disposedAddress, disposedPrice, disposedDate). Do NOT extract the auction name or purchase price as sales fields. This is an acquisition document, NOT a sale document!
 - STRICTLY return null or 0 if a field is not explicitly visible in the document. NEVER guess, speculate, or extract dealer names as retail customers.
 
 JSON_START
@@ -2221,15 +2339,16 @@ MA TITLE TRANSFER FORM SPECIFIC:
 
 DOCUMENT-SPECIFIC guidelines:
 - Used Vehicle Record (UVR) Double-Sided Forms: If the document is a "Used Vehicle Record" containing both "Acquisition" and "Disposition" sections, since this is a SALE purpose, you MUST extract the details from the "Disposition of Motor Vehicle/Part" section (Transferred To purchaser name, street address, city, state, zip, date, and odometer) and ignore the "Acquisition" section.
-- PURCHASE CONTRACT SPECIFIC: "Dealer/Seller Name and Address" is Broadway (ignore this address). "Purchaser(s) Name(s) and Address(es)" is the BUYER (e.g. Joshua Hernandez). Stock No. is the stockNumber.
+- PURCHASE CONTRACT SPECIFIC: "Dealer/Seller Name and Address" is our dealership (ignore this address). "Purchaser(s) Name(s) and Address(es)" is the BUYER (e.g. Joshua Hernandez). Stock No. is the stockNumber.
 - Price: "Total Contract Price" or "Total Balance Due" is the disposedPrice. Ensure you extract the final total price (including all fees), not just the raw "Vehicle Sales Price" subtotal!
-- NEVER use Broadway's address as the purchaser's address.${docText}`;
+- NEVER use our dealership's address as the purchaser's address.${docText}`;
 }
 
 function buildAutoPrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
+  const { label } = buildDealershipPromptIdentity();
   return `Extract ALL vehicle information from this document. This could be ANY type of vehicle document.
-Determine direction: If Broadway is BUYER → ACQUISITION. If Broadway is SELLER → SALE. If unclear, treat as ACQUISITION.
+Determine direction: If our dealership (${label}) is BUYER → ACQUISITION. If our dealership is SELLER → SALE. If unclear, treat as ACQUISITION.
 
 You MUST return a JSON object. Do NOT explain. Do NOT write markdown.
 
@@ -2274,8 +2393,8 @@ LABEL MAPPING:
 - SELLING PRICE vs TOTAL PRICE: "Selling Price" or "Hammer Price" is the base car cost before fees. "Total Price" or "Balance Due" includes buyer fees and all transaction costs. ALWAYS extract the final larger total!
 - Odomoter/Mileage: "Odometer", "Miles", "Mileage", "Reading"
 - ODOMETER VS PRICE RULE: Odometer is a vehicle mileage reading. NEVER extract the vehicle's selling price or total price as the odometer reading, or vice versa!
-- Source: Prioritize AUCTION/FACILITY name and address. Look for any company name or address that is NOT Broadway.
-- Dealer-to-dealer bills of sale with BUYER INFORMATION / SELLER INFORMATION panels should be treated as ACQUISITION when Broadway is the buyer. The seller panel is the source.
+- Source: Prioritize AUCTION/FACILITY name and address. Look for any company name or address that is NOT our dealership.
+- Dealer-to-dealer bills of sale with BUYER INFORMATION / SELLER INFORMATION panels should be treated as ACQUISITION when our dealership is the buyer. The seller panel is the source.
 - Title: "Title #", "Certificate #", "Cert of Origin"
 - Stock: "Stock #", "Lot #", "Unit ID"
 - Infer state from zip if missing (01xxx/02xxx = MA, 06xxx = CT, etc.).
@@ -2285,8 +2404,8 @@ HELPER ARRAYS:
 - "allVisibleOdometers": You MUST list all numeric odometer/mileage values visible on the page.
 
 - Used Vehicle Record (UVR) Double-Sided Forms: If the document contains both "Acquisition" and "Disposition" sections: If processed as a sale, prioritize "Disposition of Motor Vehicle/Part" section for buyer/sale fields. If processed as an acquisition, prioritize "Acquisition of Motor Vehicle/Part" section for source/purchase fields.
-- PURCHASE CONTRACT: "Dealer/Seller" is Broadway (ignore address). "Purchaser" is buyer ( Joshua Hernandez etc. ). Stock No is stockNumber.
-- NEVER use Broadway's address for source or disposed fields.${docText}`;
+- PURCHASE CONTRACT: "Dealer/Seller" is our dealership (ignore address). "Purchaser" is buyer ( Joshua Hernandez etc. ). Stock No is stockNumber.
+- NEVER use our dealership's address for source or disposed fields.${docText}`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2321,7 +2440,7 @@ async function textExtract(text, purpose = "") {
       body: JSON.stringify({
         model: modelName,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: buildSystemPrompt() },
           { role: "user", content: prompt }
         ],
         temperature: 0,
@@ -2420,7 +2539,7 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
       body: JSON.stringify({
         model: modelName,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: buildSystemPrompt() },
           {
             role: "user",
             content: [
@@ -2617,12 +2736,9 @@ function clean(d) {
     s(d.disposedZip)
   );
 
-  // Filter out Broadway addresses that may have leaked into source/disposed fields
-  const isBroadwayAddr = (addr) => {
-    if (!addr) return false;
-    const u = String(addr).toUpperCase();
-    return u.includes('REVERE BEACH') || u.includes('100 BROADWAY') || u.includes('BROADWAY USED');
-  };
+  // Filter out our own dealership's addresses (current tenant, or a legacy alias) that may
+  // have leaked into source/disposed fields
+  const isBroadwayAddr = (addr) => isBroadwayValue(addr);
 
   // ── Universal Vehicle Make Database ──
   const KNOWN_MAKES = new Set([

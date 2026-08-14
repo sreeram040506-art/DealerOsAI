@@ -30,6 +30,28 @@ async function getTemplateBuffer() {
   return cachedTemplateBuffer;
 }
 
+/**
+ * Resolves the current tenant's dealership identity ({ name, address }) so the document
+ * parser can tell "our dealership" apart from the counterparty for ANY tenant — not a single
+ * hardcoded dealer name. Cached on the request object since a single route may need it more
+ * than once (primary extraction + text-fallback extraction).
+ */
+async function getDealershipIdentity(req) {
+  if (!req.dealershipId) return null;
+  if (req._dealershipIdentity !== undefined) return req._dealershipIdentity;
+  try {
+    const dealership = await prisma.dealership.findUnique({
+      where: { id: req.dealershipId },
+      select: { name: true, address: true }
+    });
+    req._dealershipIdentity = dealership ? { name: dealership.name || null, address: dealership.address || null } : null;
+  } catch (err) {
+    console.warn('[DocumentRoute] Failed to load dealership identity:', err?.message || err);
+    req._dealershipIdentity = null;
+  }
+  return req._dealershipIdentity;
+}
+
 function parseCurrency(value) {
   if (!value) return 0;
   if (typeof value === 'number') return value;
@@ -506,7 +528,8 @@ async function findFuzzyVehicle(vin, dealershipId) {
 router.post('/scan-document', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ status: 'error', message: 'No file uploaded' });
-    const info = await extractVehicleInfo(req.file.buffer, req.file.mimetype);
+    const dealership = await getDealershipIdentity(req);
+    const info = await extractVehicleInfo(req.file.buffer, req.file.mimetype, '', dealership);
     res.json({ success: true, info });
   } catch (err) {
     next(err);
@@ -548,7 +571,8 @@ router.post(
       }
 
       // ── Extract acquisition/auction data strictly. Disposition is filled later from a sale bill of sale. ──
-      info = sanitizeVehicleIdentity(await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'acquisition'));
+      const dealership = await getDealershipIdentity(req);
+      info = sanitizeVehicleIdentity(await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'acquisition', dealership));
       info = sanitizeVehicleIdentity(info || {});
       info = clearDispositionInfo(info || {});
       console.log(`[UserForm] Extracted VIN: ${info.vin}, Make: ${info.make}, Model: ${info.model}`);
@@ -581,7 +605,7 @@ router.post(
         try {
           console.log('[UserForm] Acquisition details incomplete. Running fallback text extraction...');
           rawText = await extractText(sourceFile.buffer, sourceFile.mimetype);
-          const parsed = extractAcquisitionDetailsFromText(rawText);
+          const parsed = extractAcquisitionDetailsFromText(rawText, dealership);
           if (parsed && Object.keys(parsed).length) {
             info.purchasedFrom = parsed.purchasedFrom || info.purchasedFrom;
             if (parsed.usedVehicleSourceAddress) {
@@ -981,7 +1005,8 @@ router.post('/upload-auto', upload.single('file'), async (req, res, next) => {
 
     // ── Bill-of-sale path ──
     // Reuse the same logic from /upload-bill-of-sale by executing the core steps here.
-    let billOfSaleInfo = await extractVehicleInfo(req.file.buffer, req.file.mimetype, 'sale');
+    const dealership = await getDealershipIdentity(req);
+    let billOfSaleInfo = await extractVehicleInfo(req.file.buffer, req.file.mimetype, 'sale', dealership);
     billOfSaleInfo = sanitizeVehicleIdentity(billOfSaleInfo || {});
 
     const hasCompleteVision = !!billOfSaleInfo.vin;
@@ -989,7 +1014,7 @@ router.post('/upload-auto', upload.single('file'), async (req, res, next) => {
     if (!hasCompleteVision) {
       try {
         const rawBillText = await extractText(req.file.buffer, req.file.mimetype);
-        const dispositionFallback = extractDispositionDetailsFromText(rawBillText);
+        const dispositionFallback = extractDispositionDetailsFromText(rawBillText, dealership);
 
         for (const key of ['disposedTo', 'disposedAddress', 'disposedCity', 'disposedState', 'disposedZip']) {
           if (dispositionFallback[key]) billOfSaleInfo[key] = billOfSaleInfo[key] || dispositionFallback[key];
@@ -1106,17 +1131,18 @@ router.post('/upload-bill-of-sale', upload.single('file'), async (req, res, next
     }
 
     // ── Step 1: Extract Disposition + VIN from Bill of Sale (purpose: sale) ──
-    let billOfSaleInfo = await extractVehicleInfo(req.file.buffer, req.file.mimetype, 'sale');
+    const dealership = await getDealershipIdentity(req);
+    let billOfSaleInfo = await extractVehicleInfo(req.file.buffer, req.file.mimetype, 'sale', dealership);
     billOfSaleInfo = sanitizeVehicleIdentity(billOfSaleInfo || {});
 
     // ── OPTIMIZATION: Bypass heavy local OCR if Vision successfully extracted the VIN ──
     const hasCompleteVision = !!billOfSaleInfo.vin;
-    
+
     if (!hasCompleteVision) {
       try {
         console.log('[BillOfSale] Vision extraction was incomplete. Running fallback text extraction...');
         const rawBillText = await extractText(req.file.buffer, req.file.mimetype);
-        const dispositionFallback = extractDispositionDetailsFromText(rawBillText);
+        const dispositionFallback = extractDispositionDetailsFromText(rawBillText, dealership);
         for (const key of ['disposedTo', 'disposedAddress', 'disposedCity', 'disposedState', 'disposedZip']) {
           if (dispositionFallback[key]) billOfSaleInfo[key] = billOfSaleInfo[key] || dispositionFallback[key];
         }

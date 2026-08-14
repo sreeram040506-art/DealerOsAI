@@ -223,6 +223,27 @@ describe('document parser fallback extraction', () => {
     expect(info.disposedZip).toBe('02169');
   });
 
+  it('extracts disposition buyer details from bill of sale text, not Washington Street Auto Sales seller details', () => {
+    const text = `
+      Motor Vehicle Purchase Contract
+      Dealer/Seller Name and Address: Washington Street Auto Sales
+      45 Washington Street
+      Norwood, MA 02062
+
+      Purchaser(s) Name(s) and Address(es): Jane Customer
+      Address: 9 Main Street City: Quincy State: MA Zip: 02169
+      Vehicle Sales Price: $12,500
+    `;
+
+    const info = extractDispositionDetailsFromText(text);
+
+    expect(info.disposedTo).toBe('Jane Customer');
+    expect(info.disposedAddress).toBe('9 Main Street');
+    expect(info.disposedCity).toBe('Quincy');
+    expect(info.disposedState).toBe('MA');
+    expect(info.disposedZip).toBe('02169');
+  });
+
   it('extracts CarMax auction acquisition details without treating boilerplate purchaser text as disposition', () => {
     const text = `
       Wholesale Bill of Sale
