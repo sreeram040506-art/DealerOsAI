@@ -29,7 +29,7 @@ export default function Dashboard() {
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
-  const { user, token } = useAuth();
+  const { user, token, logout } = useAuth();
   const navigate = useNavigate();
   
   const isAdmin = user?.role === 'ADMIN';

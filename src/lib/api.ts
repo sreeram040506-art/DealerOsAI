@@ -51,7 +51,7 @@ export async function apiFetch(path: string, token: string | null, init: Request
 }
 
 export async function handleApiResponse<T>(response: Response, logout?: () => void): Promise<T> {
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     logout?.();
     const errorText = await response.text();
     throw new Error(errorText || 'Session expired. Please sign in again.');
