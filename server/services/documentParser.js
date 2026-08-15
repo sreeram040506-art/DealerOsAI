@@ -708,13 +708,24 @@ function mergeFallbackResult(result, fallback) {
            merged[key] = fallbackVin;
            continue;
         }
-        
-        // Let's also check if the AI VIN has adjacent repeated digits that look like an OCR dropped letter (e.g. '8' instead of 'B')
-        // We know Tesseract is often better at exact string sequences on plain paper than Vision LLMs.
-        // If Tesseract found a perfect 17 char VIN, it's highly likely to be correct.
-        // We will prefer the fallback if it's 17 characters and the AI is different.
-        console.log(`[Parser:PostProcess] Overriding AI VIN (${aiVin}) with Fallback (${fallbackVin}) because Tesseract is generally more accurate for exact sequences.`);
-        merged[key] = fallbackVin;
+
+        // Decide between two plausible 17-char VINs using the ISO 3779 check digit rather
+        // than blanket-trusting the regex fallback. This previously always preferred the
+        // fallback ("Tesseract is generally more accurate for exact sequences"), which is
+        // wrong in the common case: the regex scans the WHOLE page for any 17-character
+        // run, so it happily lifts unrelated digits — a buyer's phone numbers, for
+        // instance, condense to a 17-char string that even passes the checksum — while the
+        // AI actually reads the labelled VIN box and knows where the VIN lives.
+        const aiValid = isValidVin(aiVin);
+        const fallbackValid = isValidVin(fallbackVin);
+        if (fallbackValid && !aiValid) {
+          console.log(`[Parser:PostProcess] Overriding AI VIN (${aiVin}) with Fallback (${fallbackVin}) — fallback passes checksum, AI does not.`);
+          merged[key] = fallbackVin;
+          continue;
+        }
+        // AI wins when it is checksum-valid, and when neither is valid (it at least had
+        // the layout context to know which box it was reading).
+        console.log(`[Parser:PostProcess] Keeping AI VIN (${aiVin}) over Fallback (${fallbackVin}) — aiValid=${aiValid}, fallbackValid=${fallbackValid}.`);
         continue;
       }
     }

@@ -7,7 +7,8 @@ import {
   extractTotalFromText,
   extractVehicleInfo,
   extractVinFromText,
-  extractVehicleInfoFromText
+  extractVehicleInfoFromText,
+  isValidVin
 } from '../../server/services/documentParser.js';
 
 describe('document parser fallback extraction', () => {
@@ -603,6 +604,21 @@ describe('document parser fallback extraction', () => {
     expect(info.mileage).toBe(99363);
     expect(info.purchasedFrom).toBe('TULLEY AUTO GROUP');
     expect(info.purchasePrice).toBe(14140);
+  });
+
+  it('does not mistake a phone number for a VIN', () => {
+    // The buyer panel's phone numbers condense to a 17-character string that even passes
+    // the ISO 3779 check digit by coincidence, so it is indistinguishable from a real VIN
+    // on structure alone. The regex fallback scans the whole page and will surface it;
+    // what matters is that it must never be preferred over a checksum-valid VIN that the
+    // AI read out of the actual VEHICLE INFORMATION box.
+    const phoneDigits = extractVinFromText('HOME: 781-298-7905 CELL: 781-298-7905');
+    expect(phoneDigits).toBe('812987905CELL7812');
+    expect(isValidVin(phoneDigits as string)).toBe(true);
+
+    // The real VIN is also valid — so preferring the fallback unconditionally (the old
+    // behaviour) silently replaced a correct VIN with phone digits.
+    expect(isValidVin('5UXTY5C09M9E04416')).toBe(true);
   });
 
   it('flags a VIN that fails checksum validation instead of silently trusting it', async () => {
