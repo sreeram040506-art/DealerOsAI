@@ -1245,32 +1245,39 @@ function splitLineAtColumn(line, columnStart) {
 // is lost entirely. Detect that layout using the raw, space-preserving text and rewrite
 // the panel region into sequential single-column blocks, so every downstream parser sees
 // an unambiguous document. Returns the text unchanged when it isn't a two-column layout.
-// The left panel is whoever is receiving the vehicle on this form, the right panel is the
-// other party. Frazer prints two variants: a wholesale bill of sale headed
-// "BUYER INFORMATION" / "SELLER INFORMATION", and a retail purchase contract headed
-// "PURCHASER INFORMATION" / "DEALER/SELLER INFORMATION". Both are side-by-side, so both
-// need splitting; matching only the first variant left the retail contract merged and its
-// customer unextractable.
-const PANEL_HEADER_LEFT = /\b(?:BUYER|PURCHASER)\s+INFORMATION\b/i;
-const PANEL_HEADER_RIGHT = /\b(?:DEALER\s*\/\s*)?SELLER\s+INFORMATION\b/i;
+// Which side is which varies by form, so this deliberately matches ANY pair of party
+// headings rather than a fixed BUYER/SELLER pair. Forms in the wild head their columns
+// "BUYER INFORMATION"/"SELLER INFORMATION", "PURCHASER INFORMATION"/"DEALER/SELLER
+// INFORMATION", "ACQUIRED FROM"/"DELIVERING TO", "SOLD BY"/"SOLD TO", and so on. Anchoring
+// on one specific pair leaves every other wording merged, which is how a column heading
+// like "DELIVERING TO" ends up recorded as the name of the seller.
+const PARTY_HEADING = /\b(?:BUYER|PURCHASER|SELLER|DEALER\s*\/\s*SELLER|CONSIGNOR|CONSIGNEE|BILL\s+TO|BILL\s+FROM|SOLD\s+TO|SOLD\s+BY|ACQUIRED\s+FROM|OBTAINED\s+FROM|PURCHASED\s+FROM|DELIVER(?:ING)?\s+TO|SHIP\s+TO|REMIT\s+TO)(?:\s+INFORMATION)?\b/gi;
+
+// Returns the index where the second party heading starts, or -1 when the line does not
+// hold two of them side by side.
+function findSecondPartyHeadingIndex(line) {
+  const matches = [...String(line || '').matchAll(PARTY_HEADING)];
+  if (matches.length < 2) return -1;
+  // Skip overlapping matches ("DEALER/SELLER" also matches "SELLER") by requiring the
+  // second heading to begin after the first one ends.
+  const first = matches[0];
+  const second = matches.find((m) => m.index >= first.index + first[0].length);
+  return second ? second.index : -1;
+}
 
 function deinterleaveTwoColumnPanels(text) {
   const raw = String(text || '');
   const lines = raw.split(/\r?\n/);
-  const headerIndex = lines.findIndex(
-    (line) => PANEL_HEADER_LEFT.test(line) && PANEL_HEADER_RIGHT.test(line)
-  );
+  const headerIndex = lines.findIndex((line) => findSecondPartyHeadingIndex(line) >= 10);
   if (headerIndex < 0) return raw;
 
   const headerLine = lines[headerIndex];
-  const columnStart = headerLine.match(PANEL_HEADER_RIGHT)?.index ?? -1;
-  // Without a real left column before the right-hand header this isn't a two-column layout.
-  if (columnStart < 10) return raw;
+  const columnStart = findSecondPartyHeadingIndex(headerLine);
 
-  // Keep each form's own wording rather than forcing it to BUYER/SELLER. The roles differ
-  // between the two variants — on the retail contract the left panel is the customer and
-  // the right panel is us — and downstream parsing keys off those exact labels to decide
-  // which party is which.
+  // Keep each form's own wording rather than forcing it to BUYER/SELLER. Which side holds
+  // which party is not fixed — a retail contract puts the customer on the left, a wholesale
+  // receipt can put the seller there — and downstream parsing reads those labels to work
+  // out who is who.
   const leftHeader = headerLine.slice(0, columnStart).trim() || 'BUYER INFORMATION:';
   const rightHeader = headerLine.slice(columnStart).trim() || 'SELLER INFORMATION:';
 
@@ -2559,6 +2566,23 @@ Even if the document format is UNFAMILIAR, do not give up on the whole document 
 
 ${identityLines}
 
+HOW TO READ ANY VEHICLE DOCUMENT (apply this to EVERY document, familiar or not):
+Named formats are listed later only as examples. Never conclude that a field is absent because the document does not match a format you recognise. Work it out from the page itself:
+
+A. FIND THE PARTIES BY ROLE, NOT BY WORDING. Every transaction document names who is giving up the vehicle and who is receiving it, but the wording varies endlessly. Receiving side: "Buyer", "Purchaser", "Bill To", "Sold To", "Consignee", "Transferred To", or simply the dealership named at the top of an invoice. Giving-up side: "Seller", "Dealer/Seller", "Dealership Information", "Consignor", "Obtained From", "Source", "Remit To", or the addressee of a lender's letter. Match on MEANING, not on an exact label.
+
+B. WORK OUT WHICH SIDE WE ARE. Locate our dealership (named above) on the page. If we are the receiving side, the OTHER party is the source; if we are the giving-up side, the other party is the customer. If our name appears nowhere, infer from the request: you were asked for acquisition fields (we are receiving) or sale fields (we are giving up).
+
+C. THIRD PARTIES ARE NEVER THE COUNTERPARTY. Pages routinely name people and companies with no ownership role: lenders and lienholders, remittance/lockbox addresses, transport and pickup locations, contact persons, inspection services, salespeople, insurers, and the software vendor in the footer. None of these is the buyer or the seller. Likewise a COLUMN HEADING ("Pickup information", "Trade-In Information", "Lien Holder Information") is never a party name.
+
+D. RESPECT COLUMNS. These forms are laid out in two or three side-by-side panels, and flattened text can interleave them. Two names on one line usually means two different columns, not one party — never merge them into a single name, and never take one column's address for another column's party.
+
+E. VEHICLE IDENTITY COMES FROM THE VEHICLE BLOCK ONLY. Year, make, model, VIN, odometer and colour come from the labelled vehicle section or the vehicle line of an itemised table. Never assemble a VIN or an odometer from phone numbers, account numbers, order numbers, settlement figures or dates elsewhere on the page. A VIN is exactly 17 characters and never contains I, O or Q.
+
+F. MONEY: TAKE THE BOTTOM LINE. Prefer the final amount the transaction settles at, after fees — labelled Total, Total Due, Balance Due, Total Contract Price, Amount Needed to Close, or the last row of an itemised table. Do not return an individual line item or an intermediate subtotal when a later total exists. If the final total is 0.00 because the purchase was financed (floorplan) or fully credited, use the subtotal above it instead.
+
+G. DATES: use the document/transaction date, not a due date, an expiry date, or an "effective until" date.
+
 CRITICAL RULES:
 1. NEVER GUESS OR INVENT A VALUE. This is the most important rule. If a field's value is not clearly and explicitly visible in the document (the box is blank, illegible, or absent), you MUST return null for that field (0 for numeric fields). Do NOT infer a "plausible" value — not a common color, not a typical price, not a guessed digit. A record with some fields correctly left null is far more useful than one where you filled in something that looks right but is wrong. This rule applies independently per field — leaving one field null is never a reason to also skip a different field you CAN clearly see.
 2. ROLE DETECTION: If our dealership appears as BUYER → this is an ACQUISITION. If our dealership appears as SELLER/DEALER → this is a SALE.
@@ -2579,12 +2603,16 @@ function buildAcquisitionPrompt(textOrEmpty) {
   const { label } = buildDealershipPromptIdentity();
   return `Extract data from this VEHICLE ACQUISITION document. Our dealership (${label}) is the BUYER.
 
-CRITICAL ROLE AND SOURCE RULE:
-- FIRST, decide whether an auction/dealer is even involved. Many acquisitions are bought straight from a private owner, and the rules below about auctions then do not apply at all. In particular, on a LENDER PAYOFF LETTER (letterhead of a finance company such as TD Auto Finance / Ally / Santander / a credit union, headed something like "Amount Needed to Pay Your Account In Full") there is NO auction and NO selling dealer: the source is the ADDRESSEE — the person named and addressed at the top of the letter, the one greeted as "Dear <NAME>". Use that person's name as "purchasedFrom" and their address as the source address. Returning null here because you could not find an auction is WRONG. See the dedicated payoff-letter section further below.
-- ALWAYS prioritize the AUCTION HOUSE/FACILITY name and address (e.g. "ADESA Concord", "ADESA Boston", "Manheim New England", "America's Auto Auction", "CarMax") as the "purchasedFrom" and source address details — when the document actually is an auction/dealer purchase.
-- DO NOT USE the consignor or individual seller listed in the "SELLER" or "CONSIGNOR" box (e.g. "RON BOUCHARD'S AUTO SALES INC") as the "purchasedFrom" or source address.
-- The auction house itself (usually shown at the top-left or in a big logo like "ADESA Concord", "Manheim") is the authoritative transaction partner. Set "purchasedFrom" to the auction name and use the auction's address (e.g. "77 Hosmer Street, Acton, MA 01720" for ADESA Concord).
-- HEADER / TITLE CONFUSION WARNING: Even if the document has a giant bold header saying "Bill of Sale" at the top center (such as wholesale auction bills of sale from ADESA Concord or Manheim), if this is an Acquisition/Purchase document (our dealership is the BUYER), you MUST strictly parse the Auction details (purchasedFrom, purchasePrice, purchaseDate) and ignore any retail sales/disposition fields!
+CHOOSING THE SOURCE ("purchasedFrom" and the source address)
+The source is the party we bought the vehicle FROM. Decide which one that is by asking who is invoicing us / who the vehicle came from, using step A–C of the method above. In practice it is exactly one of these three, and this ordering settles every case:
+
+1. AN AUCTION OR MARKETPLACE, when one is running the transaction — ADESA, Manheim, CMAA/Central Mass, America's AA, CarMax, OPENLANE, ACV, Copart. It is the party billing us, usually shown as the letterhead/logo at the top. When present it WINS over any consignor: an auction invoice often also names the dealership that consigned the car (e.g. "RON BOUCHARD'S AUTO SALES INC", "IRA LEXUS", sometimes under a heading like "Seller" or "Dealership information"), and that consignor is NOT the source. Use the auction's own name and address.
+2. THE SELLING DEALERSHIP, on a direct dealer-to-dealer purchase with no auction in the middle — typically the party in the "SELLER INFORMATION" panel opposite our own "BUYER INFORMATION" panel.
+3. THE PRIVATE OWNER, when we buy from an individual. On a lender's payoff letter this is the ADDRESSEE — the person the letter is written to and greets as "Dear <NAME>" — never the finance company on the letterhead, which is only the lienholder.
+
+If no auction appears anywhere, do NOT return null for the source: fall through to case 2 or 3 and name the actual counterparty. "I could not find an auction" is not a reason to leave purchasedFrom empty.
+
+HEADER / TITLE CONFUSION WARNING: a giant "Bill of Sale" header at the top does not make a document a retail sale. If we are the BUYER, parse acquisition fields (purchasedFrom, purchasePrice, purchaseDate) and leave the retail disposition fields null.
 
 JSON_START
 {
@@ -2624,7 +2652,7 @@ HELPER ARRAYS:
 - "allVisiblePrices": You MUST list all numeric dollar values related to pricing, fees, sales, or totals visible on the page.
 - "allVisibleOdometers": You MUST list all numeric odometer/mileage values visible on the page.
 
-DOCUMENT-SPECIFIC:
+WORKED EXAMPLES OF THE METHOD (reference only — these are formats seen often, NOT the only ones supported). If the document in front of you is not listed here, that changes nothing: apply the method above and extract every field you can see. Where an example conflicts with what is actually printed, believe the document.
 - Used Vehicle Record (UVR) Double-Sided Forms: If the document is a "Used Vehicle Record" containing both "Acquisition" and "Disposition" sections, since this is an ACQUISITION purpose, you MUST extract the details from the "Acquisition of Motor Vehicle/Part" section (Obtained From / Source name, street address, city, state, zip, date, and odometer) and ignore the "Disposition" section.
 - AMERICA'S AA (America's Auto Auction): Use "AMERICA'S AA BOSTON" and the North Billerica, MA address as the source. The TOTAL is at the absolute bottom of the price table on the right ($4,765.00 in the example). Title # is in the small box on the right (e.g. BJ713930).
 - ADESA: Use the AUCTION FACILITY name and address (usually at the top or labeled "FACILITY") as the source, not the individual seller (e.g. "ADESA Concord", "77 Hosmer Street, Acton, MA 01720").
@@ -2673,10 +2701,12 @@ function buildSalePrompt(textOrEmpty) {
   const { label } = buildDealershipPromptIdentity();
   return `Extract data from this VEHICLE SALE document. Our dealership (${label}) is the SELLER.
 
-CRITICAL ROLE AND CUSTOMER RULE:
-- STRICTLY extract details of the retail customer (disposedTo, disposedAddress, etc.) purchasing the car from our dealership.
-- IF our dealership is the BUYER or if the document represents a purchase from an auction house (like ADESA, Manheim, Copart), you MUST return null or 0 for all sales/disposition fields (disposedTo, disposedAddress, disposedPrice, disposedDate). Do NOT extract the auction name or purchase price as sales fields. This is an acquisition document, NOT a sale document!
-- STRICTLY return null or 0 if a field is not explicitly visible in the document. NEVER guess, speculate, or extract dealer names as retail customers.
+CHOOSING THE CUSTOMER ("disposedTo" and the disposed address)
+The customer is the party RECEIVING the vehicle from us. Identify them with step A–C of the method above: find the receiving side by meaning, whatever this particular form calls it — "Purchaser", "Purchaser(s) Name(s) and Address(es)", "Buyer", "Bill To", "Sold To", "Transferred To", "PURCHASER INFORMATION", or simply the individual named opposite our dealership. Our own dealership will usually appear as "Dealer/Seller"; that is us, never the customer.
+- Do not be constrained by the label wordings listed above — an unfamiliar form still has a receiving party, and you should name them.
+- Third parties are not the customer: a lienholder or lender financing the purchase (e.g. a credit union in a "LIEN HOLDER INFORMATION" box), an insurer, a co-signer's employer, a salesperson, or a trade-in's previous lender. A COLUMN HEADING is never a person.
+- IF this document is actually a purchase by us (we are the buyer, or it is an auction/marketplace invoice such as ADESA, Manheim, Copart, OPENLANE), return null or 0 for ALL disposition fields. Never record an auction or a selling dealer as a retail customer.
+- STRICTLY return null or 0 if a field is not explicitly visible in the document. NEVER guess or speculate.
 
 JSON_START
 {

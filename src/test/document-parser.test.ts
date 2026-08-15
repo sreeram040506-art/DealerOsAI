@@ -690,6 +690,41 @@ describe('document parser fallback extraction', () => {
     expect(info.purchasePrice).toBe(14140);
   });
 
+  it('reads an unfamiliar wholesale receipt whose columns use non-standard labels', async () => {
+    // Guards the generalisation: this form is described nowhere in the prompt and heads its
+    // side-by-side panels "ACQUIRED FROM" / "DELIVERING TO" rather than BUYER / SELLER.
+    // Anchoring the column splitter on one fixed label pair left these merged, and the
+    // column heading "DELIVERING TO" was being recorded as the seller's name.
+    // Indentation is load-bearing — it reproduces the column offsets.
+    const text = [
+      'COASTLINE MOTORS GROUP — WHOLESALE PURCHASE RECEIPT',
+      'Receipt No: WR-88213      Transaction Date: 04/02/2026',
+      'ACQUIRED FROM:                 DELIVERING TO:',
+      'NORTHSHORE AUTO WHOLESALE      Washington Street Auto Sales',
+      '18 Commerce Way                879 Washington St',
+      'Peabody, MA 01960              Canton, MA 02021',
+      'UNIT: 2018 Toyota Highlander LE   V.I.N. 5TDZARFH4JS040118',
+      'Reading: 62,004',
+      'Unit Price      12,400.00',
+      'Doc Fee            250.00',
+      'GRAND TOTAL     12,650.00',
+    ].join('\n');
+
+    const info = await extractVehicleInfo(Buffer.from(text), 'text/plain', 'acquisition', {
+      name: 'Washington Street Auto Sales',
+    });
+
+    expect(info.vin).toBe('5TDZARFH4JS040118');
+    expect(info.purchasedFrom).toMatch(/NORTHSHORE AUTO WHOLESALE/i);
+    // Never a column heading, and never our own side of the page.
+    expect(info.purchasedFrom).not.toMatch(/DELIVERING|ACQUIRED FROM|WASHINGTON STREET/i);
+    expect(info.usedVehicleSourceAddress).toMatch(/18 Commerce Way/i);
+    expect(info.usedVehicleSourceAddress).not.toMatch(/879 Washington/i);
+    expect(info.usedVehicleSourceCity).toMatch(/Peabody/i);
+    // Grand total, not the unit price.
+    expect(info.purchasePrice).toBe(12650);
+  }, 30000);
+
   it('treats OPENLANE as the source and ignores the consignor and pickup columns', async () => {
     // Three columns — Buyer | Seller | Pickup information — so the panel splitter (which
     // handles two) leaves them merged and the source was coming back as the literal column
