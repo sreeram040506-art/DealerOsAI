@@ -25,3 +25,9 @@ dist-ssr
 .env
 server/.env
 .antigravityignore
+
+# Predictor model snapshots — regenerated on every server start (the app retrains at boot
+# and guards reads with fs.existsSync), so tracking them only adds churn and repo bloat.
+server/data/predictor-models/
+server/data/demand_model_latest.json
+server/data/demand_model.json
