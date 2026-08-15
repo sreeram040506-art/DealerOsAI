@@ -690,6 +690,42 @@ describe('document parser fallback extraction', () => {
     expect(info.purchasePrice).toBe(14140);
   });
 
+  it('takes the owner, not the lender, as the source on a lien payoff letter', async () => {
+    // A payoff letter has three parties and only one is the source: the addressee owns the
+    // vehicle we are buying, while the finance company is merely the lienholder. The
+    // acquisition prompt otherwise pushes hard toward auctions, which made it return null
+    // here rather than the person named at the top.
+    const text = [
+      'TD Auto Finance',
+      'February 19, 2026',
+      'KELLY M BRADLEY',
+      '10 JEFFREY RD',
+      'CANTON, MA 02021',
+      'RE: Account Number: 1103836081',
+      'YEAR   MAKE     MODEL       VEHICLE IDENTIFICATION NUMBER',
+      '2016   NISSAN   ROGUE AWD   KNMAT2MV1GP614442',
+      'Here Is the Amount Needed to Pay Your Account In Full',
+      'Dear KELLY M BRADLEY,',
+      'Current Balance:                            $ 3,933.89',
+      'PLUS Finance Charges to Date:               $    12.94',
+      'TOTAL Amount Needed to Close Your Account   $ 3,946.83',
+      'TD Auto Finance  PO Box 16039  Lewiston, ME 04243-9520',
+    ].join('\n');
+
+    const info = await extractVehicleInfo(Buffer.from(text), 'text/plain', 'acquisition');
+
+    expect(info.vin).toBe('KNMAT2MV1GP614442');
+    expect(info.year).toBe(2016);
+    // The owner is the source — never the finance company or its lockbox address.
+    expect(info.purchasedFrom).toMatch(/KELLY M BRADLEY/i);
+    expect(info.purchasedFrom).not.toMatch(/TD AUTO FINANCE/i);
+    expect(info.usedVehicleSourceAddress).toMatch(/10 JEFFREY RD/i);
+    expect(info.usedVehicleSourceCity).toMatch(/CANTON/i);
+    expect(info.usedVehicleSourceZipCode).toBe('02021');
+    // The payoff total, not the pre-interest balance.
+    expect(info.purchasePrice).toBe(3946.83);
+  }, 30000);
+
   it('flags a VIN that fails checksum validation instead of silently trusting it', async () => {
     // Last digit deliberately tampered so it no longer matches the ISO 3779 check digit
     // (the real VIN '5UXTY5C09M9E04416' is checksum-valid; this is not).

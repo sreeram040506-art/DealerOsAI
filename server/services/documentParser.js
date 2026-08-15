@@ -2548,7 +2548,8 @@ function buildAcquisitionPrompt(textOrEmpty) {
   return `Extract data from this VEHICLE ACQUISITION document. Our dealership (${label}) is the BUYER.
 
 CRITICAL ROLE AND SOURCE RULE:
-- ALWAYS prioritize the AUCTION HOUSE/FACILITY name and address (e.g. "ADESA Concord", "ADESA Boston", "Manheim New England", "America's Auto Auction", "CarMax") as the "purchasedFrom" and source address details.
+- FIRST, decide whether an auction/dealer is even involved. Many acquisitions are bought straight from a private owner, and the rules below about auctions then do not apply at all. In particular, on a LENDER PAYOFF LETTER (letterhead of a finance company such as TD Auto Finance / Ally / Santander / a credit union, headed something like "Amount Needed to Pay Your Account In Full") there is NO auction and NO selling dealer: the source is the ADDRESSEE — the person named and addressed at the top of the letter, the one greeted as "Dear <NAME>". Use that person's name as "purchasedFrom" and their address as the source address. Returning null here because you could not find an auction is WRONG. See the dedicated payoff-letter section further below.
+- ALWAYS prioritize the AUCTION HOUSE/FACILITY name and address (e.g. "ADESA Concord", "ADESA Boston", "Manheim New England", "America's Auto Auction", "CarMax") as the "purchasedFrom" and source address details — when the document actually is an auction/dealer purchase.
 - DO NOT USE the consignor or individual seller listed in the "SELLER" or "CONSIGNOR" box (e.g. "RON BOUCHARD'S AUTO SALES INC") as the "purchasedFrom" or source address.
 - The auction house itself (usually shown at the top-left or in a big logo like "ADESA Concord", "Manheim") is the authoritative transaction partner. Set "purchasedFrom" to the auction name and use the auction's address (e.g. "77 Hosmer Street, Acton, MA 01720" for ADESA Concord).
 - HEADER / TITLE CONFUSION WARNING: Even if the document has a giant bold header saying "Bill of Sale" at the top center (such as wholesale auction bills of sale from ADESA Concord or Manheim), if this is an Acquisition/Purchase document (our dealership is the BUYER), you MUST strictly parse the Auction details (purchasedFrom, purchasePrice, purchaseDate) and ignore any retail sales/disposition fields!
@@ -2612,6 +2613,16 @@ This form has a fixed layout. Read each value ONLY from the box named below. Do 
   * COLOR 1: / COLOR 2: are frequently left BLANK on this form. If nothing is printed after the label, return null for color — never guess a common colour such as White or Black.
 - ODOMETER READING (upper-RIGHT, right of the vehicle block): the mileage, e.g. "99,363". The same figure is usually repeated in the "VEHICLE MILEAGE AND CONDITION STATEMENT" paragraph, which you can use to confirm it.
 - SETTLEMENT (right column): a money table ending in "SUBTOTAL:", "TAX", "TOTAL DUE:". When "TOTAL DUE:" is $0.00 (floorplan-financed), use SUBTOTAL as purchasePrice. The "REMARKS:" box often restates that same amount followed by the word "Floorplan".
+
+LIEN PAYOFF LETTER / "AMOUNT NEEDED TO PAY YOUR ACCOUNT IN FULL" (from a lender such as TD Auto Finance, Ally, Santander, Capital One, a credit union):
+This is not a bill of sale. It is a lender quoting what is owed to clear the loan on a vehicle we are buying from its owner, usually a trade-in or a private purchase. It has three parties, and only one of them is the source:
+- The ADDRESSEE — the person's name and address in the letter block near the top, also greeted as "Dear <NAME>". This is the vehicle's OWNER, the party we are acquiring from. Use this name as "purchasedFrom" and this address for ALL source address fields.
+- The LENDER whose logo/letterhead is on the page (e.g. "TD Auto Finance") and whose remittance address appears near the bottom ("PO Box ...", "Lockbox", "Mail your check to"). This is the LIENHOLDER, NOT the seller. NEVER use the lender's name or its remittance/lockbox address for purchasedFrom or the source address.
+- Vehicle identity comes from the small table headed "YEAR | MAKE | MODEL | VEHICLE IDENTIFICATION NUMBER".
+- Price: use the figure on the "TOTAL Amount Needed to Close Your Account" line as "purchasePrice". Do NOT use "Current Balance" — it excludes accrued finance charges. Ignore per-day charge amounts (e.g. "$0.46 per day").
+- Date: use the letter's date (top of the page), not the "effective until" date.
+- "RE: Account Number" is the LOAN account number. It is NOT the title number and NOT the stock number — leave both null unless printed elsewhere.
+- Odometer is normally absent from these letters; return 0/null rather than borrowing a number from the money column.
 
 NEVER use our dealership's own name or address as the source address (this includes "${label}" and its address if given above, plus the legacy names "BROADWAY USED AUTO SALES" / "WASHINGTON STREET AUTO SALES"). If you see any of these names in a table, the address beside it is the BUYER, not the seller.${docText}`;
 }
