@@ -554,6 +554,57 @@ describe('document parser fallback extraction', () => {
     expect(info.purchasePrice).toBe(14140);
   });
 
+  it('separates side-by-side buyer and seller panels on two-column scans', () => {
+    // A scanned bill of sale places BUYER INFORMATION and SELLER INFORMATION side by side,
+    // so OCR emits both panels on the SAME physical line. Collapsing whitespace previously
+    // merged the two parties into "WASHINGTON STREET TULLEY AUTO GROUP" and dropped the
+    // seller's address entirely. Column alignment must be used to keep them apart.
+    // NOTE: the leading indentation here is intentional and load-bearing — it reproduces
+    // the column offsets OCR produces.
+    const text = [
+      'BILL OF SALE                          DATE: 7-31-2026 STOCK #: MPA6724A',
+      'BUYER INFORMATION:                    SELLER INFORMATION:',
+      'WASHINGTON STREET                     TULLEY AUTO GROUP',
+      'WASHINGTON STREET AUTO SALES          131 W Glenwood St',
+      'Driver Lic: --                        Nashua, NH 03060',
+      'HOME: 781-298-7905 CELL: 781-298-7905 603-519-3314',
+      '                                      auction@tulley.com',
+      'VEHICLE INFORMATION:',
+      'NEW  X USED   YEAR: 2021    STOCK: MPA6724A',
+      'DEMO   RENTAL MAKE: BMW     COLOR 1:',
+      'SALVAGE REBUILT MODEL: X3   COLOR 2:',
+      'FACTORY OFFICIAL VIN: 5UXTY5C09M9E04416  TRANS:',
+      'BODY: 4D Sport Utility      STYLE:',
+      'ODOMETER READING',
+      '99,363',
+      'SETTLEMENT',
+      'VEHICLE PRICE:  $13,800.00',
+      'BUY FEE  $315.00',
+      'Floorplan Processing Fee  $25.00',
+      'SUBTOTAL:  $14,140.00',
+      'TAX',
+      'TOTAL DUE:  $0.00',
+    ].join('\n');
+
+    const acquisition = extractAcquisitionDetailsFromText(text);
+    const info = extractVehicleInfoFromText(text);
+
+    // The seller must be the counterparty alone — never merged with the buyer's name.
+    expect(acquisition.purchasedFrom).toBe('TULLEY AUTO GROUP');
+    expect(acquisition.usedVehicleSourceAddress).toBe('131 W Glenwood St');
+    expect(acquisition.usedVehicleSourceCity).toBe('Nashua');
+    expect(acquisition.usedVehicleSourceState).toBe('NH');
+    expect(acquisition.usedVehicleSourceZipCode).toBe('03060');
+
+    expect(info.vin).toBe('5UXTY5C09M9E04416');
+    expect(info.year).toBe(2021);
+    expect(info.make).toBe('BMW');
+    expect(info.model).toBe('X3');
+    expect(info.mileage).toBe(99363);
+    expect(info.purchasedFrom).toBe('TULLEY AUTO GROUP');
+    expect(info.purchasePrice).toBe(14140);
+  });
+
   it('flags a VIN that fails checksum validation instead of silently trusting it', async () => {
     // Last digit deliberately tampered so it no longer matches the ISO 3779 check digit
     // (the real VIN '5UXTY5C09M9E04416' is checksum-valid; this is not).

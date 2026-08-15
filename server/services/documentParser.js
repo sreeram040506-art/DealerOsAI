@@ -1141,6 +1141,70 @@ function normalizeDocumentLines(text) {
     .filter(Boolean);
 }
 
+// Splits one physical line into [leftColumn, rightColumn] at the boundary implied by
+// `columnStart`. Prefers a real run of 2+ spaces near that offset, since OCR column
+// positions drift a little line to line; falls back to a hard slice at the offset.
+function splitLineAtColumn(line, columnStart) {
+  const source = String(line || '');
+  if (!source.trim()) return ['', ''];
+  if (source.length <= columnStart) return [source.trim(), ''];
+
+  let boundary = null;
+  for (const match of source.matchAll(/\s{2,}/g)) {
+    const gapEnd = match.index + match[0].length;
+    const distance = Math.abs(gapEnd - columnStart);
+    if (boundary === null || distance < boundary.distance) {
+      boundary = { start: match.index, end: gapEnd, distance };
+    }
+  }
+
+  const cut = boundary && boundary.distance <= 12
+    ? boundary
+    : { start: columnStart, end: columnStart };
+  return [source.slice(0, cut.start).trim(), source.slice(cut.end).trim()];
+}
+
+// Scanned dealer bills of sale (CarMax, Central Mass, Tulley/Frazer-style forms, etc.)
+// commonly place BUYER INFORMATION and SELLER INFORMATION side by side. OCR then emits
+// BOTH panels on the SAME physical line, so collapsing whitespace merges the two parties
+// into one string (e.g. "WASHINGTON STREET TULLEY AUTO GROUP") and the seller's address
+// is lost entirely. Detect that layout using the raw, space-preserving text and rewrite
+// the panel region into sequential single-column blocks, so every downstream parser sees
+// an unambiguous document. Returns the text unchanged when it isn't a two-column layout.
+function deinterleaveTwoColumnPanels(text) {
+  const raw = String(text || '');
+  const lines = raw.split(/\r?\n/);
+  const headerIndex = lines.findIndex(
+    (line) => /\bBUYER\s+INFORMATION\b/i.test(line) && /\bSELLER\s+INFORMATION\b/i.test(line)
+  );
+  if (headerIndex < 0) return raw;
+
+  const columnStart = lines[headerIndex].match(/\bSELLER\s+INFORMATION\b/i)?.index ?? -1;
+  // Without a real left column before the seller header this isn't a two-column layout.
+  if (columnStart < 10) return raw;
+
+  const stopPattern = /\b(VEHICLE\s+INFORMATION|ODOMETER\s+READING|SETTLEMENT|ANNOUNCEMENTS|VEHICLE\s+MILEAGE|PRIOR\s+USE|REMARKS)\b/i;
+  const buyerLines = [];
+  const sellerLines = [];
+  let end = headerIndex + 1;
+  for (; end < lines.length; end++) {
+    if (stopPattern.test(lines[end])) break;
+    const [left, right] = splitLineAtColumn(lines[end], columnStart);
+    if (left) buyerLines.push(left);
+    if (right) sellerLines.push(right);
+  }
+  if (!sellerLines.length) return raw;
+
+  return [
+    ...lines.slice(0, headerIndex),
+    'BUYER INFORMATION:',
+    ...buyerLines,
+    'SELLER INFORMATION:',
+    ...sellerLines,
+    ...lines.slice(end),
+  ].join('\n');
+}
+
 // Checks whether `value` refers to OUR OWN dealership — either the current tenant
 // (from AsyncLocalStorage context, set per-request) or one of the legacy hardcoded aliases.
 // Kept as `isBroadwayValue` for minimal diff at call sites; it is no longer Broadway-only.
@@ -1350,7 +1414,7 @@ function isBoilerplateDispositionLine(line) {
 // hardcoded name — see getCurrentDealership()/isBroadwayValue().
 export function extractAcquisitionDetailsFromText(text, dealership = null) {
   return runWithDealership(dealership, () => {
-    const lines = normalizeDocumentLines(text);
+    const lines = normalizeDocumentLines(deinterleaveTwoColumnPanels(text));
     if (!lines.length) return {};
 
     const carMax = extractCarMaxAcquisitionDetails(lines);
@@ -1588,7 +1652,7 @@ function extractKnownAuctionAcquisitionDetails(lines) {
 // the retail customer fields, for any dealership.
 export function extractDispositionDetailsFromText(text, dealership = null) {
   return runWithDealership(dealership, () => {
-    const lines = normalizeDocumentLines(text);
+    const lines = normalizeDocumentLines(deinterleaveTwoColumnPanels(text));
     if (!lines.length) return {};
 
     const maTitleDisposition = extractMaTitleDispositionDetails(lines);
@@ -1729,7 +1793,7 @@ export function extractVehicleInfoFromText(text, dealership = null) {
 function extractVehicleInfoFromTextImpl(text) {
   if (!text) return {};
 
-  const lines = String(text)
+  const lines = deinterleaveTwoColumnPanels(text)
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
