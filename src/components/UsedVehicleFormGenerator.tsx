@@ -49,14 +49,24 @@ export default function UsedVehicleFormGenerator({
     message: string;
   } | null>(null);
 
-  const handleGenerate = async (pushToInventory: boolean, vinOverrides: Record<string, string> = {}) => {
-    if (sourceFiles.length === 0) {
+  // `filesOverride` lets the VIN-confirmation retry pass its file in directly. It cannot
+  // rely on `sourceFiles`: this function clears that state when it finishes, and a caller
+  // that calls setSourceFiles then invokes this immediately would still read the stale,
+  // empty array from the render closure — the retry would silently hit the guard below and
+  // never re-submit.
+  const handleGenerate = async (
+    pushToInventory: boolean,
+    vinOverrides: Record<string, string> = {},
+    filesOverride?: File[]
+  ) => {
+    const filesToProcess = filesOverride ?? sourceFiles;
+    if (filesToProcess.length === 0) {
       toast.error('Choose the source file(s) first.');
       return;
     }
 
     setLoading(true);
-    setProgress({ current: 0, total: sourceFiles.length });
+    setProgress({ current: 0, total: filesToProcess.length });
 
     let successCount = 0;
     let failCount = 0;
@@ -146,10 +156,10 @@ export default function UsedVehicleFormGenerator({
     };
 
     // Sequential processing with cooldown between files for API rate limit safety
-    for (let i = 0; i < sourceFiles.length; i++) {
-      await processFile(sourceFiles[i]);
+    for (let i = 0; i < filesToProcess.length; i++) {
+      await processFile(filesToProcess[i]);
       // Wait 1s between files to avoid NVIDIA API rate limiting
-      if (i < sourceFiles.length - 1) {
+      if (i < filesToProcess.length - 1) {
         await new Promise(r => setTimeout(r, 1000));
       }
     }
@@ -206,8 +216,9 @@ export default function UsedVehicleFormGenerator({
                 onClick={() => {
                   const { file, value } = pendingVin;
                   setPendingVin(null);
-                  setSourceFiles([file]);
-                  void handleGenerate(true, { [file.name]: value.toUpperCase() });
+                  // Pass the file explicitly — sourceFiles was cleared when the first run
+                  // finished, and setting it here would not be visible to this call.
+                  void handleGenerate(true, { [file.name]: value.toUpperCase() }, [file]);
                 }}
               >
                 Confirm &amp; add to inventory
