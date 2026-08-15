@@ -2372,6 +2372,12 @@ async function crossCheckVinWithOcr(result, fileBuffer, mimetype = 'image/jpeg')
 // never depends on a third party being reachable.
 const VIN_DECODE_TIMEOUT_MS = 6000;
 
+// The test suite must stay hermetic, offline-safe and fast, so the network lookup is off
+// under NODE_ENV=test unless a test opts in with ENABLE_VIN_DECODE=1. Left on everywhere
+// else, which is where the correction actually matters.
+const vinDecodeEnabled =
+  process.env.NODE_ENV !== 'test' || process.env.ENABLE_VIN_DECODE === '1';
+
 async function decodeVinWithNhtsa(vin) {
   const response = await fetchWithTimeout(
     `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`,
@@ -2402,6 +2408,7 @@ function isSameVehicleField(a, b) {
 }
 
 async function applyVinDecodeCorrections(result) {
+  if (!vinDecodeEnabled) return result;
   if (!result?.vin || !isValidVin(result.vin) || result.vinChecksumInvalid) return result;
 
   try {

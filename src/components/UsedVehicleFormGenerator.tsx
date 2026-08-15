@@ -19,6 +19,8 @@ interface GenerateUsedVehicleResponse {
   registryAdded?: boolean;
   inventoryAdded?: boolean;
   message?: string;
+  /** Server withheld the inventory row because the extracted VIN fails its check digit. */
+  needsVinConfirmation?: boolean;
   warnings?: {
     addressMissing?: boolean;
     makeMissing?: boolean;
@@ -38,8 +40,16 @@ export default function UsedVehicleFormGenerator({
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const sourceInputRef = useRef<HTMLInputElement>(null);
+  // Set when the server refuses to create an inventory row because the scanned VIN is
+  // provably misread; holds the file so we can retry it with the corrected VIN.
+  const [pendingVin, setPendingVin] = useState<{
+    file: File;
+    extractedVin: string;
+    value: string;
+    message: string;
+  } | null>(null);
 
-  const handleGenerate = async (pushToInventory: boolean) => {
+  const handleGenerate = async (pushToInventory: boolean, vinOverrides: Record<string, string> = {}) => {
     if (sourceFiles.length === 0) {
       toast.error('Choose the source file(s) first.');
       return;
@@ -55,6 +65,9 @@ export default function UsedVehicleFormGenerator({
       const formData = new FormData();
       formData.append('sourceFile', file);
       formData.append('pushToInventory', String(pushToInventory));
+      // Set once the operator has confirmed/corrected a VIN the scan got wrong.
+      const confirmedVin = vinOverrides[file.name];
+      if (confirmedVin) formData.append('vinOverride', confirmedVin);
 
       try {
         const response = await fetch(apiUrl('/documents/generate-used-vehicle-form'), {
@@ -91,14 +104,31 @@ export default function UsedVehicleFormGenerator({
           toast.warning(`${file.name}: Address could not be reliably extracted. Review before adding to inventory.`);
         }
 
+        // The server withheld the inventory row because the VIN is provably misread.
+        // Collect a corrected VIN rather than creating a vehicle no bill of sale can match.
+        if (data.needsVinConfirmation) {
+          setPendingVin({
+            file,
+            extractedVin: data.info?.vin ?? '',
+            value: data.info?.vin ?? '',
+            message: data.message ?? '',
+          });
+          onScanComplete({
+            info: data.info,
+            pdfBase64: data.pdfBase64,
+            fileName: data.fileName,
+          });
+          return; // not a failure — awaiting confirmation
+        }
+
         if (data.warnings?.vinChecksumInvalid) {
           toast.warning(`${file.name}: VIN "${data.info?.vin}" failed checksum validation — please double-check it against the source document before saving.`);
         }
 
-        onScanComplete({ 
-          info: data.info, 
-          pdfBase64: data.pdfBase64, 
-          fileName: data.fileName 
+        onScanComplete({
+          info: data.info,
+          pdfBase64: data.pdfBase64,
+          fileName: data.fileName
         });
 
         if (sourceFiles.length === 1) {
@@ -134,8 +164,59 @@ export default function UsedVehicleFormGenerator({
     setSourceFiles([]);
   };
 
+  const confirmedVinIsValid = /^[A-HJ-NPR-Z0-9]{17}$/.test(pendingVin?.value.toUpperCase() ?? '');
+
   return (
     <div className="rounded-[24px] border border-border bg-white p-6 space-y-6 shadow-sm">
+      {pendingVin && (
+        <div className="rounded-[20px] border-2 border-amber-400 bg-amber-50 p-5 space-y-3">
+          <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-900">
+            Confirm VIN before adding to inventory
+          </h4>
+          <p className="text-sm text-amber-900/90 font-medium leading-relaxed">
+            {pendingVin.message ||
+              `The VIN read from ${pendingVin.file.name} failed its check-digit validation, so at least one character was misread.`}
+          </p>
+          <p className="text-xs text-amber-900/70">
+            Check it against the VIN box on the document. The record and PDF were still
+            generated — only the inventory entry is waiting, because a wrong VIN cannot be
+            matched by its bill of sale later.
+          </p>
+          <input
+            value={pendingVin.value}
+            onChange={(e) =>
+              setPendingVin({ ...pendingVin, value: e.target.value.toUpperCase() })
+            }
+            maxLength={17}
+            spellCheck={false}
+            aria-label="Corrected VIN"
+            className="w-full rounded-xl border border-amber-300 bg-white px-4 py-3 font-mono text-sm tracking-[0.15em] uppercase focus:border-amber-500 focus:outline-none"
+          />
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-amber-900/70">
+              {pendingVin.value.length}/17
+              {pendingVin.value.length === 17 && !confirmedVinIsValid && ' — contains I, O or Q, which VINs never use'}
+            </span>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setPendingVin(null)} disabled={loading}>
+                Skip
+              </Button>
+              <Button
+                disabled={!confirmedVinIsValid || loading}
+                onClick={() => {
+                  const { file, value } = pendingVin;
+                  setPendingVin(null);
+                  setSourceFiles([file]);
+                  void handleGenerate(true, { [file.name]: value.toUpperCase() });
+                }}
+              >
+                Confirm &amp; add to inventory
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
         <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground mb-2">
           Used Vehicle Record (Bulk)

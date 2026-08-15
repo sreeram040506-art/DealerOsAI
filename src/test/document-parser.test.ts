@@ -620,11 +620,11 @@ describe('document parser fallback extraction', () => {
     ).toBe('5UXTY5C09M9E04416');
   });
 
-  it('corrects a misread model using the VIN as the authority', async () => {
+  // Hits NHTSA's public vPIC service, so it is opt-in (ENABLE_VIN_DECODE=1) to keep the
+  // default suite hermetic, offline-safe and fast.
+  it.skipIf(process.env.ENABLE_VIN_DECODE !== '1')('corrects a misread model using the VIN as the authority', async () => {
     // Marginal print turns an X3 into an X4 on this scan. The VIN already encodes the
     // real answer, so a decode pass should override the misread rather than trust it.
-    // Hits NHTSA's public vPIC service; it is deliberately fail-open, so if the service
-    // is unreachable the extracted "X4" simply stands and this assertion is skipped.
     const text = [
       'VEHICLE INFORMATION:',
       'YEAR: 2021   MAKE: BMW   MODEL: X4',

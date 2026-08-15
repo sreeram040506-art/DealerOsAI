@@ -575,6 +575,16 @@ router.post(
       info = sanitizeVehicleIdentity(await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'acquisition', dealership));
       info = sanitizeVehicleIdentity(info || {});
       info = clearDispositionInfo(info || {});
+
+      // A VIN the operator confirmed/corrected in the UI is authoritative — it beats
+      // anything read off the scan, so apply it before the record or inventory row is built.
+      const vinOverride = String(req.body.vinOverride || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (vinOverride.length === 17) {
+        console.log(`[UserForm] Using operator-confirmed VIN ${vinOverride} (extracted: ${info.vin}).`);
+        info.vin = vinOverride;
+        delete info.vinChecksumInvalid;
+      }
+
       console.log(`[UserForm] Extracted VIN: ${info.vin}, Make: ${info.make}, Model: ${info.model}`);
 
       // ── Generate PDF ──
@@ -752,6 +762,28 @@ router.post(
       }
 
       // ── Push to Inventory with status = "Available" ──
+      // A VIN that fails its check digit is known-wrong, and the VIN is what every later
+      // bill-of-sale upload matches against — the fuzzy matcher tolerates ~3 characters,
+      // and a misread is routinely worse than that. Creating the row anyway produces a
+      // vehicle no bill of sale can ever find, so ask the operator to confirm the VIN
+      // first. The record/PDF is still generated and returned below; only the inventory
+      // row waits.
+      if (isPushToInventory && info.vinChecksumInvalid) {
+        console.warn(`[UserForm] Holding inventory push — VIN ${info.vin} failed checksum. Awaiting operator confirmation.`);
+        return res.json({
+          status: 'success',
+          action: 'needs_vin_confirmation',
+          needsVinConfirmation: true,
+          info,
+          fileName: buildUsedVehiclePdfFileName(info),
+          pdfBase64: pdfBase64Str,
+          inventoryAdded: false,
+          registryAdded: !!registryId,
+          warnings,
+          message: `The VIN read from this document (${info.vin}) fails its check-digit validation, so at least one character was misread. Confirm or correct it before adding the vehicle to inventory.`
+        });
+      }
+
       if (isPushToInventory) {
         const normalizedVin = info.vin ? info.vin.toUpperCase().trim() : '';
 
