@@ -24,7 +24,21 @@ const hasNvidiaKey = !!nvidiaApiKey && nvidiaApiKey !== 'YOUR_NVIDIA_API_KEY_HER
 // Strictly force OpenAI for parsing as requested by the user
 const useOpenAI = true;
 const useNvidia = false;
-const hasLlmKey = true;
+// Must reflect whether a key is ACTUALLY configured. This was previously hardcoded to
+// `true`, so with no key the parser still attempted every AI call, failed with
+// "Incorrect API key provided: undefined", and silently degraded to raw OCR + regex —
+// which yields confident-looking nonsense (e.g. reading a phone number as the VIN)
+// with nothing to tell the operator the AI never ran.
+const hasLlmKey = hasOpenaiKey || hasNvidiaKey;
+
+if (!hasLlmKey) {
+  console.warn(
+    '[Parser] WARNING: No OPENAI_API_KEY (or NVIDIA_API_KEY) is configured. ' +
+    'AI document extraction is DISABLED and results will fall back to local OCR, ' +
+    'which is substantially less accurate on scanned/photographed documents. ' +
+    'Set OPENAI_API_KEY in this environment to enable accurate extraction.'
+  );
+}
 const ocrLangPath = path.dirname(
   require.resolve('@tesseract.js-data/eng/4.0.0/eng.traineddata.gz')
 );
@@ -2137,7 +2151,14 @@ function isExtractionComplete(result) {
 // detection and self-reference filtering everywhere downstream (AI prompts, deterministic
 // text parsing) — it is resolved per-request, NOT hardcoded to any single dealership.
 export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "", dealership = null) {
-  return runWithDealership(dealership, () => extractVehicleInfoImpl(fileBuffer, mimetype, purpose));
+  const result = await runWithDealership(dealership, () =>
+    extractVehicleInfoImpl(fileBuffer, mimetype, purpose)
+  );
+  // Without an AI key every extraction silently comes from local OCR + regex, which is
+  // markedly less accurate on scans. Mark the result so callers can warn the operator
+  // rather than presenting low-confidence OCR output as if it were a normal read.
+  if (result && !hasLlmKey) result.aiUnavailable = true;
+  return result;
 }
 
 async function extractVehicleInfoImpl(fileBuffer, mimetype, purpose = "") {

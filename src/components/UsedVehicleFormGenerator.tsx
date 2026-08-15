@@ -26,6 +26,7 @@ interface GenerateUsedVehicleResponse {
     yearMissing?: boolean;
     priceMissing?: boolean;
     vinChecksumInvalid?: boolean;
+    aiUnavailable?: boolean;
   };
 }
 
@@ -82,6 +83,10 @@ export default function UsedVehicleFormGenerator({
           }
         }
         
+        if (data.warnings?.aiUnavailable) {
+          toast.warning(`${file.name}: AI extraction is not configured on the server, so this was read with basic OCR only. Verify every field before saving.`);
+        }
+
         if (data.warnings?.addressMissing) {
           toast.warning(`${file.name}: Address could not be reliably extracted. Review before adding to inventory.`);
         }

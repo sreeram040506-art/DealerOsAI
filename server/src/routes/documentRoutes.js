@@ -602,6 +602,11 @@ router.post(
         console.warn(`[UserForm] VIN failed checksum validation and could not be auto-corrected: ${info.vin}. Flagging for manual review.`);
       }
 
+      if (info.aiUnavailable) {
+        warnings.aiUnavailable = true;
+        console.warn('[UserForm] No AI key configured — extracted via local OCR only. Accuracy will be significantly reduced.');
+      }
+
       // ── OPTIMIZATION: Bypass heavy local OCR if Vision successfully extracted the VIN ──
       const hasCompleteAcquisition = !!info.vin;
       
