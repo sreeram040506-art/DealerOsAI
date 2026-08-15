@@ -87,7 +87,19 @@ export default function BillOfSaleUploader({
               body: buildFormData(currentFile),
             });
 
+            // The bill-of-sale endpoint explains exactly why it refused (most often the
+            // vehicle is not in inventory yet). Keep that message: retrying the generic
+            // auto endpoint below overwrites `response`, and its failure is usually far
+            // less specific, which previously left the user with a bare "Failed to
+            // process document" and a 404 in the console.
+            let billOfSaleError: string | null = null;
             if (!response.ok) {
+              billOfSaleError = await response
+                .clone()
+                .json()
+                .then((body) => body?.message ?? null)
+                .catch(() => null);
+
               response = await fetch(apiUrl('/documents/upload-auto'), {
                 method: 'POST',
                 headers: {
@@ -99,7 +111,9 @@ export default function BillOfSaleUploader({
 
             if (!response.ok) {
               const errorData = await response.json().catch(() => ({}));
-              throw new Error(errorData.message || 'Failed to process document');
+              throw new Error(
+                billOfSaleError || errorData.message || 'Failed to process document'
+              );
             }
 
             const data = await response.json();
