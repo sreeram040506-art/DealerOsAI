@@ -607,18 +607,51 @@ describe('document parser fallback extraction', () => {
   });
 
   it('does not mistake a phone number for a VIN', () => {
-    // The buyer panel's phone numbers condense to a 17-character string that even passes
-    // the ISO 3779 check digit by coincidence, so it is indistinguishable from a real VIN
-    // on structure alone. The regex fallback scans the whole page and will surface it;
-    // what matters is that it must never be preferred over a checksum-valid VIN that the
-    // AI read out of the actual VEHICLE INFORMATION box.
-    const phoneDigits = extractVinFromText('HOME: 781-298-7905 CELL: 781-298-7905');
-    expect(phoneDigits).toBe('812987905CELL7812');
-    expect(isValidVin(phoneDigits as string)).toBe(true);
+    // The buyer panel's phone numbers condense to "812987905CELL7812" — 17 characters,
+    // legal VIN alphabet, and it passes the ISO 3779 check digit by coincidence, so no
+    // structural test rejects it. It must be rejected on the swept-up label text instead.
+    expect(isValidVin('812987905CELL7812')).toBe(true); // structurally indistinguishable
+    expect(extractVinFromText('HOME: 781-298-7905 CELL: 781-298-7905')).toBeNull();
 
-    // The real VIN is also valid — so preferring the fallback unconditionally (the old
-    // behaviour) silently replaced a correct VIN with phone digits.
-    expect(isValidVin('5UXTY5C09M9E04416')).toBe(true);
+    // A genuine VIN must still be extracted, including when both appear on the same page.
+    expect(extractVinFromText('VIN: 5UXTY5C09M9E04416')).toBe('5UXTY5C09M9E04416');
+    expect(
+      extractVinFromText('HOME: 781-298-7905 CELL: 781-298-7905\nVIN: 5UXTY5C09M9E04416')
+    ).toBe('5UXTY5C09M9E04416');
+  });
+
+  it('reads the Frazer dealer bill of sale without inventing model or color', async () => {
+    // Regression for the deployed failure: the VIN came out as the buyer's phone digits,
+    // the model drifted X3 -> X4, and a colour was invented for blank COLOR 1/COLOR 2
+    // fields. Indentation is load-bearing — it reproduces the two-column OCR offsets.
+    const text = [
+      'BILL OF SALE                          DATE: 7-31-2026 STOCK #: MPA6724A',
+      'BUYER INFORMATION:                    SELLER INFORMATION:',
+      'WASHINGTON STREET AUTO SALES          TULLEY AUTO GROUP',
+      'Driver Lic: --                        131 W Glenwood St',
+      'HOME: 781-298-7905 CELL: 781-298-7905 Nashua, NH 03060',
+      'VEHICLE INFORMATION:',
+      'NEW  X USED   YEAR: 2021    STOCK: MPA6724A',
+      'DEMO   RENTAL MAKE: BMW     COLOR 1:',
+      'SALVAGE REBUILT MODEL: X3   COLOR 2:',
+      'FACTORY OFFICIAL VIN: 5UXTY5C09M9E04416  TRANS:',
+      'ODOMETER READING',
+      '99,363',
+      'SETTLEMENT',
+      'VEHICLE PRICE:  $13,800.00',
+      'SUBTOTAL:  $14,140.00',
+      'TOTAL DUE:  $0.00',
+    ].join('\n');
+
+    const info = await extractVehicleInfo(Buffer.from(text), 'text/plain', 'acquisition');
+
+    expect(info.vin).toBe('5UXTY5C09M9E04416'); // not the phone digits
+    expect(info.model).toBe('X3'); // not X4
+    expect(info.color).toBeFalsy(); // COLOR 1/2 are blank on the form
+    expect(info.make).toBe('BMW');
+    expect(info.year).toBe(2021);
+    expect(info.purchasedFrom).toBe('TULLEY AUTO GROUP');
+    expect(info.purchasePrice).toBe(14140);
   });
 
   it('flags a VIN that fails checksum validation instead of silently trusting it', async () => {

@@ -446,6 +446,18 @@ function extractTotalFromText(text, purpose = '') {
   return best;
 }
 
+// A 17-character run pulled off a page is not automatically a VIN. Contact rows are the
+// worst offender: "HOME: 781-298-7905 CELL: 781-298-7905" condenses to
+// "812987905CELL7812", which is 17 chars, uses only legal VIN characters, and even passes
+// the ISO 3779 check digit by coincidence — so neither length, alphabet, nor checksum
+// rejects it. The label text swept up alongside the digits is the reliable tell, since a
+// genuine VIN is a manufacturer-assigned code that does not embed words like CELL or FAX.
+const VIN_CONTACT_NOISE_PATTERN = /(CELL|PHONE|HOME|FAX|TEL|MOBILE|EMAIL)/i;
+
+function looksLikeContactNoise(vin) {
+  return VIN_CONTACT_NOISE_PATTERN.test(String(vin || ''));
+}
+
 function extractSpacedVin(text) {
   if (!text) return null;
   const lines = text.split(/\r?\n/);
@@ -461,7 +473,7 @@ function extractSpacedVin(text) {
     let cleaned = line.replace(/[|/\\[\]\s_-]/g, '').toUpperCase();
     for (let i = 0; i + 17 <= cleaned.length; i++) {
       const candidate = cleaned.slice(i, i + 17);
-      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate) && isValidVin(candidate)) {
+      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate) && isValidVin(candidate) && !looksLikeContactNoise(candidate)) {
         return candidate;
       }
     }
@@ -471,7 +483,7 @@ function extractSpacedVin(text) {
     const singleChars = parts.filter(p => p.length === 1 && /^[A-Z0-9]$/.test(p));
     if (singleChars.length >= 17) {
       const candidate = singleChars.slice(0, 17).join('');
-      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate) && isValidVin(candidate)) {
+      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate) && isValidVin(candidate) && !looksLikeContactNoise(candidate)) {
         return candidate;
       }
     }
@@ -493,6 +505,7 @@ function extractVinFromText(text) {
     if (!candidate) return;
     const value = String(candidate).replace(/[^A-Z0-9]/gi, '').toUpperCase();
     if (!/^[A-Z0-9]{17}$/.test(value)) return;
+    if (looksLikeContactNoise(value)) return;
     if (priority && !priorityCandidates.includes(value)) priorityCandidates.push(value);
     candidates.add(value);
   };
@@ -911,7 +924,13 @@ function postProcessResult(result, rawText, purpose) {
   if (result.vin) {
     const normalizedVin = normalizeVinCharacters(result.vin);
     result.vin = normalizedVin;
-    if (!isValidVin(normalizedVin)) {
+    // Contact-row digits masquerading as a VIN survive every structural test (length,
+    // alphabet, even checksum), so reject them on the embedded label text instead.
+    if (looksLikeContactNoise(normalizedVin)) {
+      console.log(`[Parser:PostProcess] Discarding VIN "${normalizedVin}" — it carries contact-row text (phone/cell/fax), so it came from a contact field, not the VIN box.`);
+      result.vin = null;
+      result.vinChecksumInvalid = true;
+    } else if (!isValidVin(normalizedVin)) {
       console.log(`[Parser:PostProcess] VIN failed checksum validation: ${normalizedVin}`);
       result.vinChecksumInvalid = true;
     }
@@ -2420,6 +2439,19 @@ DOCUMENT-SPECIFIC:
 - CarMax: SELLER address is at the ABSOLUTE BOTTOM-RIGHT (e.g. "170 Turnpike Rd"). Our dealership's address is in the middle table — IGNORE the middle table for address extraction. The price MUST be the "TOTAL" at the bottom of the table, not "Selling Price".
 - Manheim: Use the "TRANSACTION LOCATION" or "REMIT PAYMENT TO" as the auction name and source address. Strip " US" from addresses.
 - Dealer-to-dealer bill of sale (e.g. Frazer-Computing-style forms with "BUYER INFORMATION" and "SELLER INFORMATION" boxes, a "VEHICLE INFORMATION" block, and a "SETTLEMENT" table with VEHICLE PRICE/fees/SUBTOTAL/TOTAL DUE): If the page has BUYER INFORMATION and SELLER INFORMATION panels, our dealership is the BUYER. Use the SELLER INFORMATION panel for purchasedFrom/source address, and use the SETTLEMENT subtotal as purchasePrice when the final total due is zero (e.g. because the purchase was financed via floorplan).
+
+FRAZER-STYLE DEALER BILL OF SALE — EXACT FIELD LOCATIONS (footer reads "FZ-OH-BOS ... Frazer Computing, LLC"):
+This form has a fixed layout. Read each value ONLY from the box named below. Do not take a value from anywhere else on the page just because it looks like the right shape.
+- Top row: "DATE:" (transaction/purchase date) and "STOCK #:" (stockNumber) sit on the same header line, above the panels.
+- BUYER INFORMATION (upper-LEFT box): our dealership. Contains a dealership name, "Driver Lic:", and "HOME:"/"CELL:" phone numbers. IGNORE this entire box for purchasedFrom and for the source address.
+- SELLER INFORMATION (upper-RIGHT box): the counterparty. Its first line is the seller's name (purchasedFrom), followed by street, then "City, ST ZIP", then a phone and sometimes an email. Take purchasedFrom and ALL source address fields from HERE ONLY.
+- VEHICLE INFORMATION (middle-LEFT block): the ONLY place vehicle identity is valid. Fields are explicitly labelled "YEAR:", "MAKE:", "MODEL:", "VIN:", "BODY:", "STOCK:", "COLOR 1:", "COLOR 2:", "TRANS:", "STYLE:".
+  * VIN: take the value printed immediately after the "VIN:" label in this block. It is a single unbroken 17-character code.
+  * CRITICAL — NEVER build a VIN out of the "HOME:"/"CELL:" phone numbers in the BUYER box. Concatenated phone digits can coincidentally look like a valid 17-character VIN. A VIN comes ONLY from the "VIN:" label.
+  * MODEL: return exactly the token after "MODEL:" (e.g. "X3"). Do NOT substitute a similar-looking model from the same family (X3 is not X4, 330i is not 340i). If the character is ambiguous, prefer what is printed over what seems more common.
+  * COLOR 1: / COLOR 2: are frequently left BLANK on this form. If nothing is printed after the label, return null for color — never guess a common colour such as White or Black.
+- ODOMETER READING (upper-RIGHT, right of the vehicle block): the mileage, e.g. "99,363". The same figure is usually repeated in the "VEHICLE MILEAGE AND CONDITION STATEMENT" paragraph, which you can use to confirm it.
+- SETTLEMENT (right column): a money table ending in "SUBTOTAL:", "TAX", "TOTAL DUE:". When "TOTAL DUE:" is $0.00 (floorplan-financed), use SUBTOTAL as purchasePrice. The "REMARKS:" box often restates that same amount followed by the word "Floorplan".
 
 NEVER use our dealership's own name or address as the source address (this includes "${label}" and its address if given above, plus the legacy names "BROADWAY USED AUTO SALES" / "WASHINGTON STREET AUTO SALES"). If you see any of these names in a table, the address beside it is the BUYER, not the seller.${docText}`;
 }
