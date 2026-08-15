@@ -906,6 +906,11 @@ function postProcessResult(result, rawText, purpose) {
       { pattern: /\bAmerica'?s\s+(?:AA|Auto Auction)\b/i, name: "America's AA Boston", address: '400 Charter Way', city: 'North Billerica', state: 'MA', zip: '01862' },
       { pattern: /\bCMAA\b|Central\s+Mass/i, name: 'Central Mass Auto Auction', address: '', city: '', state: 'MA', zip: '' },
       { pattern: /\bCarMax\b/i, name: 'CarMax', address: '', city: '', state: '', zip: '' },
+      // OPENLANE is an online wholesale marketplace rather than a physical lane, so its
+      // invoice names a selling dealership in a "Seller" column. Treated the same way as
+      // the auctions above: the marketplace is the transaction partner and the party
+      // actually invoicing us, and the dealership plays the consignor's role.
+      { pattern: /\bOPEN\s*LANE\b/i, name: 'OPENLANE', address: '11299 N. Illinois St', city: 'Carmel', state: 'IN', zip: '46032' },
     ];
 
     // Check the LLM's purchasedFrom field against known auction names
@@ -1189,7 +1194,7 @@ function normalizeDealerIdentityText(str) {
 // Legacy hardcoded names/addresses kept for backward compatibility with older
 // documents/tests that pre-date per-tenant dealership context.
 const BROADWAY_PATTERN = /\b(BROADWAY USED AUTO SALES|AUTO SALES ON BROADWAY|100 BROADWAY|2125 REVERE BEACH|NORWOOD,?\s+MA\s+02062|EVERETT,?\s+MA\s+02149|WASHINGTON STREET AUTO SALES|WASHINGTON ST AUTO SALES)\b/i;
-const AUCTION_NAME_PATTERN = /\b(ADESA|MANHEIM|CARMAX|CMAA|CENTRAL MASS(?:ACHUSETTS)? AUTO AUCTION|AMERICA'?S (?:AA|AUTO AUCTION)|ACV|COPART|IAAI|AUTO AUCTION|AUCTION)\b/i;
+const AUCTION_NAME_PATTERN = /\b(ADESA|MANHEIM|CARMAX|CMAA|CENTRAL MASS(?:ACHUSETTS)? AUTO AUCTION|AMERICA'?S (?:AA|AUTO AUCTION)|ACV|COPART|IAAI|OPEN\s*LANE|AUTO AUCTION|AUCTION)\b/i;
 const STREET_PATTERN = /^\d{1,6}\s+.+\b(?:ST|STREET|RD|ROAD|AVE|AVENUE|BLVD|BOULEVARD|DR|DRIVE|LN|LANE|PKWY|PARKWAY|HWY|HIGHWAY|WAY|CT|COURT|PL|PLACE|PIKE|TURNPIKE)\b\.?/i;
 const CITY_STATE_ZIP_PATTERN = /([A-Za-z .'-]+),?\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/i;
 
@@ -1704,6 +1709,14 @@ function extractKnownAuctionAcquisitionDetails(lines) {
       city: 'North Dighton',
       state: 'MA',
       zip: '02764'
+    },
+    {
+      pattern: /\bOPEN\s*LANE\b/i,
+      name: 'OPENLANE',
+      address: '11299 N. Illinois St',
+      city: 'Carmel',
+      state: 'IN',
+      zip: '46032'
     }
   ];
 
@@ -2039,6 +2052,18 @@ function extractVehicleInfoFromTextImpl(text) {
     }
 
     // "Mileage:" is how the retail purchase contract labels the odometer.
+    // Marketplace invoices state the odometer inline in the vehicle description
+    // ("2012 Honda Cr-v LX, 111289 miles, <VIN>, color: Gray") with no label in front of
+    // it, so the trailing unit is the only marker available.
+    if (!data.mileage && /\b[\d,]{3,}\s*miles\b/i.test(line)) {
+      const inline = line.match(/\b([\d,]{3,})\s*miles\b/i)?.[1];
+      const num = inline ? Number(inline.replace(/,/g, '')) : NaN;
+      if (Number.isFinite(num) && num > 0) {
+        data.mileage = num;
+        continue;
+      }
+    }
+
     if (/\b(?:Odometer(?: In| Out| Reading)?|Mileage)\b/i.test(line)) {
       let value = readValue(line, /(?:Odometer(?: In| Out| Reading)?|Mileage)[:\s]+([\d,]+)/i);
       if (!value) {
@@ -2432,6 +2457,13 @@ async function recoverInvalidVin(result, fileBuffer, mimetype = 'image/jpeg') {
 // Deliberately fail-open: this is a correction pass, not a gate. Any timeout, outage, or
 // unrecognised VIN leaves the extracted values exactly as they were, so document upload
 // never depends on a third party being reachable.
+// The suite makes real LLM calls, and the previous 3.5s cap sat right on the edge of a
+// normal gpt-4o-mini response. Calls aborted at random, silently dropping tests onto the
+// deterministic fallback, which returns slightly different values ("Bmw" rather than
+// "BMW") and produced failures that looked like regressions but were only timing. A
+// looser cap keeps the suite deterministic; it costs nothing when calls are fast.
+const LLM_TEST_TIMEOUT_MS = 20000;
+
 const VIN_DECODE_TIMEOUT_MS = 6000;
 
 // The test suite must stay hermetic, offline-safe and fast, so the network lookup is off
@@ -2614,6 +2646,15 @@ This form has a fixed layout. Read each value ONLY from the box named below. Do 
 - ODOMETER READING (upper-RIGHT, right of the vehicle block): the mileage, e.g. "99,363". The same figure is usually repeated in the "VEHICLE MILEAGE AND CONDITION STATEMENT" paragraph, which you can use to confirm it.
 - SETTLEMENT (right column): a money table ending in "SUBTOTAL:", "TAX", "TOTAL DUE:". When "TOTAL DUE:" is $0.00 (floorplan-financed), use SUBTOTAL as purchasePrice. The "REMARKS:" box often restates that same amount followed by the word "Floorplan".
 
+OPENLANE MARKETPLACE INVOICE (OPENLANE logo top-left, "Order Number", "Date", "Due Date", then a THREE-column block headed "Buyer" | "Seller" | "Pickup information", then an itemised table ending in "Pre-tax Total / Tax / Total"):
+- purchasedFrom is "OPENLANE", with OPENLANE's own address (11299 N. Illinois St, Carmel, IN 46032). OPENLANE is the marketplace that invoices us, so it is treated like ADESA or Manheim.
+- The "Seller" column names a consignor dealership (e.g. "IRA LEXUS" with a contact person and a Danvers MA address). Like any consignor, do NOT use it for purchasedFrom or the source address. The "Pickup information" column is a collection location and a contact phone — never a party; "Pickup information" is a column HEADING, not a company name.
+- The "Buyer" / "Bill to" column is our dealership. Ignore it for source fields.
+- Vehicle identity comes from the first row of the item table, written as one sentence: "2012 Honda Cr-v LX, 111289 miles, 2HKRM4H36CH610056, color: Gray" — that is year, make, model/trim, odometer, VIN, then colour. Return the model without the trim where they are separable (Cr-v LX → CR-V), and take the mileage from "NNNNNN miles".
+- Price: use the final "Total" at the bottom of the item table. It already includes the fee rows (As Described Guarantee, Buy fee, Floorplan Admin fee, Transportation), so do NOT return just the "Vehicle" line amount.
+- "Order Number" is OPENLANE's order reference. It is not a title number and not a stock number.
+- Date: use "Date", not "Due Date".
+
 LIEN PAYOFF LETTER / "AMOUNT NEEDED TO PAY YOUR ACCOUNT IN FULL" (from a lender such as TD Auto Finance, Ally, Santander, Capital One, a credit union):
 This is not a bill of sale. It is a lender quoting what is owed to clear the loan on a vehicle we are buying from its owner, usually a trade-in or a private purchase. It has three parties, and only one of them is the source:
 - The ADDRESSEE — the person's name and address in the letter block near the top, also greeted as "Dear <NAME>". This is the vehicle's OWNER, the party we are acquiring from. Use this name as "purchasedFrom" and this address for ALL source address fields.
@@ -2779,7 +2820,7 @@ async function textExtract(text, purpose = "") {
     const modelName = isOpenAI ? "gpt-4o-mini" : "meta/llama-3.1-70b-instruct";
 
     console.log(`[Parser:Text] Sending ${text.length} chars to ${isOpenAI ? 'OpenAI' : 'NVIDIA'} LLM (model=${modelName}, purpose=${purpose || 'auto'})...`);
-    const llmTimeoutMs = process.env.NODE_ENV === 'test' ? 3500 : 90000;
+    const llmTimeoutMs = process.env.NODE_ENV === 'test' ? LLM_TEST_TIMEOUT_MS : 90000;
     const response = await fetchWithTimeout(apiUrl, {
       method: "POST",
       headers: {
@@ -2907,7 +2948,7 @@ Reply with nothing but: VIN_START<17 characters>VIN_END`;
       : 'https://integrate.api.nvidia.com/v1/chat/completions';
     const apiKey = useOpenAI ? openaiApiKey : nvidiaApiKey;
     const modelName = useOpenAI ? 'gpt-4o' : 'meta/llama-3.2-90b-vision-instruct';
-    const llmTimeoutMs = process.env.NODE_ENV === 'test' ? 3500 : 60000;
+    const llmTimeoutMs = process.env.NODE_ENV === 'test' ? LLM_TEST_TIMEOUT_MS : 60000;
 
     console.log('[Parser:VinReRead] VIN failed its check digit — re-reading the VIN box at high fidelity...');
     const response = await fetchWithTimeout(apiUrl, {
@@ -2982,7 +3023,7 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
     const modelName = isOpenAI ? "gpt-4o" : "meta/llama-3.2-90b-vision-instruct";
 
     console.log(`[Parser:Vision] Sending image to ${isOpenAI ? 'OpenAI' : 'NVIDIA'} Vision AI (model=${modelName}, purpose=${purpose || 'auto'})...`);
-    const llmTimeoutMs = process.env.NODE_ENV === 'test' ? 3500 : 90000;
+    const llmTimeoutMs = process.env.NODE_ENV === 'test' ? LLM_TEST_TIMEOUT_MS : 90000;
     const response = await fetchWithTimeout(apiUrl, {
       method: "POST",
       headers: {

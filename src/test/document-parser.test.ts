@@ -690,6 +690,42 @@ describe('document parser fallback extraction', () => {
     expect(info.purchasePrice).toBe(14140);
   });
 
+  it('treats OPENLANE as the source and ignores the consignor and pickup columns', async () => {
+    // Three columns — Buyer | Seller | Pickup information — so the panel splitter (which
+    // handles two) leaves them merged and the source was coming back as the literal column
+    // heading "Pickup information". OPENLANE is the marketplace that invoices us, so it is
+    // the transaction partner; IRA LEXUS is a consignor and the pickup block is a location.
+    const text = [
+      'OPENLANE',
+      'ATTN: US Open Marketplace, 4th Floor',
+      '11299 N. Illinois St   Carmel, IN 46032',
+      'Order Number: S403116   Date: 05/30/2026   Due Date: 06/06/2026',
+      'Buyer                    Seller                   Pickup information',
+      'Bill to                  Dealership information   Location',
+      'Washington Street Auto   IRA LEXUS                101 Andover Street',
+      'Attn: Ziad Obeid         Mike Coco                Danvers, MA 01923',
+      '879A WASHINGTON ST A     99A Andover Street       Contact Mike Coco',
+      'CANTON, MA 02021         Danvers, MA 01923',
+      'Item                                   Price ($)  Qty  Total ($)',
+      'Vehicle',
+      '2012 Honda Cr-v LX, 111289 miles, 2HKRM4H36CH610056, color: Gray  6,600.00  1  6,600.00',
+      'As Described Guarantee                   145.00   1    145.00',
+      'Buy fee                                  300.00   1    300.00',
+      'Transportation                           190.00   1    190.00',
+      'Pre-tax Total: 7,245.00   Tax: 0.00   Total: 7,245.00',
+    ].join('\n');
+
+    const info = await extractVehicleInfo(Buffer.from(text), 'text/plain', 'acquisition');
+
+    expect(info.vin).toBe('2HKRM4H36CH610056');
+    expect(info.purchasedFrom).toBe('OPENLANE');
+    expect(info.purchasedFrom).not.toMatch(/pickup|IRA LEXUS/i);
+    expect(info.usedVehicleSourceCity).toBe('Carmel');
+    // The bottom-line total, not just the 6,600 vehicle row.
+    expect(info.purchasePrice).toBe(7245);
+    expect(info.mileage).toBe(111289);
+  }, 30000);
+
   it('takes the owner, not the lender, as the source on a lien payoff letter', async () => {
     // A payoff letter has three parties and only one is the source: the addressee owns the
     // vehicle we are buying, while the finance company is merely the lienholder. The
