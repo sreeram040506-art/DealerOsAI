@@ -1060,7 +1060,8 @@ router.post('/upload-auto', upload.single('file'), async (req, res, next) => {
     let vehicle = await resolveBillOfSaleVehicle(req, vinCandidates);
     if (!vehicle) {
       return res.status(404).json({
-        message: `Cannot upload Bill of Sale. Vehicle with VIN ${extractedVin || docVin || bodyVin} is not in your inventory. Please add the vehicle to inventory first.`
+        vehicleNotInInventory: true,
+        message: `This bill of sale is for VIN ${extractedVin || docVin || bodyVin}, which is not in your inventory yet. A bill of sale records a SALE, so the vehicle has to exist before it can be marked sold. Add it first via Used Vehicle Record — upload the purchase/auction document for this VIN with the Push to Inventory option — then upload this bill of sale again.`
       });
     }
 
@@ -1193,7 +1194,8 @@ router.post('/upload-bill-of-sale', upload.single('file'), async (req, res, next
     if (!vehicle) {
       console.log(`[BillOfSale] Rejected: Vehicle with VIN ${extractedVin || docVin || bodyVin} not found in inventory.`);
       return res.status(404).json({
-        message: `Cannot upload Bill of Sale. Vehicle with VIN ${extractedVin || docVin || bodyVin} is not in your inventory. Please add the vehicle to inventory first.`
+        vehicleNotInInventory: true,
+        message: `This bill of sale is for VIN ${extractedVin || docVin || bodyVin}, which is not in your inventory yet. A bill of sale records a SALE, so the vehicle has to exist before it can be marked sold. Add it first via Used Vehicle Record — upload the purchase/auction document for this VIN with the Push to Inventory option — then upload this bill of sale again.`
       });
     }
 

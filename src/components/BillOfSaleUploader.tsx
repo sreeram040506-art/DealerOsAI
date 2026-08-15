@@ -26,6 +26,9 @@ export default function BillOfSaleUploader({
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [lastRepairDoc, setLastRepairDoc] = useState<{ url: string; fileName: string; mimeType: string } | null>(null);
+  // A bill of sale for a VIN that isn't in inventory is the most common rejection here, and
+  // it needs a concrete next step rather than a toast that disappears before it's read.
+  const [blockedNotice, setBlockedNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -48,6 +51,7 @@ export default function BillOfSaleUploader({
     }
 
     setLoading(true);
+    setBlockedNotice(null);
     setProgress({ current: 0, total: files.length });
 
     let successCount = 0;
@@ -94,11 +98,14 @@ export default function BillOfSaleUploader({
             // process document" and a 404 in the console.
             let billOfSaleError: string | null = null;
             if (!response.ok) {
-              billOfSaleError = await response
-                .clone()
-                .json()
-                .then((body) => body?.message ?? null)
-                .catch(() => null);
+              const billOfSaleBody = await response.clone().json().catch(() => null);
+              billOfSaleError = billOfSaleBody?.message ?? null;
+              // Not a transient failure — retrying the auto endpoint cannot help, and the
+              // operator needs the instructions to stay on screen.
+              if (billOfSaleBody?.vehicleNotInInventory && billOfSaleError) {
+                setBlockedNotice(billOfSaleError);
+                throw new Error(billOfSaleError);
+              }
 
               response = await fetch(apiUrl('/documents/upload-auto'), {
                 method: 'POST',
@@ -202,6 +209,18 @@ export default function BillOfSaleUploader({
 
   return (
     <div className="rounded-[24px] border border-border bg-white p-6 space-y-6 shadow-sm">
+      {blockedNotice && (
+        <div className="rounded-[20px] border-2 border-amber-400 bg-amber-50 p-5 space-y-3">
+          <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-900">
+            Vehicle not in inventory yet
+          </h4>
+          <p className="text-sm text-amber-900/90 font-medium leading-relaxed">{blockedNotice}</p>
+          <Button variant="ghost" onClick={() => setBlockedNotice(null)} disabled={loading}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
