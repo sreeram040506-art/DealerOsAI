@@ -944,7 +944,7 @@ function postProcessResult(result, rawText, purpose) {
   // this runs before the empty-rawText early return so it also covers the fast Vision-only
   // path (the common case for image uploads). We deliberately do NOT try to guess-correct
   // it here (see the note above normalizeVinCharacters) — recovery only happens via a real
-  // second read in crossCheckVinWithOcr, or manual review.
+  // second read in recoverInvalidVin, or manual review.
   if (result.vin) {
     const normalizedVin = normalizeVinCharacters(result.vin);
     result.vin = normalizedVin;
@@ -2233,7 +2233,7 @@ async function extractVehicleInfoImpl(fileBuffer, mimetype, purpose = "") {
       if (visionResult && (visionResult.vin || visionResult.make || visionResult.disposedTo)) {
         const cleaned = postProcessResult(visionResult, '', effectivePurpose);
         if (cleaned.vinChecksumInvalid) {
-          await crossCheckVinWithOcr(cleaned, fileBuffer);
+          await recoverInvalidVin(cleaned, fileBuffer);
         }
         return cleaned;
       }
@@ -2295,7 +2295,7 @@ async function extractVehicleInfoImpl(fileBuffer, mimetype, purpose = "") {
         if (visionResult && (visionResult.vin || visionResult.make || visionResult.disposedTo)) {
           const cleaned = postProcessResult(visionResult, '', effectivePurpose);
           if (cleaned.vinChecksumInvalid) {
-            await crossCheckVinWithOcr(cleaned, fileBuffer, mimetype);
+            await recoverInvalidVin(cleaned, fileBuffer, mimetype);
           }
           return cleaned;
         }
@@ -2336,24 +2336,52 @@ async function extractVehicleInfoImpl(fileBuffer, mimetype, purpose = "") {
   return {};
 }
 
-// When the Vision model's VIN fails checksum validation (even after the single-character
-// auto-correction attempt in postProcessResult), run local OCR as an independent second
-// read and use it if it produces a checksum-valid VIN. Vision and OCR tend to misread
-// different characters, so a second read often recovers what the first one missed. This
-// only runs on the (uncommon) checksum-failure path, not on every upload.
-async function crossCheckVinWithOcr(result, fileBuffer, mimetype = 'image/jpeg') {
+// Recovery for a VIN that failed its check digit. Runs only on that (uncommon) path, and
+// tries the two independent second reads in order of how well each does on small print:
+//
+//   1. A focused, high-fidelity vision re-read of just the VIN box. The first pass had
+//      seventeen fields competing for attention on a downscaled image; this asks one
+//      question at full resolution.
+//   2. Local OCR. Weaker on photographs, but it misreads different characters than the
+//      vision model does, so it occasionally succeeds where the re-read does not.
+//
+// A candidate replaces the original only if it is checksum-valid and structurally a VIN,
+// so a second wrong guess leaves the flag in place rather than swapping one bad VIN for
+// another.
+const VIN_OCR_FALLBACK_TIMEOUT_MS = 25000;
+
+async function recoverInvalidVin(result, fileBuffer, mimetype = 'image/jpeg') {
+  const accept = (candidate, source) => {
+    if (!candidate || candidate === result.vin) return false;
+    if (!isValidVin(candidate) || !isStructurallyPlausibleVin(candidate)) return false;
+    console.log(`[Parser:PostProcess] ${source} recovered a checksum-valid VIN: ${result.vin} → ${candidate}`);
+    result.vin = candidate;
+    delete result.vinChecksumInvalid;
+    return true;
+  };
+
   try {
-    const ocrText = (isPdfMimeType(mimetype) || isPdfBuffer(fileBuffer))
-      ? await ocrPdf(fileBuffer)
-      : await ocrImage(fileBuffer);
-    const ocrVin = extractVinFromText(ocrText);
-    if (ocrVin && isValidVin(ocrVin) && ocrVin !== result.vin) {
-      console.log(`[Parser:PostProcess] OCR cross-check found a checksum-valid VIN: ${result.vin} → ${ocrVin}`);
-      result.vin = ocrVin;
-      delete result.vinChecksumInvalid;
-    } else {
-      console.log(`[Parser:PostProcess] OCR cross-check did not find a better VIN (candidate: ${ocrVin || 'none'})`);
+    if (accept(await reReadVinWithVision(fileBuffer, mimetype), 'Focused vision re-read')) return;
+  } catch (err) {
+    console.warn(`[Parser:PostProcess] Focused VIN re-read failed: ${err?.message || err}`);
+  }
+
+  try {
+    // Tesseract on a full-page photo can run for minutes, which would stall the upload
+    // request itself. This is a best-effort last resort, so cap it: if it has not produced
+    // an answer in time, fall through and let the operator confirm the VIN instead.
+    const ocrText = await Promise.race([
+      (isPdfMimeType(mimetype) || isPdfBuffer(fileBuffer))
+        ? ocrPdf(fileBuffer)
+        : ocrImage(fileBuffer),
+      new Promise((resolve) => setTimeout(() => resolve(null), VIN_OCR_FALLBACK_TIMEOUT_MS)),
+    ]);
+    if (ocrText === null) {
+      console.log(`[Parser:PostProcess] OCR cross-check timed out after ${VIN_OCR_FALLBACK_TIMEOUT_MS}ms — leaving the VIN flagged.`);
+      return;
     }
+    if (accept(extractVinFromText(ocrText), 'OCR cross-check')) return;
+    console.log('[Parser:PostProcess] No second read produced a valid VIN — leaving it flagged for operator confirmation.');
   } catch (err) {
     console.warn(`[Parser:PostProcess] OCR cross-check failed: ${err?.message || err}`);
   }
@@ -2746,44 +2774,148 @@ async function textExtract(text, purpose = "") {
 // ═══════════════════════════════════════════════════════════════
 // VISION LLM — For images and scanned PDFs
 // ═══════════════════════════════════════════════════════════════
-async function visionExtract(fileBuffer, mimetype, purpose = "") {
-  if (!hasLlmKey) return null;
-
-  let base64Image = '';
-  let imgMime = mimetype;
-
+// Renders a document to a base64 JPEG for the vision model.
+//
+// `highFidelity` exists for the VIN re-read: a 17-character code in small print is the
+// hardest thing on the page to read, and the defaults here (1.5x render, quality 0.6)
+// throw away exactly the detail needed to tell 5 from S or 4 from 1. The whole-document
+// pass keeps the cheaper settings since it is mostly reading large labelled fields.
+async function prepareImageForVision(fileBuffer, mimetype, highFidelity = false) {
   if (mimetype === 'application/pdf') {
     try {
       const loadingTask = getDocument({ data: new Uint8Array(fileBuffer), useSystemFonts: true, disableFontFace: true });
       const doc = await loadingTask.promise;
       const page = await doc.getPage(1);
-      const tc = await page.getTextContent();
-      const txt = tc.items.map(i => ('str' in i ? i.str : '')).join(' ').trim();
-      if (txt.length > 40) return null; // has native text, skip vision
+      if (!highFidelity) {
+        const tc = await page.getTextContent();
+        const txt = tc.items.map(i => ('str' in i ? i.str : '')).join(' ').trim();
+        if (txt.length > 40) return null; // has native text, skip vision
+      }
 
-      const vp = page.getViewport({ scale: 1.5 });
+      const vp = page.getViewport({ scale: highFidelity ? 3.0 : 1.5 });
       const cf = createCanvasFactory();
       const { canvas, context } = cf.create(Math.ceil(vp.width), Math.ceil(vp.height));
       await page.render({ canvasContext: context, viewport: vp, canvasFactory: cf }).promise;
-      base64Image = canvas.toBuffer('image/jpeg', { quality: 0.6 }).toString('base64');
-      imgMime = 'image/jpeg';
+      const base64Image = canvas
+        .toBuffer('image/jpeg', { quality: highFidelity ? 0.92 : 0.6 })
+        .toString('base64');
       cf.destroy({ canvas, context });
+      return { base64Image, imgMime: 'image/jpeg' };
     } catch (e) {
       console.warn('[Parser:Vision] PDF render fail:', e.message);
       return null;
     }
-  } else if (mimetype.startsWith('image/')) {
+  }
+
+  if (mimetype.startsWith('image/')) {
     try {
-      const resizedBuffer = await resizeImageIfNeeded(fileBuffer);
-      base64Image = resizedBuffer.toString('base64');
-      imgMime = 'image/jpeg';
+      // Downscaling is what destroys small print, so the re-read uses the original pixels.
+      const buffer = highFidelity ? fileBuffer : await resizeImageIfNeeded(fileBuffer);
+      return { base64Image: buffer.toString('base64'), imgMime: 'image/jpeg' };
     } catch (e) {
       console.warn('[Parser:Vision] Image resize fail:', e.message);
-      base64Image = fileBuffer.toString('base64');
+      return { base64Image: fileBuffer.toString('base64'), imgMime: 'image/jpeg' };
     }
-  } else {
+  }
+
+  return null;
+}
+
+// A second look at just the VIN, used only when the first read fails its check digit.
+//
+// The whole-document pass has seventeen fields competing for attention and works from a
+// downscaled image; a 17-character code in small print is where that budget runs out. This
+// asks one question against a high-fidelity render, which is a genuinely different read
+// rather than a retry of the same one. The answer is only accepted if it validates, so a
+// second wrong guess changes nothing.
+async function reReadVinWithVision(fileBuffer, mimetype) {
+  if (!hasLlmKey) return null;
+
+  const prepared = await prepareImageForVision(fileBuffer, mimetype, true);
+  if (!prepared?.base64Image) return null;
+
+  // Without a system message this call was refused outright ("I'm sorry, I can't assist
+  // with that") — stripped of context, transcribing an identifier off a scanned form reads
+  // as something sensitive. The whole-document pass never hit this because it carries the
+  // full extraction system prompt. Restate the same framing here: a dealership reading a
+  // VIN off its own bill of sale is ordinary inventory data entry, and a VIN is public
+  // vehicle information, not personal data.
+  const systemPrompt =
+    'You are a vehicle document data extractor for a licensed car dealership. You transcribe ' +
+    'fields from the dealership\'s own purchase and sale paperwork into its inventory system. ' +
+    'A VIN is a public, non-personal vehicle identifier printed on the document. Transcribing ' +
+    'it is routine, authorised data entry. Reply with the requested field only.';
+
+  const prompt = `Read ONE field from this vehicle bill of sale: the VIN.
+
+WHERE IT IS: inside the VEHICLE INFORMATION box, immediately after the label "VIN:" (it may also be labelled "Vehicle Ident. No." or "V.I.N."). Ignore every other number on the page — phone numbers, stock numbers, dates, odometer readings and settlement totals are NOT the VIN.
+
+HOW TO READ IT: transcribe the characters one at a time, left to right, exactly as printed. A VIN is exactly 17 characters and never contains the letters I, O or Q. Take extra care with pairs that look alike in print: 5/S, 8/B, 0/D, 1/I, 6/G, 9/4, 2/Z, 4/A, X/Y, 7/T.
+
+Transcribe what is actually printed. Do NOT "correct" it toward a VIN that seems more plausible, and do NOT guess a character you cannot see — if a character is genuinely illegible, return NONE instead.
+
+Reply with nothing but: VIN_START<17 characters>VIN_END`;
+
+  try {
+    const apiUrl = useOpenAI
+      ? 'https://api.openai.com/v1/chat/completions'
+      : 'https://integrate.api.nvidia.com/v1/chat/completions';
+    const apiKey = useOpenAI ? openaiApiKey : nvidiaApiKey;
+    const modelName = useOpenAI ? 'gpt-4o' : 'meta/llama-3.2-90b-vision-instruct';
+    const llmTimeoutMs = process.env.NODE_ENV === 'test' ? 3500 : 60000;
+
+    console.log('[Parser:VinReRead] VIN failed its check digit — re-reading the VIN box at high fidelity...');
+    const response = await fetchWithTimeout(apiUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelName,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${prepared.imgMime};base64,${prepared.base64Image}`,
+                  detail: 'high',
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 60,
+        temperature: 0,
+        stream: false,
+      })
+    }, llmTimeoutMs);
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message || 'vision re-read failed');
+
+    const raw = String(data.choices?.[0]?.message?.content || '');
+    const candidate = normalizeVinCharacters(
+      raw.match(/VIN_START\s*([A-Z0-9\s-]{17,40}?)\s*VIN_END/i)?.[1] ?? ''
+    );
+    if (candidate.length !== 17) {
+      console.log(`[Parser:VinReRead] No usable VIN returned (raw: ${raw.trim().slice(0, 60)}).`);
+      return null;
+    }
+    return candidate;
+  } catch (err) {
+    console.warn(`[Parser:VinReRead] Skipped — ${err?.message || err}`);
     return null;
   }
+}
+
+async function visionExtract(fileBuffer, mimetype, purpose = "") {
+  if (!hasLlmKey) return null;
+
+  const prepared = await prepareImageForVision(fileBuffer, mimetype, false);
+  if (!prepared) return null;
+  const { base64Image, imgMime } = prepared;
 
   if (!base64Image) return null;
 
@@ -3592,6 +3724,6 @@ function normalizeVinCharacters(vin) {
 // while leaving the real errors in place. That's worse than doing nothing: it silently
 // converts a visibly-wrong VIN into a plausible-but-still-wrong one. Instead, an invalid
 // checksum is flagged (see postProcessResult) and resolved only via a genuine second,
-// independent read (crossCheckVinWithOcr) or manual review — never by guessing.
+// independent read (recoverInvalidVin) or manual review — never by guessing.
 
 export { extractTotalFromText, extractVinFromText, extractTitleFromText, normalizeVinCharacters };
