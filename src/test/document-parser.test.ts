@@ -620,6 +620,21 @@ describe('document parser fallback extraction', () => {
     ).toBe('5UXTY5C09M9E04416');
   });
 
+  it('rejects settlement-table text swept into a 17-character run', () => {
+    // Blocking the phone row alone just moved the scanner onto the next 17-character run:
+    // "TALDUE000PLHEARSE", assembled from "TOTAL DUE 0.00" and neighbouring words. It too
+    // passes length, alphabet and the ISO 3779 check digit, so only VIN structure rejects
+    // it — positions 12-17 are a numeric production serial, and "HEARSE" has no digits.
+    expect(isValidVin('TALDUE000PLHEARSE')).toBe(true); // checksum cannot catch this
+    expect(
+      extractVinFromText('SUBTOTAL: $14,140.00  TAX  TOTAL DUE: $0.00  Floorplan  HEARSE')
+    ).toBeNull();
+
+    // Real VINs, including ones with a letter inside the last six, must survive the check.
+    expect(extractVinFromText('VIN: 1FMCU9JXXGUB02440')).toBe('1FMCU9JXXGUB02440');
+    expect(extractVinFromText('VIN: 5UXTY5C09M9E04416')).toBe('5UXTY5C09M9E04416');
+  });
+
   it('reads the Frazer dealer bill of sale without inventing model or color', async () => {
     // Regression for the deployed failure: the VIN came out as the buyer's phone digits,
     // the model drifted X3 -> X4, and a colour was invented for blank COLOR 1/COLOR 2

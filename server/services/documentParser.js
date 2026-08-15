@@ -458,6 +458,30 @@ function looksLikeContactNoise(vin) {
   return VIN_CONTACT_NOISE_PATTERN.test(String(vin || ''));
 }
 
+// Blocking individual noise words is whack-a-mole: reject the phone row and the scanner
+// simply returns the next 17-character run on the page ("TALDUE000PLHEARSE", built from
+// "TOTAL DUE 0.00" and neighbouring words). That one also satisfies length, alphabet AND
+// the ISO 3779 check digit, so no amount of word-blocking or checksumming separates it
+// from a real VIN. Structure does: positions 12-17 are the manufacturer's sequential
+// production number and are overwhelmingly numeric, and a VIN carries several digits
+// overall. Across every real VIN in this codebase the minimums are 7 digits total and 5
+// within the last six; the floors below sit well under that so genuine but unusual VINs
+// still pass, while swept-up form text (3 digits total, 0 in the last six) does not.
+function isStructurallyPlausibleVin(vin) {
+  const raw = String(vin || '').toUpperCase();
+  // Check noise words against the raw text: normalization rewrites I/O/Q to 1/0/0 and
+  // would corrupt words like PHONE before they could be matched.
+  if (looksLikeContactNoise(raw)) return false;
+
+  const value = normalizeVinCharacters(raw);
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(value)) return false;
+
+  const countDigits = (text) => (text.match(/[0-9]/g) || []).length;
+  if (countDigits(value) < 4) return false;
+  if (countDigits(value.slice(11)) < 3) return false;
+  return true;
+}
+
 function extractSpacedVin(text) {
   if (!text) return null;
   const lines = text.split(/\r?\n/);
@@ -473,7 +497,7 @@ function extractSpacedVin(text) {
     let cleaned = line.replace(/[|/\\[\]\s_-]/g, '').toUpperCase();
     for (let i = 0; i + 17 <= cleaned.length; i++) {
       const candidate = cleaned.slice(i, i + 17);
-      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate) && isValidVin(candidate) && !looksLikeContactNoise(candidate)) {
+      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate) && isValidVin(candidate) && isStructurallyPlausibleVin(candidate)) {
         return candidate;
       }
     }
@@ -483,7 +507,7 @@ function extractSpacedVin(text) {
     const singleChars = parts.filter(p => p.length === 1 && /^[A-Z0-9]$/.test(p));
     if (singleChars.length >= 17) {
       const candidate = singleChars.slice(0, 17).join('');
-      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate) && isValidVin(candidate) && !looksLikeContactNoise(candidate)) {
+      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate) && isValidVin(candidate) && isStructurallyPlausibleVin(candidate)) {
         return candidate;
       }
     }
@@ -505,7 +529,7 @@ function extractVinFromText(text) {
     if (!candidate) return;
     const value = String(candidate).replace(/[^A-Z0-9]/gi, '').toUpperCase();
     if (!/^[A-Z0-9]{17}$/.test(value)) return;
-    if (looksLikeContactNoise(value)) return;
+    if (!isStructurallyPlausibleVin(value)) return;
     if (priority && !priorityCandidates.includes(value)) priorityCandidates.push(value);
     candidates.add(value);
   };
@@ -924,10 +948,11 @@ function postProcessResult(result, rawText, purpose) {
   if (result.vin) {
     const normalizedVin = normalizeVinCharacters(result.vin);
     result.vin = normalizedVin;
-    // Contact-row digits masquerading as a VIN survive every structural test (length,
-    // alphabet, even checksum), so reject them on the embedded label text instead.
-    if (looksLikeContactNoise(normalizedVin)) {
-      console.log(`[Parser:PostProcess] Discarding VIN "${normalizedVin}" — it carries contact-row text (phone/cell/fax), so it came from a contact field, not the VIN box.`);
+    // Page text swept into a 17-character run passes length, alphabet AND checksum, so
+    // reject on VIN structure (digit distribution, embedded label words) instead. Better
+    // to surface no VIN and flag it than to record a confident-looking fabrication.
+    if (!isStructurallyPlausibleVin(normalizedVin)) {
+      console.log(`[Parser:PostProcess] Discarding VIN "${normalizedVin}" — not structurally a VIN (looks like text swept off the page rather than the VIN box).`);
       result.vin = null;
       result.vinChecksumInvalid = true;
     } else if (!isValidVin(normalizedVin)) {
