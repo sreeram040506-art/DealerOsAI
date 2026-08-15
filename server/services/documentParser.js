@@ -2213,6 +2213,9 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "", dea
   // markedly less accurate on scans. Mark the result so callers can warn the operator
   // rather than presenting low-confidence OCR output as if it were a normal read.
   if (result && !hasLlmKey) result.aiUnavailable = true;
+  // Correct make/model/year from the VIN itself where possible — applied here so every
+  // extraction path (image, scanned PDF, native-text PDF, Word) gets the same treatment.
+  await applyVinDecodeCorrections(result);
   return result;
 }
 
@@ -2354,6 +2357,69 @@ async function crossCheckVinWithOcr(result, fileBuffer, mimetype = 'image/jpeg')
   } catch (err) {
     console.warn(`[Parser:PostProcess] OCR cross-check failed: ${err?.message || err}`);
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VIN DECODE — authoritative make/model/year cross-check
+// ═══════════════════════════════════════════════════════════════
+// Reading make/model off a scan is guesswork the moment the print is marginal: an X3
+// reads as an X4, a 330i as a 340i. The VIN already encodes the answer, so once we hold a
+// checksum-valid VIN we can stop guessing and ask an authority. NHTSA's vPIC service is
+// free, keyless, and definitive for US-market vehicles.
+//
+// Deliberately fail-open: this is a correction pass, not a gate. Any timeout, outage, or
+// unrecognised VIN leaves the extracted values exactly as they were, so document upload
+// never depends on a third party being reachable.
+const VIN_DECODE_TIMEOUT_MS = 6000;
+
+async function decodeVinWithNhtsa(vin) {
+  const response = await fetchWithTimeout(
+    `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`,
+    { method: 'GET' },
+    VIN_DECODE_TIMEOUT_MS,
+    0
+  );
+  const payload = await response.json();
+  const decoded = payload?.Results?.[0];
+  if (!decoded) return null;
+
+  const year = Number.parseInt(decoded.ModelYear, 10);
+  return {
+    make: decoded.Make ? String(decoded.Make).trim() : null,
+    model: decoded.Model ? String(decoded.Model).trim() : null,
+    year: Number.isFinite(year) ? year : null,
+  };
+}
+
+// Compares loosely: the decoder returns canonical names ("BMW", "X3") while a document may
+// carry casing or spacing variants. Only a genuine disagreement is worth overriding.
+function isSameVehicleField(a, b) {
+  const normalize = (value) => String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const left = normalize(a);
+  const right = normalize(b);
+  if (!left || !right) return true; // nothing extracted to contradict
+  return left === right;
+}
+
+async function applyVinDecodeCorrections(result) {
+  if (!result?.vin || !isValidVin(result.vin) || result.vinChecksumInvalid) return result;
+
+  try {
+    const decoded = await decodeVinWithNhtsa(result.vin);
+    if (!decoded || !decoded.make) return result; // unknown VIN — leave everything alone
+
+    for (const field of ['make', 'model', 'year']) {
+      const authoritative = decoded[field];
+      if (!authoritative) continue;
+      if (isSameVehicleField(result[field], authoritative)) continue;
+      console.log(`[Parser:VinDecode] ${field}: "${result[field]}" → "${authoritative}" (decoded from VIN ${result.vin})`);
+      result[field] = authoritative;
+      result.vinDecodeCorrected = true;
+    }
+  } catch (err) {
+    console.warn(`[Parser:VinDecode] Skipped — decoder unavailable (${err?.message || err}). Extracted values kept as-is.`);
+  }
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════

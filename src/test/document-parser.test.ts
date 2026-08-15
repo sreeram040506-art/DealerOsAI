@@ -620,6 +620,27 @@ describe('document parser fallback extraction', () => {
     ).toBe('5UXTY5C09M9E04416');
   });
 
+  it('corrects a misread model using the VIN as the authority', async () => {
+    // Marginal print turns an X3 into an X4 on this scan. The VIN already encodes the
+    // real answer, so a decode pass should override the misread rather than trust it.
+    // Hits NHTSA's public vPIC service; it is deliberately fail-open, so if the service
+    // is unreachable the extracted "X4" simply stands and this assertion is skipped.
+    const text = [
+      'VEHICLE INFORMATION:',
+      'YEAR: 2021   MAKE: BMW   MODEL: X4',
+      'VIN: 5UXTY5C09M9E04416',
+    ].join('\n');
+
+    const info = await extractVehicleInfo(Buffer.from(text), 'text/plain', 'acquisition');
+
+    expect(info.vin).toBe('5UXTY5C09M9E04416');
+    if (info.vinDecodeCorrected) {
+      expect(info.model).toBe('X3');
+      expect(info.make).toBe('BMW');
+      expect(info.year).toBe(2021);
+    }
+  }, 30000);
+
   it('rejects settlement-table text swept into a 17-character run', () => {
     // Blocking the phone row alone just moved the scanner onto the next 17-character run:
     // "TALDUE000PLHEARSE", assembled from "TOTAL DUE 0.00" and neighbouring words. It too
