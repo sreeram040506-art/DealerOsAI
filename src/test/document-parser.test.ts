@@ -618,6 +618,42 @@ describe('document parser fallback extraction', () => {
     expect(info.vin).toBe('5UXTY5C09M9E04416');
   });
 
+  it('does not hallucinate a color when the color field is blank on the source document', async () => {
+    // Mirrors the real Tulley/Washington Street bill of sale: "COLOR 1:" / "COLOR 2:" are
+    // printed as labels but have no value filled in. The model previously guessed "Black"
+    // for this instead of returning null.
+    const text = `
+      BILL OF SALE
+      BUYER INFORMATION:
+      WASHINGTON STREET AUTO SALES
+
+      SELLER INFORMATION:
+      TULLEY AUTO GROUP
+      131 W Glenwood St
+      Nashua, NH 03060
+
+      VEHICLE INFORMATION:
+      YEAR: 2021
+      MAKE: BMW
+      MODEL: X3
+      COLOR 1:
+      COLOR 2:
+      VIN: 5UXTY5C09M9E04416
+      ODOMETER READING
+      99,363
+
+      SETTLEMENT
+      VEHICLE PRICE: $13,800.00
+      TOTAL DUE: $14,140.00
+    `;
+
+    const info = await extractVehicleInfo(Buffer.from(text), 'text/plain', 'acquisition');
+
+    expect(info.make).toBe('BMW');
+    expect(info.model).toBe('X3');
+    expect(info.color).toBeFalsy();
+  });
+
   it('extracts MA title transfer buyer details only when sale labels are present', () => {
     const text = `
       Print Name(s) of Purchaser(s) OL State DL Number

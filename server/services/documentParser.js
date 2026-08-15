@@ -2248,17 +2248,18 @@ function buildSystemPrompt() {
 - Private party bills of sale
 - Insurance documents, registration forms, and any other vehicle paperwork
 
-Even if the document format is UNFAMILIAR, you MUST still extract every vehicle detail you can find. NEVER return an empty result if any vehicle data is visible.
+Even if the document format is UNFAMILIAR, do not give up on the whole document — extract every REAL, clearly-visible vehicle detail you can find, field by field. This does NOT mean every field must have a value: if a specific field isn't visible or legible anywhere on the page, that one field is null, while every other field you can actually see still gets extracted normally.
 
 ${identityLines}
 
 CRITICAL RULES:
-1. ROLE DETECTION: If our dealership appears as BUYER → this is an ACQUISITION. If our dealership appears as SELLER/DEALER → this is a SALE.
-2. ADDRESS FILTERING: NEVER return our dealership's own address as the source or disposed address. Return null instead.
-3. BODY TYPE vs MODEL: "Body Type" (Sedan, SUV, Hatchback, Coupe) is NOT the model. "Model" is the vehicle name (Corolla, Camry, C250, E350, 328i, Wrangler). For luxury cars (Mercedes-Benz, BMW, Audi), the model is ALWAYS the alphanumeric code (e.g. C250). NEVER put "Sedan" or "SUV" in the model field.
-4. TITLE NUMBER: This is CRITICAL. Extract if labeled "Certificate of Title", "Title No", "Title #", "Certificate No", or "Cert of Origin". It is usually an 8-10 digit alphanumeric code (e.g. BK182936).
-5. PRICE (TOTAL ONLY): ALWAYS extract the ABSOLUTE TOTAL/BALANCE DUE (e.g. 7645.00). NEVER extract the "Sale Price" or "Selling Price" (e.g. 7200.00) if a larger TOTAL exists below it. Fees MUST be included.
-6. You MUST return ONLY a valid JSON object wrapped in JSON_START and JSON_END markers. Do NOT write explanations, reasoning, or markdown.
+1. NEVER GUESS OR INVENT A VALUE. This is the most important rule. If a field's value is not clearly and explicitly visible in the document (the box is blank, illegible, or absent), you MUST return null for that field (0 for numeric fields). Do NOT infer a "plausible" value — not a common color, not a typical price, not a guessed digit. A record with some fields correctly left null is far more useful than one where you filled in something that looks right but is wrong. This rule applies independently per field — leaving one field null is never a reason to also skip a different field you CAN clearly see.
+2. ROLE DETECTION: If our dealership appears as BUYER → this is an ACQUISITION. If our dealership appears as SELLER/DEALER → this is a SALE.
+3. ADDRESS FILTERING: NEVER return our dealership's own address as the source or disposed address. Return null instead.
+4. BODY TYPE vs MODEL: "Body Type" (Sedan, SUV, Hatchback, Coupe) is NOT the model. "Model" is the vehicle name (Corolla, Camry, C250, E350, 328i, Wrangler). For luxury cars (Mercedes-Benz, BMW, Audi), the model is ALWAYS the alphanumeric code (e.g. C250). NEVER put "Sedan" or "SUV" in the model field.
+5. TITLE NUMBER: This is CRITICAL. Extract if labeled "Certificate of Title", "Title No", "Title #", "Certificate No", or "Cert of Origin". It is usually an 8-10 digit alphanumeric code (e.g. BK182936).
+6. PRICE (TOTAL ONLY): ALWAYS extract the ABSOLUTE TOTAL/BALANCE DUE (e.g. 7645.00). NEVER extract the "Sale Price" or "Selling Price" (e.g. 7200.00) if a larger TOTAL exists below it. Fees MUST be included.
+7. You MUST return ONLY a valid JSON object wrapped in JSON_START and JSON_END markers. Do NOT write explanations, reasoning, or markdown.
 Example:
 JSON_START
 { "vin": "...", ... }
@@ -2298,7 +2299,7 @@ JSON_START
   "allVisibleOdometers": [131575]
 }
 JSON_END
-IMPORTANT: If a value is missing or unclear, return null. NEVER return placeholder text like "exact 17-char VIN".
+IMPORTANT: If a value is missing or unclear, return null. NEVER return placeholder text like "exact 17-char VIN" or invent a value that merely looks plausible.
 
 LABEL MAPPING:
 - VIN: "VIN", "V.I.N. No.", "Vehicle Identification Number", "Serial #"
@@ -2339,27 +2340,28 @@ CRITICAL ROLE AND CUSTOMER RULE:
 
 JSON_START
 {
-  "vin": "exact 17-char VIN",
-  "make": "manufacturer (Toyota, Ford, Honda, etc.)",
-  "model": "model name ONLY (Corolla, Camry, Pilot) — NOT body type",
+  "vin": "exact 17-char VIN or null",
+  "make": "manufacturer (Toyota, Ford, Honda, etc.) or null",
+  "model": "model name ONLY (Corolla, Camry, Pilot) — NOT body type — or null",
   "year": 2014,
-  "color": "color",
+  "color": "Color or null",
   "titleNumber": null,
-  "stockNumber": "stock number",
-  "disposedTo": "PURCHASER/BUYER name",
-  "disposedAddress": "PURCHASER street address",
-  "disposedCity": "PURCHASER city",
-  "disposedState": "XX (2-letter code)",
-  "disposedZip": "PURCHASER zip code",
-  "disposedDate": "YYYY-MM-DD",
+  "stockNumber": "stock number or null",
+  "disposedTo": "PURCHASER/BUYER name or null",
+  "disposedAddress": "PURCHASER street address or null",
+  "disposedCity": "PURCHASER city or null",
+  "disposedState": "XX (2-letter code) or null",
+  "disposedZip": "PURCHASER zip code or null",
+  "disposedDate": "YYYY-MM-DD or null",
   "disposedPrice": 7751,
   "disposedOdometer": 119629,
-  "disposedDlNumber": "driver license number",
-  "disposedDlState": "XX",
+  "disposedDlNumber": "driver license number or null",
+  "disposedDlState": "XX or null",
   "allVisiblePrices": [7200.00, 7751.00, 551.00],
   "allVisibleOdometers": [119629]
 }
 JSON_END
+IMPORTANT: If a value is missing or unclear, return null. NEVER return placeholder text like "exact 17-char VIN" or invent a value that merely looks plausible.
 
 LABEL MAPPING:
 - VIN: "VIN", "Vehicle/Vessel Identification Number", "Vessel ID"
@@ -2431,7 +2433,7 @@ JSON_START
   "allVisibleOdometers": [131575]
 }
 JSON_END
-IMPORTANT: If a value is missing or unclear, return null. NEVER return placeholder text.
+IMPORTANT: If a value is missing or unclear, return null. NEVER return placeholder text or invent a value that merely looks plausible.
 
 LABEL MAPPING:
 - VIN: "VIN", "V.I.N.", "Vehicle Identification Number", "Serial #"
