@@ -1240,36 +1240,53 @@ function splitLineAtColumn(line, columnStart) {
 // is lost entirely. Detect that layout using the raw, space-preserving text and rewrite
 // the panel region into sequential single-column blocks, so every downstream parser sees
 // an unambiguous document. Returns the text unchanged when it isn't a two-column layout.
+// The left panel is whoever is receiving the vehicle on this form, the right panel is the
+// other party. Frazer prints two variants: a wholesale bill of sale headed
+// "BUYER INFORMATION" / "SELLER INFORMATION", and a retail purchase contract headed
+// "PURCHASER INFORMATION" / "DEALER/SELLER INFORMATION". Both are side-by-side, so both
+// need splitting; matching only the first variant left the retail contract merged and its
+// customer unextractable.
+const PANEL_HEADER_LEFT = /\b(?:BUYER|PURCHASER)\s+INFORMATION\b/i;
+const PANEL_HEADER_RIGHT = /\b(?:DEALER\s*\/\s*)?SELLER\s+INFORMATION\b/i;
+
 function deinterleaveTwoColumnPanels(text) {
   const raw = String(text || '');
   const lines = raw.split(/\r?\n/);
   const headerIndex = lines.findIndex(
-    (line) => /\bBUYER\s+INFORMATION\b/i.test(line) && /\bSELLER\s+INFORMATION\b/i.test(line)
+    (line) => PANEL_HEADER_LEFT.test(line) && PANEL_HEADER_RIGHT.test(line)
   );
   if (headerIndex < 0) return raw;
 
-  const columnStart = lines[headerIndex].match(/\bSELLER\s+INFORMATION\b/i)?.index ?? -1;
-  // Without a real left column before the seller header this isn't a two-column layout.
+  const headerLine = lines[headerIndex];
+  const columnStart = headerLine.match(PANEL_HEADER_RIGHT)?.index ?? -1;
+  // Without a real left column before the right-hand header this isn't a two-column layout.
   if (columnStart < 10) return raw;
 
-  const stopPattern = /\b(VEHICLE\s+INFORMATION|ODOMETER\s+READING|SETTLEMENT|ANNOUNCEMENTS|VEHICLE\s+MILEAGE|PRIOR\s+USE|REMARKS)\b/i;
-  const buyerLines = [];
-  const sellerLines = [];
+  // Keep each form's own wording rather than forcing it to BUYER/SELLER. The roles differ
+  // between the two variants — on the retail contract the left panel is the customer and
+  // the right panel is us — and downstream parsing keys off those exact labels to decide
+  // which party is which.
+  const leftHeader = headerLine.slice(0, columnStart).trim() || 'BUYER INFORMATION:';
+  const rightHeader = headerLine.slice(columnStart).trim() || 'SELLER INFORMATION:';
+
+  const stopPattern = /\b(VEHICLE\s+INFORMATION|ODOMETER\s+READING|SETTLEMENT|ANNOUNCEMENTS|VEHICLE\s+MILEAGE|PRIOR\s+USE|REMARKS|TRADE-?IN\s+INFORMATION)\b/i;
+  const leftLines = [];
+  const rightLines = [];
   let end = headerIndex + 1;
   for (; end < lines.length; end++) {
     if (stopPattern.test(lines[end])) break;
     const [left, right] = splitLineAtColumn(lines[end], columnStart);
-    if (left) buyerLines.push(left);
-    if (right) sellerLines.push(right);
+    if (left) leftLines.push(left);
+    if (right) rightLines.push(right);
   }
-  if (!sellerLines.length) return raw;
+  if (!rightLines.length) return raw;
 
   return [
     ...lines.slice(0, headerIndex),
-    'BUYER INFORMATION:',
-    ...buyerLines,
-    'SELLER INFORMATION:',
-    ...sellerLines,
+    leftHeader,
+    ...leftLines,
+    rightHeader,
+    ...rightLines,
     ...lines.slice(end),
   ].join('\n');
 }
@@ -1758,7 +1775,10 @@ export function extractDispositionDetailsFromText(text, dealership = null) {
 }
 
 function hasDispositionLabel(line) {
-  return /(?:^|\s)(Print Name\(s\) of Purchaser\(s\)|Purchaser\(s\)? Name\(s\)(?:\s+and\s+Address(?:\(es\)|es)?)?|Buyer Name|Buyer|Sold To|Customer|Transferred To)\s*[:#-]?/i.test(line);
+  // "PURCHASER INFORMATION" is the panel heading on the retail Motor Vehicle Purchase
+  // Contract; the customer's name is the line directly beneath it. Without this the
+  // heading matched nothing and the buyer was never extracted from that form.
+  return /(?:^|\s)(Print Name\(s\) of Purchaser\(s\)|Purchaser\s+Information|Purchaser\(s\)? Name\(s\)(?:\s+and\s+Address(?:\(es\)|es)?)?|Buyer\s+Information|Buyer Name|Buyer|Sold To|Customer|Transferred To)\s*[:#-]?/i.test(line);
 }
 
 function extractMaTitleDispositionDetails(lines) {
@@ -1898,7 +1918,16 @@ function extractVehicleInfoFromTextImpl(text) {
 
   const parseFieldPairs = (line) => {
     const pairs = {};
-    const labelRegex = /\b(Mfrs\.?\s*Model\s*Year|Year|Make|Model|Color|Vehicle\s+Identification\s+Number|Vehicle\s+Ident(?:ification)?(?:\.|\s)*No\.?)\b\s*[:\-]?\s*([^\r\n]+?)(?=(?:\s+\b(?:Mfrs\.?\s*Model\s*Year|Year|Make|Model|Color|Vehicle\s+Identification\s+Number|Vehicle\s+Ident(?:ification)?(?:\.|\s)*No\.?)\b\s*[:\-]?)|$)/gi;
+    // Every label that can appear on a packed vehicle row. They matter as TERMINATORS as
+    // much as as keys: the retail purchase contract prints
+    // "MODEL: X3   BODY: SUV   MILEAGE: 99375   TRANS: AUTO" on one line, and without
+    // Body/Mileage/Trans/Style/Cyl/Stock/VIN here the model value ran to the end of the
+    // line and was later discarded as not-a-model.
+    const LABELS = 'Mfrs\\.?\\s*Model\\s*Year|Year|Make|Model|Color\\s*\\d?|Body|Style|Trans|Cyl|Mileage|Stock|VIN|Vehicle\\s+Identification\\s+Number|Vehicle\\s+Ident(?:ification)?(?:\\.|\\s)*No\\.?';
+    const labelRegex = new RegExp(
+      `\\b(${LABELS})\\b\\s*[:\\-]?\\s*([^\\r\\n]+?)(?=(?:\\s+\\b(?:${LABELS})\\b\\s*[:\\-]?)|$)`,
+      'gi'
+    );
     let match;
     while ((match = labelRegex.exec(line)) !== null) {
       const label = match[1].replace(/\s+/g, ' ').toLowerCase();
@@ -2009,8 +2038,9 @@ function extractVehicleInfoFromTextImpl(text) {
       }
     }
 
-    if (/\bOdometer(?: In| Out| Reading)?\b/i.test(line)) {
-      let value = readValue(line, /Odometer(?: In| Out| Reading)?[:\s]+([\d,]+)/i);
+    // "Mileage:" is how the retail purchase contract labels the odometer.
+    if (/\b(?:Odometer(?: In| Out| Reading)?|Mileage)\b/i.test(line)) {
+      let value = readValue(line, /(?:Odometer(?: In| Out| Reading)?|Mileage)[:\s]+([\d,]+)/i);
       if (!value) {
         const nextLine = lines[i + 1] || '';
         const nextMatch = nextLine.match(/^\s*([\d,]{4,})\s*$/) || nextLine.match(/(?:^|[^0-9])(\d[\d,]{2,})(?:[^0-9]|$)/);
@@ -2047,7 +2077,11 @@ function extractVehicleInfoFromTextImpl(text) {
     if (fieldPairs['model'] && !data.model) {
       data.model = fieldPairs['model'];
     } else if (/\bModel(?!\s+Year)\b/i.test(line) && !data.model) {
-      data.model = readValue(line, /Model(?!\s+Year)[:\s]+([A-Za-z0-9 &\-/]+?)(?=\s+Color|\s+Year|\s+Title|\s+Vehicle|\s+Stock|\s+Address|\s+City|\s+State|\s+Zip|\s+Odometer|\s+Transaction Date|$)/i) || data.model;
+      // The lookahead lists every label that can sit to the RIGHT of the model on a
+      // multi-column row; without Body/Mileage/Trans/Style/Cyl the retail contract's
+      // "MODEL: X3   BODY: SUV   MILEAGE: 99375   TRANS: AUTO" swallowed the whole line
+      // and was then rejected as not-a-model, leaving the field empty.
+      data.model = readValue(line, /Model(?!\s+Year)[:\s]+([A-Za-z0-9 &\-/]+?)(?=\s+Color|\s+Year|\s+Title|\s+Vehicle|\s+Stock|\s+Address|\s+City|\s+State|\s+Zip|\s+Odometer|\s+Body\b|\s+Mileage\b|\s+Trans\b|\s+Style\b|\s+Cyl\b|\s+VIN\b|\s+Transaction Date|$)/i) || data.model;
     }
 
     if (fieldPairs['color'] && !data.color) {
