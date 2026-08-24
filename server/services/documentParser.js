@@ -911,6 +911,9 @@ function postProcessResult(result, rawText, purpose) {
       // the auctions above: the marketplace is the transaction partner and the party
       // actually invoicing us, and the dealership plays the consignor's role.
       { pattern: /\bOPEN\s*LANE\b/i, name: 'OPENLANE', address: '11299 N. Illinois St', city: 'Carmel', state: 'IN', zip: '46032' },
+      // ACV's bill of sale leads with its own title ("BUYER BILL OF SALE  Auction ID #...")
+      // above the party columns, which generic extraction picked up as the seller's name.
+      { pattern: /\bACV\b/i, name: 'ACV Auctions', address: '640 Ellicott Street, Suite 321', city: 'Buffalo', state: 'NY', zip: '14203' },
     ];
 
     // Check the LLM's purchasedFrom field against known auction names
@@ -1724,6 +1727,14 @@ function extractKnownAuctionAcquisitionDetails(lines) {
       city: 'Carmel',
       state: 'IN',
       zip: '46032'
+    },
+    {
+      pattern: /\bACV\b/i,
+      name: 'ACV Auctions',
+      address: '640 Ellicott Street, Suite 321',
+      city: 'Buffalo',
+      state: 'NY',
+      zip: '14203'
     }
   ];
 

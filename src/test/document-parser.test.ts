@@ -690,6 +690,42 @@ describe('document parser fallback extraction', () => {
     expect(info.purchasePrice).toBe(14140);
   });
 
+  it('names ACV as the source rather than the title of its own bill of sale', async () => {
+    // ACV prints "BUYER BILL OF SALE  Auction ID #..." above the party columns. With ACV
+    // absent from the known-auction table, generic extraction picked that heading up and
+    // recorded it as the seller's name, with a mangled address to match.
+    const text = [
+      'ACV AUCTIONS   640 Ellicott Street, Suite 321 - Buffalo, NY 14203',
+      'Your ACV Dealer ID: 3427342',
+      'BUYER BILL OF SALE        Auction ID #15578034',
+      '2017 Nissan Sentra        2026-06-04 15:02:38',
+      'VIN:    3N1AB7AP2HY339866',
+      'Year: 2017   Make: Nissan   Model: Sentra   Trim: SR',
+      'Miles 81,202   Color: White',
+      'Buyer                                    Seller',
+      'WASHINGTON STREET AUTO SALES INC         EAST WATERLOO MOTORS',
+      '879A WASHINGTON STREET A                 2000 E WATERLOO RD',
+      'CANTON, MA 02021                         AKRON, OH 44312',
+      'Itemization of Purchase:',
+      'Sale Price:               $2,500.00',
+      'Buyer Fee:                $305.00',
+      'ACV Transportation Fee:   $969.00',
+      'Total:                    $3,799.00',
+    ].join('\n');
+
+    const info = await extractVehicleInfo(Buffer.from(text), 'text/plain', 'acquisition', {
+      name: 'Washington Street Auto Sales',
+    });
+
+    expect(info.vin).toBe('3N1AB7AP2HY339866');
+    expect(info.purchasedFrom).toMatch(/ACV/i);
+    // Never the document's own title, and never the consignor dealership.
+    expect(info.purchasedFrom).not.toMatch(/BILL OF SALE|Auction ID|EAST WATERLOO/i);
+    expect(info.usedVehicleSourceCity).toMatch(/Buffalo/i);
+    // Total including the fees, not the 2,500 sale-price row.
+    expect(info.purchasePrice).toBe(3799);
+  }, 30000);
+
   it('reads an unfamiliar wholesale receipt whose columns use non-standard labels', async () => {
     // Guards the generalisation: this form is described nowhere in the prompt and heads its
     // side-by-side panels "ACQUIRED FROM" / "DELIVERING TO" rather than BUYER / SELLER.
