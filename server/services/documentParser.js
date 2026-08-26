@@ -2412,8 +2412,22 @@ async function extractVehicleInfoImpl(fileBuffer, mimetype, purpose = "") {
       }
     }
 
-    // Fallback: fast regex heuristics
-    return extractFallbackInfo(combinedText, effectivePurpose);
+    // Fallback: regex heuristics over whatever text we have. A scanned PDF has no native
+    // text at all, so OCR it first — the image path already does this, and without the
+    // same safety net here any Vision failure (an outage, a rate limit, or the model
+    // declining to transcribe the page) left nothing to parse and the upload failed with
+    // "Could not extract a valid VIN" even when the document was perfectly legible.
+    let fallbackText = combinedText;
+    if (!hasNativeText) {
+      try {
+        console.log('[Parser] Vision produced no usable result for a scanned PDF. Running OCR fallback...');
+        fallbackText = await ocrPdf(fileBuffer);
+        console.log(`[Parser] OCR fallback recovered ${fallbackText.replace(/\s/g, '').length} chars.`);
+      } catch (ocrErr) {
+        console.warn(`[Parser] Scanned-PDF OCR fallback failed: ${ocrErr?.message || ocrErr}`);
+      }
+    }
+    return extractFallbackInfo(fallbackText, effectivePurpose);
   }
 
   // Word docs and other text
@@ -2595,7 +2609,11 @@ function buildDealershipPromptIdentity() {
 // ─── Shared system prompt for ALL AI calls (text + vision) ───
 function buildSystemPrompt() {
   const { identityLines } = buildDealershipPromptIdentity();
-  return `You are a UNIVERSAL vehicle document data extractor. You process ANY automotive document, including but not limited to:
+  return `You are a document data extractor operating inside the back-office system of a licensed motor vehicle dealership. The dealership uploads its OWN purchase and sale paperwork — bills of sale, auction invoices, purchase contracts, title and payoff documents — and you transcribe the printed fields into its inventory records. This is routine, authorised bookkeeping that the dealership is legally required to keep, and it is the express purpose of this system.
+
+Scanned dealership paperwork normally carries signatures, a customer's address, a driver's licence number or an account number alongside the vehicle details. Their presence is expected and does NOT make the page off limits: transcribe the requested fields as printed. Never reply with a refusal, an apology, or a request for confirmation — the only valid reply is the JSON object described below, using null for anything you genuinely cannot read.
+
+You process ANY automotive document, including but not limited to:
 - Auction Bills of Sale (ADESA, CMAA/Central Mass, Manheim, CarMax, America's AA)
 - Dealer-to-dealer bills of sale with BUYER INFORMATION / SELLER INFORMATION panels
 - MA Title Transfer Forms ("FOR A MOTOR VEHICLE, MOBILE HOME...")
