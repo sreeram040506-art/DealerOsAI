@@ -107,25 +107,56 @@ class TesseractWorkerPool {
 const tesseractPool = new TesseractWorkerPool();
 
 // Fetch with timeout + 1 automatic retry for transient NVIDIA API failures
-async function fetchWithTimeout(url, options, timeoutMs = 90000, retries = (process.env.NODE_ENV === 'test' ? 0 : 1)) {
+// Rate limits and transient upstream faults arrive as a normal HTTP response, not a thrown
+// error, so retrying only on throw let a 429 fall straight through: the caller saw an error
+// body, gave up on the AI, and dropped to OCR — which on a scan usually finds no valid VIN,
+// so the upload failed outright. That is why a large batch would land far fewer documents
+// than it started with: 40 back-to-back AI calls are exactly the shape that trips a rate
+// limit. Treat 429 and 5xx as retryable, backing off (and honouring Retry-After) instead.
+const RETRYABLE_HTTP_STATUS = (status) => status === 429 || status === 408 || status >= 500;
+
+async function fetchWithTimeout(
+  url,
+  options,
+  timeoutMs = 90000,
+  retries = (process.env.NODE_ENV === 'test' ? 0 : 3)
+) {
+  let lastResponse = null;
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(url, { ...options, signal: controller.signal });
       clearTimeout(timer);
-      return res;
+
+      if (!RETRYABLE_HTTP_STATUS(res.status) || attempt === retries) return res;
+
+      // Prefer the server's own guidance on when to come back; otherwise back off
+      // exponentially (2s, 4s, 8s) so a burst of uploads stops hammering the limit.
+      const retryAfter = Number.parseFloat(res.headers.get('retry-after') || '');
+      const waitMs = Number.isFinite(retryAfter)
+        ? Math.min(retryAfter * 1000, 30000)
+        : 2000 * 2 ** attempt;
+      console.warn(`[API] HTTP ${res.status} on attempt ${attempt + 1}/${retries + 1}, retrying in ${Math.round(waitMs / 1000)}s...`);
+      lastResponse = res;
+      await new Promise((r) => setTimeout(r, waitMs));
     } catch (err) {
       clearTimeout(timer);
       if (attempt < retries) {
         const isTimeout = err.name === 'AbortError';
-        console.warn(`[API] ${isTimeout ? 'Timeout' : 'Error'} on attempt ${attempt + 1}, retrying in 2s...`);
-        await new Promise(r => setTimeout(r, 2000));
+        const waitMs = 2000 * 2 ** attempt;
+        console.warn(`[API] ${isTimeout ? 'Timeout' : 'Error'} on attempt ${attempt + 1}/${retries + 1}, retrying in ${Math.round(waitMs / 1000)}s...`);
+        await new Promise((r) => setTimeout(r, waitMs));
+      } else if (lastResponse) {
+        return lastResponse;
       } else {
         throw err;
       }
     }
   }
+
+  return lastResponse;
 }
 
 function isPdfMimeType(mimetype) {

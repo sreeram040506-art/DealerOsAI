@@ -38,6 +38,9 @@ export default function UsedVehicleFormGenerator({
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const sourceInputRef = useRef<HTMLInputElement>(null);
+  // Files the batch could not process, kept on screen after the run so they can be
+  // re-selected. Toasts alone scroll away during a long batch.
+  const [batchFailures, setBatchFailures] = useState<{ fileName: string; reason: string }[]>([]);
 
   const handleGenerate = async (pushToInventory: boolean) => {
     const filesToProcess = sourceFiles;
@@ -47,10 +50,12 @@ export default function UsedVehicleFormGenerator({
     }
 
     setLoading(true);
+    setBatchFailures([]);
     setProgress({ current: 0, total: filesToProcess.length });
 
     let successCount = 0;
     let failCount = 0;
+    const failures: { fileName: string; reason: string }[] = [];
 
     const processFile = async (file: File) => {
       const formData = new FormData();
@@ -110,6 +115,7 @@ export default function UsedVehicleFormGenerator({
       } catch (error: any) {
         console.error(error);
         failCount++;
+        failures.push({ fileName: file.name, reason: error?.message || 'Unknown error' });
         toast.error(`Failed ${file.name}: ${error.message}`);
       } finally {
         setProgress(prev => ({ ...prev, current: prev.current + 1 }));
@@ -125,18 +131,52 @@ export default function UsedVehicleFormGenerator({
       }
     }
 
+    // Report the whole batch, not just the wins. Per-file errors were only ever transient
+    // toasts, so across a long run they scrolled away unnoticed and the summary still said
+    // "Successfully processed N" — which is why a 40-file batch could look like it simply
+    // "took" 25 or 30 with no explanation of the rest.
     if (successCount > 0) {
-      toast.success(`Successfully processed ${successCount} files.`, {
+      toast.success(`Successfully processed ${successCount} of ${filesToProcess.length} files.`, {
         icon: <CheckCircle2 className="w-4 h-4 text-primary" />,
       });
     }
-    
+    if (failCount > 0) {
+      setBatchFailures(failures);
+      toast.error(
+        `${failCount} of ${filesToProcess.length} file(s) did not process. See the list below to retry them.`,
+        { duration: 10000 }
+      );
+    }
+
     setLoading(false);
     setSourceFiles([]);
   };
 
   return (
     <div className="rounded-[24px] border border-border bg-white p-6 space-y-6 shadow-sm">
+      {batchFailures.length > 0 && (
+        <div className="rounded-[20px] border-2 border-red-300 bg-red-50 p-5 space-y-3">
+          <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-red-900">
+            {batchFailures.length} file{batchFailures.length === 1 ? '' : 's'} did not process
+          </h4>
+          <p className="text-xs text-red-900/70">
+            The rest of the batch was processed normally. Select just these files and run
+            again — most failures are transient (a busy AI service or an unreadable scan).
+          </p>
+          <ul className="max-h-48 space-y-1 overflow-y-auto text-sm text-red-900/90">
+            {batchFailures.map((f) => (
+              <li key={f.fileName} className="font-medium">
+                <span className="font-mono text-xs">{f.fileName}</span>
+                <span className="text-red-900/60"> — {f.reason}</span>
+              </li>
+            ))}
+          </ul>
+          <Button variant="ghost" onClick={() => setBatchFailures([])} disabled={loading}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+
       <div>
         <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground mb-2">
           Used Vehicle Record (Bulk)
