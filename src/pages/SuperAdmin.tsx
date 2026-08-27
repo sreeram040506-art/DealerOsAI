@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { 
-  Building2, Users, Car, Plus, ShieldCheck, 
-  Search, Power, LayoutGrid, List, MoreVertical,
+  Building2, Users, Car, Plus, ShieldCheck,
+  Search, Power, LayoutGrid, List, MoreVertical, Trash2, AlertTriangle,
   ArrowUpRight, Globe, CheckCircle2, XCircle, TrendingUp, PieChart as PieChartIcon,
   Activity, Settings2, HardDrive, MapPin, Phone, Mail
 } from 'lucide-react';
@@ -61,6 +61,10 @@ const SuperAdmin = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  // Dealership queued for deletion, plus the name the operator has typed to confirm it.
+  const [pendingDelete, setPendingDelete] = useState<Dealership | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   // New Dealership Form
   const [formData, setFormData] = useState({
@@ -137,7 +141,42 @@ const SuperAdmin = () => {
     }
   };
 
-  const filteredDealerships = dealerships.filter(d => 
+  // Deleting a dealership removes its vehicles, sales and documents for good, so the
+  // dialog makes the caller type the name back before the button becomes usable.
+  const deleteDealership = async () => {
+    if (!pendingDelete || deleteConfirmText !== pendingDelete.name) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(apiUrl(`/super-admin/dealerships/${pendingDelete.id}`), {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ confirmName: deleteConfirmText }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body.message || 'Failed to delete dealership');
+        return;
+      }
+      const removed = Object.entries(body.deleted || {})
+        .map(([model, count]) => `${count} ${model}`)
+        .join(', ');
+      toast.success(
+        `Deleted "${pendingDelete.name}"${removed ? ` — removed ${removed}` : ''}`
+      );
+      setPendingDelete(null);
+      setDeleteConfirmText('');
+      fetchData();
+    } catch {
+      toast.error('Connection error while deleting dealership');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const filteredDealerships = dealerships.filter(d =>
     d.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     d.slug.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -462,8 +501,18 @@ const SuperAdmin = () => {
                           >
                             {deal.isActive ? 'Suspend' : 'Reactivate'}
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 border border-white/5">
-                            <MoreVertical className="w-4 h-4" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title={`Delete ${deal.name} and all of its data`}
+                            aria-label={`Delete ${deal.name}`}
+                            className="h-10 w-10 rounded-xl bg-rose-500/5 hover:bg-rose-500/20 text-rose-500 border border-rose-500/10"
+                            onClick={() => {
+                              setPendingDelete(deal);
+                              setDeleteConfirmText('');
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </td>
@@ -484,6 +533,83 @@ const SuperAdmin = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => {
+          if (!open && !deleting) {
+            setPendingDelete(null);
+            setDeleteConfirmText('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-500">
+              <AlertTriangle className="w-5 h-5" />
+              Delete {pendingDelete?.name}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              This permanently deletes the dealership and everything belonging to it. It
+              cannot be undone.
+            </p>
+
+            {pendingDelete && (
+              <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm">
+                <p className="font-semibold text-rose-500 mb-2">Will be destroyed:</p>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li>{pendingDelete._count.users} user account(s) — they lose access immediately</li>
+                  <li>{pendingDelete._count.vehicles} vehicle(s) in inventory</li>
+                  <li>{pendingDelete._count.sales} sale record(s)</li>
+                  <li>All documents, customers, repairs, expenses and compliance records</li>
+                </ul>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              If you only want to block access, use <strong>Suspend</strong> instead — that is
+              reversible and keeps the data.
+            </p>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirm-dealership-name" className="text-xs">
+                Type <span className="font-mono font-bold">{pendingDelete?.name}</span> to confirm
+              </Label>
+              <Input
+                id="confirm-dealership-name"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={pendingDelete?.name}
+                autoComplete="off"
+                disabled={deleting}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={deleting}
+              onClick={() => {
+                setPendingDelete(null);
+                setDeleteConfirmText('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              disabled={deleting || deleteConfirmText !== pendingDelete?.name}
+              onClick={deleteDealership}
+            >
+              {deleting ? 'Deleting…' : 'Delete permanently'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
