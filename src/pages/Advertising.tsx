@@ -4,7 +4,8 @@ import QueryErrorState from '@/components/QueryErrorState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, Sparkles, Megaphone, AlertTriangle, Plus, Upload, X, Image as ImageIcon, Users, ExternalLink } from 'lucide-react';
+import { Search, Sparkles, Megaphone, AlertTriangle, Plus, Upload, X, Image as ImageIcon, Users, ExternalLink, Scissors, Undo2, Loader2 } from 'lucide-react';
+import { useBackgroundRemoval, dataUrlToBlob } from '@/hooks/useBackgroundRemoval';
 import { toast } from 'sonner';
 import { useMarketing } from '@/hooks/useMarketing';
 import { useInventory } from '@/hooks/useInventory';
@@ -47,6 +48,11 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
   const [advertisingDialogOpen, setAdvertisingDialogOpen] = useState(false);
   const [editingAd, setEditingAd] = useState<any>(null);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  // Pre-cutout versions, keyed by index, so a background removal can be undone.
+  const [originalImages, setOriginalImages] = useState<Record<number, string>>({});
+  const [activeBgIndex, setActiveBgIndex] = useState<number | null>(null);
+  const { removeBackgroundToDataUrl, isProcessing: isRemovingBg, progress: bgProgress } =
+    useBackgroundRemoval();
   const [isDragging, setIsDragging] = useState(false);
   const [leadsDialogOpen, setLeadsDialogOpen] = useState(false);
   const [leads, setLeads] = useState<any[]>([]);
@@ -87,6 +93,40 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
 
   const handleRemoveImage = (index: number) => {
     setUploadedImages(prev => prev.filter((_, i) => i !== index));
+    setOriginalImages(prev => { const next = { ...prev }; delete next[index]; return next; });
+  };
+
+  // Cuts the background out of one photo, leaving a transparent PNG. The original is kept
+  // so the operator can undo a result they don't like without re-uploading.
+  const handleRemoveBackground = async (index: number) => {
+    const source = uploadedImages[index];
+    if (!source) return;
+    setActiveBgIndex(index);
+    try {
+      const cutout = await removeBackgroundToDataUrl(await dataUrlToBlob(source));
+      setOriginalImages(prev => ({ ...prev, [index]: source }));
+      setUploadedImages(prev => prev.map((img, i) => (i === index ? cutout : img)));
+      toast.success('Background removed');
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : 'Could not remove the background');
+    } finally {
+      setActiveBgIndex(null);
+    }
+  };
+
+  const handleRestoreOriginal = (index: number) => {
+    const original = originalImages[index];
+    if (!original) return;
+    setUploadedImages(prev => prev.map((img, i) => (i === index ? original : img)));
+    setOriginalImages(prev => { const next = { ...prev }; delete next[index]; return next; });
+  };
+
+  const handleRemoveAllBackgrounds = async () => {
+    for (let i = 0; i < uploadedImages.length; i++) {
+      if (originalImages[i]) continue; // already cut out
+      await handleRemoveBackground(i);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -487,25 +527,84 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
 
           {/* Image Previews */}
           {uploadedImages.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {uploadedImages.map((image, index) => (
-                <div key={index} className="relative group">
-                  <img
-                    src={image}
-                    alt={`Upload ${index + 1}`}
-                    className="w-full h-24 object-cover rounded-lg border border-border"
-                  />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveImage(index);
-                    }}
-                    className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isRemovingBg}
+                  onClick={handleRemoveAllBackgrounds}
+                >
+                  {isRemovingBg ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Scissors className="w-4 h-4 mr-2" />
+                  )}
+                  Remove background on all
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {isRemovingBg
+                    ? `${bgProgress.stage ?? 'Working'}${
+                        bgProgress.ratio !== null ? ` — ${Math.round(bgProgress.ratio * 100)}%` : ''
+                      }${activeBgIndex !== null ? ` (photo ${activeBgIndex + 1} of ${uploadedImages.length})` : ''}`
+                    : `Runs in your browser — photos are never uploaded for this. Around 20 seconds per photo${
+                        uploadedImages.length > 1 ? `, so roughly ${Math.ceil((uploadedImages.length * 20) / 60)} min for all ${uploadedImages.length}` : ''
+                      }.`}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {uploadedImages.map((image, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={image}
+                      alt={`Upload ${index + 1}`}
+                      // Checkerboard makes transparency obvious once the background is gone.
+                      className="w-full h-24 object-cover rounded-lg border border-border [background-image:linear-gradient(45deg,#e5e7eb_25%,transparent_25%),linear-gradient(-45deg,#e5e7eb_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e5e7eb_75%),linear-gradient(-45deg,transparent_75%,#e5e7eb_75%)] [background-size:12px_12px] [background-position:0_0,0_6px,6px_-6px,-6px_0px]"
+                    />
+
+                    {activeBgIndex === index && (
+                      <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50">
+                        <Loader2 className="w-5 h-5 animate-spin text-white" />
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {originalImages[index] ? (
+                        <button
+                          type="button"
+                          title="Restore the original photo"
+                          onClick={(e) => { e.stopPropagation(); handleRestoreOriginal(index); }}
+                          className="p-1 rounded bg-background/90 border border-border text-foreground hover:bg-background"
+                        >
+                          <Undo2 className="w-3 h-3" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          title="Remove background"
+                          disabled={isRemovingBg}
+                          onClick={(e) => { e.stopPropagation(); handleRemoveBackground(index); }}
+                          className="p-1 rounded bg-background/90 border border-border text-foreground hover:bg-background disabled:opacity-50"
+                        >
+                          <Scissors className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveImage(index);
+                      }}
+                      className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
