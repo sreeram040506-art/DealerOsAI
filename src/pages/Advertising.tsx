@@ -560,8 +560,7 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
                     <img
                       src={image}
                       alt={`Upload ${index + 1}`}
-                      // Checkerboard makes transparency obvious once the background is gone.
-                      className="w-full h-24 object-cover rounded-lg border border-border [background-image:linear-gradient(45deg,#e5e7eb_25%,transparent_25%),linear-gradient(-45deg,#e5e7eb_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e5e7eb_75%),linear-gradient(-45deg,transparent_75%,#e5e7eb_75%)] [background-size:12px_12px] [background-position:0_0,0_6px,6px_-6px,-6px_0px]"
+                      className="w-full h-24 object-cover rounded-lg border border-border bg-black"
                     />
 
                     {activeBgIndex === index && (

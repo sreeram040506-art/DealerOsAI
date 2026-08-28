@@ -30,7 +30,37 @@ export type BackgroundRemovalProgress = {
   stage: string | null;
 };
 
+export type BackgroundRemovalOptions = {
+  /**
+   * Solid color painted behind the cutout, e.g. "#000000". Pass null to keep the raw
+   * transparent PNG. Defaults to black — a plain transparent PNG renders as white in most
+   * viewers/editors downstream, which looks like the removal silently did nothing.
+   */
+  backgroundColor?: string | null;
+};
+
 const TRANSPARENT_PNG = 'image/png';
+const DEFAULT_BACKGROUND_COLOR = '#000000';
+
+/** Flattens a transparent cutout onto a solid color so it isn't mistaken for a plain photo. */
+async function compositeOntoBackground(blob: Blob, color: string): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas is not available to composite the background');
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (result) => (result ? resolve(result) : reject(new Error('Could not render the composited image'))),
+      TRANSPARENT_PNG
+    );
+  });
+}
 
 export function useBackgroundRemoval() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -40,7 +70,7 @@ export function useBackgroundRemoval() {
   const moduleRef = useRef<typeof import('@imgly/background-removal') | null>(null);
 
   const removeBackground = useCallback(
-    async (input: Blob | string): Promise<Blob> => {
+    async (input: Blob | string, options: BackgroundRemovalOptions = {}): Promise<Blob> => {
       setIsProcessing(true);
       setProgress({ ratio: 0, stage: isModelWarm ? 'Processing' : 'Loading model' });
 
@@ -61,7 +91,8 @@ export function useBackgroundRemoval() {
         });
 
         setIsModelWarm(true);
-        return result;
+        const backgroundColor = options.backgroundColor === undefined ? DEFAULT_BACKGROUND_COLOR : options.backgroundColor;
+        return backgroundColor ? await compositeOntoBackground(result, backgroundColor) : result;
       } finally {
         setIsProcessing(false);
         setProgress({ ratio: null, stage: null });
@@ -72,8 +103,8 @@ export function useBackgroundRemoval() {
 
   /** Convenience wrapper for the common case of showing the result in an <img>. */
   const removeBackgroundToDataUrl = useCallback(
-    async (input: Blob | string): Promise<string> => {
-      const blob = await removeBackground(input);
+    async (input: Blob | string, options?: BackgroundRemovalOptions): Promise<string> => {
+      const blob = await removeBackground(input, options);
       return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(String(reader.result));
