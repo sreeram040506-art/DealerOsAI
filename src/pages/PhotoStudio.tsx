@@ -162,8 +162,8 @@ export default function PhotoStudio() {
                   ? `${progress.stage ?? 'Working'}${progress.ratio !== null ? ` — ${Math.round(progress.ratio * 100)}%` : ''}${
                       activeIndex !== null ? ` (photo ${activeIndex + 1} of ${images.length})` : ''
                     }`
-                  : `Runs in your browser — photos are never uploaded for this. Around 20 seconds per photo${
-                      images.length > 1 ? `, so roughly ${Math.ceil((images.length * 20) / 60)} min for all ${images.length}` : ''
+                  : `Runs in your browser — photos are never uploaded for this. Around 40 seconds per photo${
+                      images.length > 1 ? `, so roughly ${Math.ceil((images.length * 40) / 60)} min for all ${images.length}` : ''
                     }.`}
               </p>
             </div>

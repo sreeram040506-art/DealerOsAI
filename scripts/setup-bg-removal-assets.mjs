@@ -1,6 +1,6 @@
 // Downloads the background-removal model + ONNX runtime once, so the feature works with no
 // network access at photo-editing time. Without this, @imgly/background-removal fetches
-// ~100MB from https://staticimgly.com on every browser session, which fails outright when a
+// ~190MB from https://staticimgly.com on every browser session, which fails outright when a
 // dealership has no internet at the point of use.
 //
 // Safe to run repeatedly (skips files already present) and never fails the build: if the
@@ -16,12 +16,14 @@ const OUT_DIR = path.join(__dirname, '..', 'public', 'bg-removal');
 const PACKAGE_VERSION = '1.7.0';
 const CDN_ROOT = `https://staticimgly.com/@imgly/background-removal-data/${PACKAGE_VERSION}/dist/`;
 
-// The model + WASM runtime pair actually used by our default config (device: "cpu",
-// model: "medium" -> "isnet_fp16"). Not the full asset set imgly ships (which also includes
-// the "small"/"large" models and a WebGPU runtime we don't use) — keeping only what we need
-// keeps this to ~100MB instead of ~330MB.
+// The model + WASM runtime pair actually used by our config (device: "cpu",
+// model: "large" -> "isnet", full fp32 precision). We deliberately don't use the faster
+// "medium"/fp16 model — it left visible ghosting artifacts around reflective/complex edges
+// like wheels. Not the full asset set imgly ships (which also includes the "small"/"medium"
+// models and a WebGPU runtime we don't use) — keeping only what we need holds this to ~190MB
+// instead of ~330MB.
 const NEEDED_KEYS = [
-  '/models/isnet_fp16',
+  '/models/isnet',
   '/onnxruntime-web/ort-wasm-simd-threaded.mjs',
   '/onnxruntime-web/ort-wasm-simd-threaded.wasm',
 ];
@@ -79,7 +81,7 @@ async function main() {
     return;
   }
 
-  console.log('[bg-removal] Fetching model + ONNX runtime for offline use (~100MB, one-time)...');
+  console.log('[bg-removal] Fetching model + ONNX runtime for offline use (~190MB, one-time)...');
   const fullManifest = await fetchJson(new URL('resources.json', CDN_ROOT));
 
   const trimmedManifest = {};

@@ -7,11 +7,13 @@ import { useCallback, useRef, useState } from 'react';
  * added to the server — which matters here because the API host already carries the OCR
  * worker pool and PDF rendering for document parsing.
  *
- * The trade-off is speed. Measured on a desktop browser, a single photo takes roughly
- * 20 seconds, and that does NOT drop away once the model is cached — the cost is the
- * inference itself, not the one-off ~40MB download. Budget about 20s per image and warn
- * before a batch: ten photos is several minutes. `progress` drives a live indicator so the
- * wait reads as work rather than a hang.
+ * The trade-off is speed. We use imgly's full-precision "large" model rather than the
+ * default "medium" one — fp16 left visible ghosting artifacts around reflective/complex
+ * edges like wheels — which costs more time per photo (measured ~35-40s on a desktop
+ * browser) and does NOT drop away once the model is cached; the cost is the inference
+ * itself, not the one-off download. Budget ~40s per image and warn before a batch: ten
+ * photos is several minutes. `progress` drives a live indicator so the wait reads as work
+ * rather than a hang.
  *
  * The model + ONNX runtime are served from same-origin (/bg-removal/, populated once by
  * scripts/setup-bg-removal-assets.mjs) rather than imgly's CDN, so this works with no
@@ -81,6 +83,7 @@ export function useBackgroundRemoval() {
 
         const result = await moduleRef.current.removeBackground(input, {
           publicPath: LOCAL_MODEL_PUBLIC_PATH,
+          model: 'large',
           output: { format: TRANSPARENT_PNG },
           progress: (key: string, current: number, total: number) => {
             // Keys look like "fetch:/models/..." or "compute:inference"; the prefix is the

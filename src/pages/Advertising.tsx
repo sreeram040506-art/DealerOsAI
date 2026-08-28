@@ -548,8 +548,8 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
                     ? `${bgProgress.stage ?? 'Working'}${
                         bgProgress.ratio !== null ? ` — ${Math.round(bgProgress.ratio * 100)}%` : ''
                       }${activeBgIndex !== null ? ` (photo ${activeBgIndex + 1} of ${uploadedImages.length})` : ''}`
-                    : `Runs in your browser — photos are never uploaded for this. Around 20 seconds per photo${
-                        uploadedImages.length > 1 ? `, so roughly ${Math.ceil((uploadedImages.length * 20) / 60)} min for all ${uploadedImages.length}` : ''
+                    : `Runs in your browser — photos are never uploaded for this. Around 40 seconds per photo${
+                        uploadedImages.length > 1 ? `, so roughly ${Math.ceil((uploadedImages.length * 40) / 60)} min for all ${uploadedImages.length}` : ''
                       }.`}
                 </p>
               </div>
