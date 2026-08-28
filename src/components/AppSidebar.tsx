@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Car, ShoppingCart, 
   Receipt, ChevronLeft, ChevronRight, CalendarDays,
-  LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users, Settings, ShieldCheck, Brain, FileText, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare
+  LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users, Settings, ShieldCheck, Brain, FileText, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare, Image as ImageIcon
 } from 'lucide-react';
 import { useState, memo, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,7 @@ const navItems = [
   { to: '/documents-forms', icon: FileText, label: 'Documents & Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/registry', icon: FileArchive, label: 'Registry', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/marketing', icon: Megaphone, label: 'Marketing', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/photo-studio', icon: ImageIcon, label: 'Photo Studio', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/ai-insights', icon: Brain, label: 'AI Insights / Ask', roles: ['ADMIN', 'MANAGER'] },
   { to: '/accounting', icon: Calculator, label: 'Accounting', roles: ['ADMIN'] },
   { to: '/communication', icon: MessageSquare, label: 'Communication', roles: ['ADMIN', 'MANAGER', 'STAFF'] },

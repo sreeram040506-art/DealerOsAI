@@ -33,6 +33,7 @@ const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Communication = lazy(() => import("./pages/Communication"));
 const Attendance = lazy(() => import("./pages/Attendance"));
+const PhotoStudio = lazy(() => import("./pages/PhotoStudio"));
 
 // Preload manager — memoized to prevent re-renders from parent
 const PreloadManager = memo(function PreloadManager() {
@@ -171,6 +172,11 @@ export default function App() {
                 <Route path="/communication" element={
                   <ProtectedRoute roles={['ADMIN', 'MANAGER', 'STAFF']}>
                     <Communication />
+                  </ProtectedRoute>
+                } />
+                <Route path="/photo-studio" element={
+                  <ProtectedRoute roles={['ADMIN', 'MANAGER', 'STAFF']}>
+                    <PhotoStudio />
                   </ProtectedRoute>
                 } />
                 <Route path="/settings" element={
