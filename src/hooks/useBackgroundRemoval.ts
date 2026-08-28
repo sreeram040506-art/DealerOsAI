@@ -13,9 +13,15 @@ import { useCallback, useRef, useState } from 'react';
  * before a batch: ten photos is several minutes. `progress` drives a live indicator so the
  * wait reads as work rather than a hang.
  *
+ * The model + ONNX runtime are served from same-origin (/bg-removal/, populated once by
+ * scripts/setup-bg-removal-assets.mjs) rather than imgly's CDN, so this works with no
+ * internet access at the point of use — the actual requirement at a dealership lot.
+ *
  * The import is dynamic so the model wrapper is only pulled into the bundle when someone
  * actually removes a background, rather than on every page load.
  */
+
+const LOCAL_MODEL_PUBLIC_PATH = `${window.location.origin}/bg-removal/`;
 
 export type BackgroundRemovalProgress = {
   /** 0-1 across the current image, or null when idle. */
@@ -44,6 +50,7 @@ export function useBackgroundRemoval() {
         }
 
         const result = await moduleRef.current.removeBackground(input, {
+          publicPath: LOCAL_MODEL_PUBLIC_PATH,
           output: { format: TRANSPARENT_PNG },
           progress: (key: string, current: number, total: number) => {
             // Keys look like "fetch:/models/..." or "compute:inference"; the prefix is the

@@ -31,3 +31,8 @@ server/.env
 server/data/predictor-models/
 server/data/demand_model_latest.json
 server/data/demand_model.json
+
+# Background-removal model + ONNX runtime (~100MB) — downloaded once by
+# scripts/setup-bg-removal-assets.mjs (runs automatically on npm install) so the feature works
+# offline. Fetched from imgly's CDN, not authored here, so it doesn't belong in git history.
+public/bg-removal/

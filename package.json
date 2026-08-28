@@ -12,7 +12,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "setup:bg-removal": "node scripts/setup-bg-removal-assets.mjs",
+    "postinstall": "node scripts/setup-bg-removal-assets.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
