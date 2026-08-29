@@ -34,15 +34,15 @@ export type BackgroundRemovalProgress = {
 
 export type BackgroundRemovalOptions = {
   /**
-   * Solid color painted behind the cutout, e.g. "#000000". Pass null to keep the raw
-   * transparent PNG. Defaults to black — a plain transparent PNG renders as white in most
-   * viewers/editors downstream, which looks like the removal silently did nothing.
+   * What to place behind the cutout. "studio" (default) draws a light gradient cyclorama
+   * with a dark elliptical turntable floor under the vehicle — the look of a marketplace
+   * listing photo. A CSS color string flat-fills instead; null keeps the raw transparent PNG.
    */
-  backgroundColor?: string | null;
+  backdrop?: 'studio' | string | null;
 };
 
 const TRANSPARENT_PNG = 'image/png';
-const DEFAULT_BACKGROUND_COLOR = '#000000';
+const DEFAULT_BACKDROP = 'studio';
 
 /** Flattens a transparent cutout onto a solid color so it isn't mistaken for a plain photo. */
 async function compositeOntoBackground(blob: Blob, color: string): Promise<Blob> {
@@ -56,6 +56,99 @@ async function compositeOntoBackground(blob: Blob, color: string): Promise<Blob>
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (result) => (result ? resolve(result) : reject(new Error('Could not render the composited image'))),
+      TRANSPARENT_PNG
+    );
+  });
+}
+
+/** Finds the pixel box of the cutout's non-transparent content, so the floor lines up with it. */
+function findAlphaBounds(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const { data } = ctx.getImageData(0, 0, width, height);
+  let minX = width, maxX = 0, minY = height, maxY = 0;
+  let found = false;
+  const ALPHA_THRESHOLD = 16;
+  // Sampling instead of scanning every pixel keeps this fast on large photos.
+  const step = Math.max(1, Math.floor(Math.max(width, height) / 400));
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
+      if (data[(y * width + x) * 4 + 3] > ALPHA_THRESHOLD) {
+        found = true;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  return found ? { minX, maxX, minY, maxY } : null;
+}
+
+/**
+ * Composites the cutout onto a light gradient backdrop with a dark elliptical "turntable"
+ * floor under the vehicle — the studio look used in marketplace listing photos, rather than
+ * a flat color that reads as an obvious cutout.
+ */
+async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob);
+  const { width, height } = bitmap;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas is not available to composite the background');
+
+  // Draw once off-canvas so we can measure where the vehicle actually sits in the frame —
+  // photos vary in framing, and a fixed floor position looks wrong on anything off-center.
+  ctx.drawImage(bitmap, 0, 0);
+  const bounds = findAlphaBounds(ctx, width, height);
+  ctx.clearRect(0, 0, width, height);
+
+  const carCx = bounds ? (bounds.minX + bounds.maxX) / 2 : width / 2;
+  const carBottomY = bounds ? bounds.maxY : height * 0.85;
+  const carWidth = bounds ? bounds.maxX - bounds.minX : width * 0.7;
+
+  // Soft light-gray cyclorama background.
+  const bgGradient = ctx.createRadialGradient(width / 2, height * 0.3, height * 0.1, width / 2, height * 0.3, width * 0.75);
+  bgGradient.addColorStop(0, '#f6f6f6');
+  bgGradient.addColorStop(1, '#c9c9c9');
+  ctx.fillStyle = bgGradient;
+  ctx.fillRect(0, 0, width, height);
+
+  // Dark elliptical turntable floor, sized and centered off the vehicle's own footprint.
+  const floorRx = carWidth * 0.66;
+  const floorRy = floorRx * 0.18;
+  const floorCy = carBottomY - floorRy * 0.25;
+
+  const floorGradient = ctx.createRadialGradient(carCx, floorCy, floorRy * 0.1, carCx, floorCy, floorRx);
+  floorGradient.addColorStop(0, '#3a3a3a');
+  floorGradient.addColorStop(0.75, '#131313');
+  floorGradient.addColorStop(1, '#050505');
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(carCx, floorCy, floorRx, floorRy, 0, 0, Math.PI * 2);
+  ctx.fillStyle = floorGradient;
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, width * 0.0018);
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.stroke();
+  ctx.restore();
+
+  // Tight, soft contact shadow directly under the vehicle.
+  ctx.save();
+  ctx.filter = 'blur(10px)';
+  ctx.beginPath();
+  ctx.ellipse(carCx, carBottomY - floorRy * 0.1, floorRx * 0.42, floorRy * 0.55, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fill();
+  ctx.restore();
+
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
   return await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (result) => (result ? resolve(result) : reject(new Error('Could not render the composited image'))),
@@ -94,8 +187,9 @@ export function useBackgroundRemoval() {
         });
 
         setIsModelWarm(true);
-        const backgroundColor = options.backgroundColor === undefined ? DEFAULT_BACKGROUND_COLOR : options.backgroundColor;
-        return backgroundColor ? await compositeOntoBackground(result, backgroundColor) : result;
+        const backdrop = options.backdrop === undefined ? DEFAULT_BACKDROP : options.backdrop;
+        if (!backdrop) return result;
+        return backdrop === 'studio' ? await compositeOntoStudioFloor(result) : await compositeOntoBackground(result, backdrop);
       } finally {
         setIsProcessing(false);
         setProgress({ ratio: null, stage: null });
