@@ -69,7 +69,12 @@ function findAlphaBounds(ctx: CanvasRenderingContext2D, width: number, height: n
   const { data } = ctx.getImageData(0, 0, width, height);
   let minX = width, maxX = 0, minY = height, maxY = 0;
   let found = false;
-  const ALPHA_THRESHOLD = 16;
+  // The model's mask isn't a clean silhouette — edges anti-alias, and faint low-alpha noise
+  // (a soft shadow trail under the tires, a semi-transparent ghost artifact) can extend well
+  // past the vehicle's real edges. A low threshold here let that noise stretch the box past
+  // the car, which visibly detached the floor from the wheels. Only count solidly-opaque
+  // pixels — the vehicle body itself — toward the box.
+  const ALPHA_THRESHOLD = 200;
   // Sampling instead of scanning every pixel keeps this fast on large photos.
   const step = Math.max(1, Math.floor(Math.max(width, height) / 400));
   for (let y = 0; y < height; y += step) {
