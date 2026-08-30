@@ -236,32 +236,34 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   const contactBottom = car ? car.contactBottom : height * 0.85;
 
   // Soft light-gray cyclorama background.
-  const bgGradient = ctx.createRadialGradient(width / 2, height * 0.3, height * 0.1, width / 2, height * 0.3, width * 0.75);
-  bgGradient.addColorStop(0, '#f7f7f8');
-  bgGradient.addColorStop(1, '#cbcbcd');
+  const bgGradient = ctx.createRadialGradient(width / 2, height * 0.28, height * 0.1, width / 2, height * 0.28, width * 0.78);
+  bgGradient.addColorStop(0, '#f8f8f9');
+  bgGradient.addColorStop(1, '#d4d4d7');
   ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, width, height);
 
-  // Turntable disc. The width is clamped against the frame so the disc can never run off the
-  // edges the way a bare multiple of the car's width does when the car nearly fills the shot.
-  const floorRx = Math.min(carWidth * 0.6, width * 0.46);
-  // Height comes from a plausible viewing angle, but is forced to at least span the contact
-  // band, otherwise the wheel furthest from the camera hangs above the disc.
+  // Turntable disc, proportioned against the VEHICLE. Measured off the reference listing
+  // photos, the platform's radius runs about 0.7x the car's width, it is roughly 2.5x wider
+  // than it is deep, and the car meets it about three-quarters of the way down — so most of
+  // the disc reads as lying behind the car, the way a camera above the turntable would see it.
+  // Sizing this against the frame instead only matches when the car happens to fill the shot,
+  // and swamps the picture whenever it doesn't.
+  const floorRx = carWidth * 0.71;
   const halfBand = Math.max(1, (contactBottom - contactTop) / 2);
-  const floorRy = Math.min(Math.max(floorRx * 0.17, halfBand * 1.3), floorRx * 0.42);
-  // Seat the contact band just above the disc's centre so more turntable shows in front of the
-  // vehicle than behind it, which is what the camera would actually see.
-  const floorCy = (contactTop + contactBottom) / 2 + floorRy * 0.18;
+  // Shallow ellipse, but never so shallow that a 3/4 view's far wheel lands off the platform.
+  const floorRy = Math.max(floorRx * 0.4, halfBand * 1.6);
+  const floorCy = contactBottom - floorRy * 0.72;
+  const floorCx = carCx;
 
   // Squash the drawing space so the radial gradient follows the ellipse and fades out at the
   // rim — a hard-edged fill reads as a sticker pasted onto the backdrop.
   ctx.save();
-  ctx.translate(carCx, floorCy);
+  ctx.translate(floorCx, floorCy);
   ctx.scale(1, floorRy / floorRx);
   const floorGradient = ctx.createRadialGradient(0, 0, floorRx * 0.05, 0, 0, floorRx);
-  floorGradient.addColorStop(0, 'rgba(38,38,41,1)');
-  floorGradient.addColorStop(0.7, 'rgba(22,22,24,1)');
-  floorGradient.addColorStop(0.92, 'rgba(18,18,20,0.9)');
+  floorGradient.addColorStop(0, 'rgba(32,32,35,1)');
+  floorGradient.addColorStop(0.75, 'rgba(21,21,23,1)');
+  floorGradient.addColorStop(0.94, 'rgba(18,18,20,0.8)');
   floorGradient.addColorStop(1, 'rgba(18,18,20,0)');
   ctx.beginPath();
   ctx.arc(0, 0, floorRx, 0, Math.PI * 2);
@@ -269,13 +271,21 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   ctx.fill();
   ctx.restore();
 
-  // Contact shadow hugging the wheels. The blur scales with the image: a fixed pixel radius is
-  // invisible on a 2000px photo and overwhelming on a thumbnail.
+  // Contact shadow hugging the wheels, so the vehicle grips the platform instead of sitting on
+  // it like a decal. The blur scales with the image — a fixed pixel radius is invisible on a
+  // 2000px photo and overwhelming on a thumbnail — and the height falls back to a fraction of
+  // the car's width, since a head-on shot has an almost flat contact band to work from.
   ctx.save();
   ctx.filter = `blur(${Math.max(3, Math.round(width * 0.012))}px)`;
   ctx.beginPath();
-  ctx.ellipse(carCx, contactBottom - halfBand * 0.35, carWidth * 0.4, Math.max(4, halfBand * 0.6), 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.ellipse(
+    carCx,
+    contactBottom - halfBand * 0.35,
+    carWidth * 0.44,
+    Math.max(carWidth * 0.035, halfBand * 0.6),
+    0, 0, Math.PI * 2
+  );
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.fill();
   ctx.restore();
 
