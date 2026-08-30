@@ -235,11 +235,8 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   const contactTop = car ? car.contactTop : height * 0.78;
   const contactBottom = car ? car.contactBottom : height * 0.85;
 
-  // Soft light-gray cyclorama background.
-  const bgGradient = ctx.createRadialGradient(width / 2, height * 0.28, height * 0.1, width / 2, height * 0.28, width * 0.78);
-  bgGradient.addColorStop(0, '#f8f8f9');
-  bgGradient.addColorStop(1, '#d4d4d7');
-  ctx.fillStyle = bgGradient;
+  // Plain white backdrop.
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
 
   // Turntable disc, proportioned against the VEHICLE. Measured off the reference listing
@@ -255,39 +252,25 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   const floorCy = contactBottom - floorRy * 0.72;
   const floorCx = carCx;
 
-  // Squash the drawing space so the radial gradient follows the ellipse and fades out at the
-  // rim — a hard-edged fill reads as a sticker pasted onto the backdrop.
+  // Solid black platform. Squashing the drawing space lets the fill follow the ellipse; the
+  // gradient stays black all the way out and only drops its alpha in the last few percent, so
+  // the disc reads as uniformly black while its rim still anti-aliases against the white
+  // instead of showing a stair-stepped edge.
   ctx.save();
   ctx.translate(floorCx, floorCy);
   ctx.scale(1, floorRy / floorRx);
   const floorGradient = ctx.createRadialGradient(0, 0, floorRx * 0.05, 0, 0, floorRx);
-  floorGradient.addColorStop(0, 'rgba(32,32,35,1)');
-  floorGradient.addColorStop(0.75, 'rgba(21,21,23,1)');
-  floorGradient.addColorStop(0.94, 'rgba(18,18,20,0.8)');
-  floorGradient.addColorStop(1, 'rgba(18,18,20,0)');
+  floorGradient.addColorStop(0, 'rgba(0,0,0,1)');
+  floorGradient.addColorStop(0.985, 'rgba(0,0,0,1)');
+  floorGradient.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.beginPath();
   ctx.arc(0, 0, floorRx, 0, Math.PI * 2);
   ctx.fillStyle = floorGradient;
   ctx.fill();
   ctx.restore();
 
-  // Contact shadow hugging the wheels, so the vehicle grips the platform instead of sitting on
-  // it like a decal. The blur scales with the image — a fixed pixel radius is invisible on a
-  // 2000px photo and overwhelming on a thumbnail — and the height falls back to a fraction of
-  // the car's width, since a head-on shot has an almost flat contact band to work from.
-  ctx.save();
-  ctx.filter = `blur(${Math.max(3, Math.round(width * 0.012))}px)`;
-  ctx.beginPath();
-  ctx.ellipse(
-    carCx,
-    contactBottom - halfBand * 0.35,
-    carWidth * 0.44,
-    Math.max(carWidth * 0.035, halfBand * 0.6),
-    0, 0, Math.PI * 2
-  );
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fill();
-  ctx.restore();
+  // No contact shadow: the wheels meet a solid black platform, so a dark shadow under them
+  // would be painting black onto black. Bring one back if the floor ever stops being flat black.
 
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
