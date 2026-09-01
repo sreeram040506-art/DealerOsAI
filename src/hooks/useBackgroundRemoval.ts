@@ -205,9 +205,9 @@ async function dropDetachedSpecks(bitmap: ImageBitmap): Promise<ImageBitmap | nu
 }
 
 /**
- * Composites the cutout onto a light gradient backdrop with a dark elliptical "turntable"
- * floor under the vehicle — the studio look used in marketplace listing photos, rather than
- * a flat color that reads as an obvious cutout.
+ * Composites the cutout into a studio scene: a white cyclorama with a black elliptical
+ * turntable under the vehicle, matching the look of the marketplace listing photos this was
+ * modelled on. A flat colour fill behind the car instead reads as an obvious cut-out.
  */
 async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   let bitmap = await createImageBitmap(blob);
@@ -235,8 +235,17 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   const contactTop = car ? car.contactTop : height * 0.78;
   const contactBottom = car ? car.contactBottom : height * 0.85;
 
-  // Plain white backdrop.
-  ctx.fillStyle = '#ffffff';
+  // White cyclorama. It is white where the light lands and falls off very slightly towards the
+  // corners, which is how a lit studio screen actually photographs — a perfectly flat white
+  // reads as a cut-out pasted onto a blank page rather than a room with depth.
+  const bgGradient = ctx.createRadialGradient(
+    width / 2, height * 0.34, Math.min(width, height) * 0.12,
+    width / 2, height * 0.34, width * 0.82
+  );
+  bgGradient.addColorStop(0, '#ffffff');
+  bgGradient.addColorStop(0.65, '#fafafb');
+  bgGradient.addColorStop(1, '#e9e9ec');
+  ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, width, height);
 
   // Turntable disc, proportioned against the VEHICLE. Measured off the reference listing
@@ -247,21 +256,31 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   // and swamps the picture whenever it doesn't.
   const floorRx = carWidth * 0.71;
   const halfBand = Math.max(1, (contactBottom - contactTop) / 2);
-  // Shallow ellipse, but never so shallow that a 3/4 view's far wheel lands off the platform.
-  const floorRy = Math.max(floorRx * 0.4, halfBand * 1.6);
+
+  // The platform's far edge has to stay below the roofline. Its depth is derived from the
+  // car's WIDTH, but a low sedan is far wider relative to its height than the tall vehicle
+  // these proportions came from, so on one the disc balloons up past the roof and the car
+  // reads as sunk into a black pool rather than standing on a platform. Cap the depth so the
+  // disc's top edge stays inside the vehicle's own height.
+  const carTop = car ? car.minY : 0;
+  const carHeight = Math.max(1, contactBottom - carTop);
+  const deepestThatClearsRoof = Math.max(1, (contactBottom - (carTop + carHeight * 0.15)) / 1.72);
+  // Seating the wheels still wins over that cap: a car hovering off the disc looks worse than
+  // a disc that reaches a little high on a steeply-angled shot.
+  const floorRy = Math.max(Math.min(floorRx * 0.4, deepestThatClearsRoof), halfBand * 1.6);
   const floorCy = contactBottom - floorRy * 0.72;
   const floorCx = carCx;
 
   // Solid black platform. Squashing the drawing space lets the fill follow the ellipse; the
-  // gradient stays black all the way out and only drops its alpha in the last few percent, so
-  // the disc reads as uniformly black while its rim still anti-aliases against the white
-  // instead of showing a stair-stepped edge.
+  // gradient stays black nearly all the way out and only drops its alpha over the last few
+  // percent, so the disc reads as uniformly black while its rim eases into the backdrop the
+  // way the reference does, rather than ending on a hard cut.
   ctx.save();
   ctx.translate(floorCx, floorCy);
   ctx.scale(1, floorRy / floorRx);
   const floorGradient = ctx.createRadialGradient(0, 0, floorRx * 0.05, 0, 0, floorRx);
   floorGradient.addColorStop(0, 'rgba(0,0,0,1)');
-  floorGradient.addColorStop(0.985, 'rgba(0,0,0,1)');
+  floorGradient.addColorStop(0.96, 'rgba(0,0,0,1)');
   floorGradient.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.beginPath();
   ctx.arc(0, 0, floorRx, 0, Math.PI * 2);
