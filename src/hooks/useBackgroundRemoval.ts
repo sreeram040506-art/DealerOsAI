@@ -34,8 +34,8 @@ export type BackgroundRemovalProgress = {
 
 export type BackgroundRemovalOptions = {
   /**
-   * What to place behind the cutout. "studio" (default) draws a light gradient cyclorama
-   * with a dark elliptical turntable floor under the vehicle — the look of a marketplace
+   * What to place behind the cutout. "studio" (default) draws a black gradient cyclorama
+   * with a lit elliptical turntable floor under the vehicle — the look of a marketplace
    * listing photo. A CSS color string flat-fills instead; null keeps the raw transparent PNG.
    */
   backdrop?: 'studio' | string | null;
@@ -205,9 +205,9 @@ async function dropDetachedSpecks(bitmap: ImageBitmap): Promise<ImageBitmap | nu
 }
 
 /**
- * Composites the cutout into a studio scene: a white cyclorama with a black elliptical
- * turntable under the vehicle, matching the look of the marketplace listing photos this was
- * modelled on. A flat colour fill behind the car instead reads as an obvious cut-out.
+ * Composites the cutout into a studio scene: a black cyclorama with a lit elliptical turntable
+ * under the vehicle, matching the look of the marketplace listing photos this was modelled on.
+ * A flat colour fill behind the car instead reads as an obvious cut-out.
  */
 async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   let bitmap = await createImageBitmap(blob);
@@ -235,16 +235,17 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   const contactTop = car ? car.contactTop : height * 0.78;
   const contactBottom = car ? car.contactBottom : height * 0.85;
 
-  // White cyclorama. It is white where the light lands and falls off very slightly towards the
-  // corners, which is how a lit studio screen actually photographs — a perfectly flat white
-  // reads as a cut-out pasted onto a blank page rather than a room with depth.
+  // Black cyclorama. The screen is lifted a hair off pure black where the light lands and falls
+  // to true black towards the corners, which is how an unlit studio screen actually photographs
+  // — a perfectly flat black reads as a cut-out pasted onto a blank page rather than a room
+  // with depth.
   const bgGradient = ctx.createRadialGradient(
     width / 2, height * 0.34, Math.min(width, height) * 0.12,
     width / 2, height * 0.34, width * 0.82
   );
-  bgGradient.addColorStop(0, '#ffffff');
-  bgGradient.addColorStop(0.65, '#fafafb');
-  bgGradient.addColorStop(1, '#e9e9ec');
+  bgGradient.addColorStop(0, '#141416');
+  bgGradient.addColorStop(0.65, '#0b0b0c');
+  bgGradient.addColorStop(1, '#000000');
   ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, width, height);
 
@@ -271,25 +272,42 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   const floorCy = contactBottom - floorRy * 0.72;
   const floorCx = carCx;
 
-  // Solid black platform. Squashing the drawing space lets the fill follow the ellipse; the
-  // gradient stays black nearly all the way out and only drops its alpha over the last few
-  // percent, so the disc reads as uniformly black while its rim eases into the backdrop the
-  // way the reference does, rather than ending on a hard cut.
+  // Lit platform. Against a black backdrop a black disc is invisible, so the turntable is
+  // painted a step lighter than the screen behind it — the way a lit platform reads in front of
+  // an unlit one — brightest under the car and fading out at the rim. Squashing the drawing
+  // space lets the fill follow the ellipse, and the falloff means the rim eases into the
+  // backdrop rather than ending on a hard cut.
   ctx.save();
   ctx.translate(floorCx, floorCy);
   ctx.scale(1, floorRy / floorRx);
   const floorGradient = ctx.createRadialGradient(0, 0, floorRx * 0.05, 0, 0, floorRx);
-  floorGradient.addColorStop(0, 'rgba(0,0,0,1)');
-  floorGradient.addColorStop(0.96, 'rgba(0,0,0,1)');
-  floorGradient.addColorStop(1, 'rgba(0,0,0,0)');
+  floorGradient.addColorStop(0, 'rgba(255,255,255,0.11)');
+  floorGradient.addColorStop(0.62, 'rgba(255,255,255,0.07)');
+  floorGradient.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.beginPath();
   ctx.arc(0, 0, floorRx, 0, Math.PI * 2);
   ctx.fillStyle = floorGradient;
   ctx.fill();
   ctx.restore();
 
-  // No contact shadow: the wheels meet a solid black platform, so a dark shadow under them
-  // would be painting black onto black. Bring one back if the floor ever stops being flat black.
+  // Contact shadow hugging the wheels, so the vehicle grips the platform instead of sitting on
+  // it like a decal. It reads again now that the platform is lighter than the backdrop rather
+  // than flat black. The blur scales with the image — a fixed pixel radius is invisible on a
+  // 2000px photo and overwhelming on a thumbnail — and the height falls back to a fraction of
+  // the car's width, since a head-on shot has an almost flat contact band to work from.
+  ctx.save();
+  ctx.filter = `blur(${Math.max(3, Math.round(width * 0.012))}px)`;
+  ctx.beginPath();
+  ctx.ellipse(
+    carCx,
+    contactBottom - halfBand * 0.35,
+    carWidth * 0.44,
+    Math.max(carWidth * 0.035, halfBand * 0.6),
+    0, 0, Math.PI * 2
+  );
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fill();
+  ctx.restore();
 
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
