@@ -34,8 +34,8 @@ export type BackgroundRemovalProgress = {
 
 export type BackgroundRemovalOptions = {
   /**
-   * What to place behind the cutout. "studio" (default) draws a black gradient cyclorama
-   * with a lit elliptical turntable floor under the vehicle — the look of a marketplace
+   * What to place behind the cutout. "studio" (default) draws a white gradient cyclorama
+   * with a dark elliptical turntable floor under the vehicle — the look of a marketplace
    * listing photo. A CSS color string flat-fills instead; null keeps the raw transparent PNG.
    */
   backdrop?: 'studio' | string | null;
@@ -205,9 +205,9 @@ async function dropDetachedSpecks(bitmap: ImageBitmap): Promise<ImageBitmap | nu
 }
 
 /**
- * Composites the cutout into a studio scene: a black cyclorama with a lit elliptical turntable
- * under the vehicle, matching the look of the marketplace listing photos this was modelled on.
- * A flat colour fill behind the car instead reads as an obvious cut-out.
+ * Composites the cutout into a studio scene: a white cyclorama with a dark charcoal elliptical
+ * turntable under the vehicle, matching the look of the marketplace listing photos this was
+ * modelled on. A flat colour fill behind the car instead reads as an obvious cut-out.
  */
 async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   let bitmap = await createImageBitmap(blob);
@@ -235,17 +235,16 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   const contactTop = car ? car.contactTop : height * 0.78;
   const contactBottom = car ? car.contactBottom : height * 0.85;
 
-  // Black cyclorama. The screen is lifted a hair off pure black where the light lands and falls
-  // to true black towards the corners, which is how an unlit studio screen actually photographs
-  // — a perfectly flat black reads as a cut-out pasted onto a blank page rather than a room
-  // with depth.
+  // White cyclorama. It is white where the light lands and falls off very slightly towards the
+  // corners, which is how a lit studio screen actually photographs — a perfectly flat white
+  // reads as a cut-out pasted onto a blank page rather than a room with depth.
   const bgGradient = ctx.createRadialGradient(
     width / 2, height * 0.34, Math.min(width, height) * 0.12,
     width / 2, height * 0.34, width * 0.82
   );
-  bgGradient.addColorStop(0, '#141416');
-  bgGradient.addColorStop(0.65, '#0b0b0c');
-  bgGradient.addColorStop(1, '#000000');
+  bgGradient.addColorStop(0, '#ffffff');
+  bgGradient.addColorStop(0.65, '#f8f8f9');
+  bgGradient.addColorStop(1, '#e6e6ea');
   ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, width, height);
 
@@ -272,29 +271,42 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   const floorCy = contactBottom - floorRy * 0.72;
   const floorCx = carCx;
 
-  // Lit platform. Against a black backdrop a black disc is invisible, so the turntable is
-  // painted a step lighter than the screen behind it — the way a lit platform reads in front of
-  // an unlit one — brightest under the car and fading out at the rim. Squashing the drawing
-  // space lets the fill follow the ellipse, and the falloff means the rim eases into the
-  // backdrop rather than ending on a hard cut.
+  // Dark charcoal platform. Against the white screen the turntable reads as a solid dark disc,
+  // deepest under the car where the body blocks the light and lifting a shade towards the rim
+  // where the floods catch it. Not flat black: the reference platform is charcoal, and pure
+  // black would swallow both the wheels and the contact shadow. Squashing the drawing space
+  // lets the fill follow the ellipse, and dropping the alpha over the last couple of percent
+  // means the rim eases into the backdrop rather than ending on a hard cut.
   ctx.save();
   ctx.translate(floorCx, floorCy);
   ctx.scale(1, floorRy / floorRx);
   const floorGradient = ctx.createRadialGradient(0, 0, floorRx * 0.05, 0, 0, floorRx);
-  floorGradient.addColorStop(0, 'rgba(255,255,255,0.11)');
-  floorGradient.addColorStop(0.62, 'rgba(255,255,255,0.07)');
-  floorGradient.addColorStop(1, 'rgba(255,255,255,0)');
+  floorGradient.addColorStop(0, '#2a2a2e');
+  floorGradient.addColorStop(0.75, '#33333a');
+  floorGradient.addColorStop(0.97, '#3e3e46');
+  floorGradient.addColorStop(1, 'rgba(62,62,70,0)');
   ctx.beginPath();
   ctx.arc(0, 0, floorRx, 0, Math.PI * 2);
   ctx.fillStyle = floorGradient;
   ctx.fill();
   ctx.restore();
 
+  // The platform's edge catches the light as a thin bright line in the reference. Stroked as a
+  // true ellipse rather than inside the squashed transform, so the line keeps an even weight
+  // instead of thinning out top and bottom.
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(floorCx, floorCy, floorRx * 0.985, floorRy * 0.985, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = Math.max(1, Math.round(floorRx * 0.005));
+  ctx.stroke();
+  ctx.restore();
+
   // Contact shadow hugging the wheels, so the vehicle grips the platform instead of sitting on
-  // it like a decal. It reads again now that the platform is lighter than the backdrop rather
-  // than flat black. The blur scales with the image — a fixed pixel radius is invisible on a
-  // 2000px photo and overwhelming on a thumbnail — and the height falls back to a fraction of
-  // the car's width, since a head-on shot has an almost flat contact band to work from.
+  // it like a decal. It reads because the platform is charcoal rather than flat black. The blur
+  // scales with the image — a fixed pixel radius is invisible on a 2000px photo and
+  // overwhelming on a thumbnail — and the height falls back to a fraction of the car's width,
+  // since a head-on shot has an almost flat contact band to work from.
   ctx.save();
   ctx.filter = `blur(${Math.max(3, Math.round(width * 0.012))}px)`;
   ctx.beginPath();
@@ -305,7 +317,7 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
     Math.max(carWidth * 0.035, halfBand * 0.6),
     0, 0, Math.PI * 2
   );
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fill();
   ctx.restore();
 

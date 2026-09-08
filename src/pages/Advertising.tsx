@@ -560,7 +560,7 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
                     <img
                       src={image}
                       alt={`Upload ${index + 1}`}
-                      className="w-full h-24 object-cover rounded-lg border border-border bg-black"
+                      className="w-full h-24 object-cover rounded-lg border border-border bg-muted"
                     />
 
                     {activeBgIndex === index && (

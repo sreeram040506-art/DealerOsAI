@@ -174,7 +174,7 @@ export default function PhotoStudio() {
                   <img
                     src={image}
                     alt={`Photo ${index + 1}`}
-                    className="w-full h-28 object-cover rounded-lg border border-border bg-black"
+                    className="w-full h-28 object-cover rounded-lg border border-border bg-muted"
                   />
 
                   {activeIndex === index && (
