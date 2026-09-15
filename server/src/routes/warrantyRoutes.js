@@ -1,10 +1,9 @@
 import express from 'express';
-import multer from 'multer';
 import prisma from '../db/prisma.js';
 import { extractVehicleInfo } from '../../services/documentParser.js';
+import { upload } from '../config/upload.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function normalizeVin(value = '') {
   return String(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 17);

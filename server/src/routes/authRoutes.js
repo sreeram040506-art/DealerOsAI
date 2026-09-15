@@ -1,13 +1,25 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 import prisma from '../db/prisma.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
+import { JWT_SECRET } from '../config/jwt.js';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
-router.post('/login', async (req, res, next) => {
+// The general /api/ limiter (500 req/15min) is far too loose to slow down password guessing
+// on its own. Scoped tightly to this one route so it doesn't throttle anything else, and only
+// failed attempts count — a legitimate user retyping a password correctly on attempt 3 never
+// gets close to the limit.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 failed attempts per IP per window
+  message: 'Too many login attempts from this IP. Please try again in 15 minutes.',
+  skipSuccessfulRequests: true,
+});
+
+router.post('/login', loginLimiter, async (req, res, next) => {
   const { email, password } = req.body;
   const normalizedEmail = String(email || '').trim().toLowerCase();
   

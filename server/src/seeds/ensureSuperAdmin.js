@@ -10,7 +10,25 @@ export async function ensureSuperAdmin() {
     { email: 'indra@indraam.com', name: 'Indra Admin' },
     { email: 'sreeram@indraam.com', name: 'Sreeram Admin' },
   ];
-  const password = process.env.SUPER_ADMIN_PASSWORD || '123456789';
+
+  const configuredPassword = process.env.SUPER_ADMIN_PASSWORD;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // These accounts previously fell back to a hardcoded, guessable password whenever
+  // SUPER_ADMIN_PASSWORD wasn't set — and that variable was undocumented, so a default
+  // deploy could easily be running with a known password on two full-access accounts.
+  // In production, refuse to create or repair them without an explicit password rather
+  // than silently seeding a backdoor. Local/dev keeps the old fallback so it still works
+  // with zero setup.
+  if (!configuredPassword && isProduction) {
+    console.error(
+      '[Seed] SUPER_ADMIN_PASSWORD is not set — skipping platform-admin account setup. ' +
+      'Set SUPER_ADMIN_PASSWORD in the environment and restart to create or repair these accounts.'
+    );
+    return;
+  }
+
+  const password = configuredPassword || '123456789';
 
   try {
     // Ensure a system dealership exists (required by schema)

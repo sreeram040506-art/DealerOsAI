@@ -1,5 +1,4 @@
 import express from 'express';
-import multer from 'multer';
 import { readFile } from 'fs/promises';
 import prisma from '../db/prisma.js';
 import { authorizeAdmin } from '../middlewares/authMiddleware.js';
@@ -7,8 +6,7 @@ import { validate, vehicleSchema } from '../utils/validators.js';
 import { vehicleCache } from '../utils/cache.js';
 import { fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
 import { decodeVin, fetchRecalls } from '../services/vinDecoder.js';
-
-const upload = multer({ storage: multer.memoryStorage() });
+import { upload } from '../config/upload.js';
 
 const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 

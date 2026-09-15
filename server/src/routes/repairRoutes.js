@@ -1,11 +1,10 @@
 import express from 'express';
-import multer from 'multer';
 import prisma from '../db/prisma.js';
 import { extractText, extractVinFromText, extractTotalFromText, isValidVin } from '../../services/documentParser.js';
 import { vehicleCache } from '../utils/cache.js';
+import { upload } from '../config/upload.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function pickRepairTotal({ rawText, bodyTotal }) {
   const manualTotal = Number.parseFloat(bodyTotal);

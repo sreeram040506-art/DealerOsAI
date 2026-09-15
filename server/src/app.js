@@ -77,42 +77,28 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('combined'));
 }
 
-// Enable CORS with support for multiple local origins and env overrides
-const defaultAllowedOrigins = [
-  'http://127.0.0.1:8080',
-  'http://localhost:8080',
-  'http://127.0.0.1:8081',
-  'http://localhost:8081',
-];
-
-const envAllowedOrigins = (process.env.CLIENT_URL || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-const allowedOrigins = new Set([...defaultAllowedOrigins, ...envAllowedOrigins]);
-
-function isSafeLocalDevOrigin(origin) {
-  try {
-    const parsed = new URL(origin);
-    const isHttp = parsed.protocol === 'http:' || parsed.protocol === 'https:';
-    if (!isHttp) return false;
-    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-  } catch {
-    return false;
-  }
-}
-
+// CORS is deliberately open to every origin: a dealership user may hit this API from any
+// device on any network (a phone on cellular data, a lot laptop on guest wifi), and there is
+// no fixed set of origins to allowlist against. This is safe specifically because auth is
+// Bearer-token only — every request carries its own token in an Authorization header, so
+// there is nothing ambient (no cookie/session) for a third-party origin to ride on.
+// `credentials: true` is intentionally NOT set: this app never sends or reads cookies, and
+// pairing a wildcard origin with credentials is the CORS misconfiguration every scanner
+// flags, for cases (unlike this one) where a session cookie exists to be stolen.
+//
+// A previous version of this file built an origin allowlist (CLIENT_URL + a handful of
+// localhost ports) but the actual `origin` callback below never consulted it — it always
+// returned `callback(null, true)`. That dead code looked like access control that wasn't
+// actually applied, which is worse than no allowlist at all, so it's been removed rather
+// than left as misleading decoration.
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow all origins to enable access from any device on the network
-    return callback(null, true);
-  },
+  origin: (origin, callback) => callback(null, true),
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  credentials: true
 }));
 
-// Rate limiting to prevent brute-force attacks
+// General API rate limiting — generous, since it covers normal dashboard polling and not
+// just auth. Too loose on its own to stop password guessing at /api/auth/login (500 req/15min
+// is ~33/min), which is what the login-specific limiter below is for.
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 500, // limit each IP to 500 requests per windowMs

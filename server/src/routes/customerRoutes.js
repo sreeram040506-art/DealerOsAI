@@ -1,12 +1,8 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
-import multer from 'multer';
+import { upload } from '../config/upload.js';
 
 const router = express.Router();
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
-});
 const META_PREFIX = 'APH_CUSTOMER_META:';
 
 function buildCustomerNotes(meta) {

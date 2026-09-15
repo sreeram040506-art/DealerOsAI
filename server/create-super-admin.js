@@ -8,7 +8,13 @@ async function createSuperAdmin() {
     { email: 'indra@indraam.com', name: 'Indra Admin' },
     { email: 'sreeram@indraam.com', name: 'Sreeram Admin' }
   ].map((admin) => ({ ...admin, email: admin.email.trim().toLowerCase() }));
-  const password = '123456789';
+
+  const password = process.env.SUPER_ADMIN_PASSWORD;
+  if (!password) {
+    console.error('SUPER_ADMIN_PASSWORD is not set. Refusing to create accounts with a guessable password.');
+    console.error('Run with: SUPER_ADMIN_PASSWORD=<a-strong-password> node create-super-admin.js');
+    process.exit(1);
+  }
 
   // Check if a dealership exists to link to, or create a "System" dealership
   let systemDealership = await prisma.dealership.findFirst({

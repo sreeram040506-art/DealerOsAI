@@ -5,10 +5,9 @@ import { validate, saleSchema } from '../utils/validators.js';
 
 import { salesCache, vehicleCache } from '../utils/cache.js';
 
-import multer from 'multer';
 import { readFile } from 'fs/promises';
 import { fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
-const upload = multer({ storage: multer.memoryStorage() });
+import { upload } from '../config/upload.js';
 
 const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 

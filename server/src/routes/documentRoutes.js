@@ -1,5 +1,4 @@
 import express from 'express';
-import multer from 'multer';
 import { readFile } from 'fs/promises';
 import {
   cleanDispositionName,
@@ -13,12 +12,9 @@ import {
 } from '../../services/documentParser.js';
 import { buildUsedVehiclePdfFileName, fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
 import prisma from '../db/prisma.js';
+import { upload } from '../config/upload.js';
 
 const router = express.Router();
-const upload = multer({ 
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }
-});
 
 const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 let cachedTemplateBuffer = null;
