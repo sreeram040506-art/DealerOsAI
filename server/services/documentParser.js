@@ -617,7 +617,13 @@ function extractVinFromText(text) {
     }
   }
 
-  const vinLabelPattern = /\bVIN\b[:\s]*([A-Z0-9\s-]{17,40})/i;
+  // Matches "VIN:", "V.I.N.", "V.I.N:", and "Vehicle Identification Number:" as PRIORITY
+  // label anchors. The word-only "VIN" version previously missed the dotted "V.I.N." style
+  // used on some receipts — and separately, \bV\.?I\.?N\.?\b would have failed even if tried,
+  // because a trailing \b can't match between a matched "." and the following space (neither
+  // side is a word character, so there's no boundary there). Dropped the trailing \b rather
+  // than chase that: [:\s]* after the label already anchors it to whitespace/colon.
+  const vinLabelPattern = /\b(?:Vehicle\s+Identification\s+Number|V\.?I\.?N\.?)[:\s]*([A-Z0-9\s-]{17,40})/i;
   for (const line of lines) {
     const match = line.match(vinLabelPattern);
     if (!match) continue;
@@ -1315,7 +1321,15 @@ function deinterleaveTwoColumnPanels(text) {
   const leftHeader = headerLine.slice(0, columnStart).trim() || 'BUYER INFORMATION:';
   const rightHeader = headerLine.slice(columnStart).trim() || 'SELLER INFORMATION:';
 
-  const stopPattern = /\b(VEHICLE\s+INFORMATION|ODOMETER\s+READING|SETTLEMENT|ANNOUNCEMENTS|VEHICLE\s+MILEAGE|PRIOR\s+USE|REMARKS|TRADE-?IN\s+INFORMATION)\b/i;
+  // A genuinely THREE-column form (Buyer | Seller | Pickup information, say) only has its
+  // first two headings detected here — this function only ever splits at one boundary. Every
+  // line below the header keeps getting sliced at that one column position regardless, which
+  // is harmless for the two-column party block itself but corrupts whatever comes after it: a
+  // line-item table's rows don't share that alignment, so a long prose cell (a vehicle
+  // description sentence, say) gets cut mid-word at an arbitrary character position and its
+  // tail is misfiled into the wrong column. Stopping at the item-table header avoids ever
+  // reaching those rows, the same way the other section headings below already do.
+  const stopPattern = /\b(VEHICLE\s+INFORMATION|ODOMETER\s+READING|SETTLEMENT|ANNOUNCEMENTS|VEHICLE\s+MILEAGE|PRIOR\s+USE|REMARKS|TRADE-?IN\s+INFORMATION|ITEM\b.{0,25}\bPRICE|QTY\b.{0,25}\bTOTAL|PRICE\s*\(\$\))/i;
   const leftLines = [];
   const rightLines = [];
   let end = headerIndex + 1;
@@ -1571,10 +1585,24 @@ export function extractAcquisitionDetailsFromText(text, dealership = null) {
       const isSellerLine = /\b(SELLER|CONSIGNOR|SOLD BY|FROM)\b/i.test(line);
       if (!isAuctionLine && !isFacilityLine && !isSellerLine) continue;
 
-      const name = cleanRoleName(
+      let name = cleanRoleName(
         line.match(/(?:Facility|Transaction Location|Remit Payment To|Auction Location|Seller|Consignor|Sold By|From)\s*[:#-]?\s*(.+)$/i)?.[1]
         || (isAuctionLine ? line : '')
       );
+      // A two-column form's header ("ACQUIRED FROM:") stands alone on its own line once
+      // deinterleaveTwoColumnPanels has split the panels apart — the party's actual name is
+      // the line directly beneath it, not appended after the colon. The same-line capture
+      // above only ever finds a name when the label and name share a line, which is common
+      // on a single-column form ("Seller: Tulley Auto Group") but never true here.
+      if (!name && !isAuctionLine) {
+        const labelOnly = /^\s*(?:Facility|Transaction Location|Remit Payment To|Auction Location|Seller|Consignor|Sold By|Acquired\s+From|Obtained\s+From|From)\s*[:#-]?\s*$/i.test(line);
+        if (labelOnly) {
+          const nextLine = (lines[i + 1] || '').trim();
+          if (nextLine && !isAddressLikeLine(nextLine) && !isBroadwayValue(nextLine)) {
+            name = cleanRoleName(nextLine);
+          }
+        }
+      }
       const address = findAddressNear(lines, i, 1, 10) || findAddressNear(lines, i, -1, 3);
       const score = (isAuctionLine ? 10 : 0) + (isFacilityLine ? 8 : 0) + (address?.address ? 4 : 0) + (name ? 2 : 0);
       candidates.push({ score, name, address });
@@ -1583,6 +1611,37 @@ export function extractAcquisitionDetailsFromText(text, dealership = null) {
     const best = candidates
       .filter((candidate) => candidate.name || candidate.address?.address)
       .sort((a, b) => b.score - a.score)[0];
+
+    // A lien payoff / account-payoff letter has three parties on the page — the finance
+    // company's own letterhead, the vehicle owner it's addressed to, and sometimes a dealer
+    // named in passing — and only the owner is the acquisition source; none of the
+    // seller/consignor/facility keywords above ever describes them, so the scan above finds
+    // nothing. The one thing every such letter reliably has is a "Dear <NAME>," salutation
+    // naming its recipient — a pattern essentially unique to a personal-letter layout among
+    // the document types this parser otherwise sees (auction bills of sale, dealer forms,
+    // and wholesale receipts don't address a "Dear" line to anyone). Only tried when the
+    // scan above found nothing, so it can never override a real match.
+    if (!best) {
+      const salutationName = lines.join('\n').match(/\bDear\s+([A-Z][A-Z .'-]{2,40}),/)?.[1]?.trim();
+      if (salutationName) {
+        const name = cleanRoleName(salutationName);
+        if (name) {
+          // The same name is usually repeated as the addressee near the top of the letter,
+          // immediately above their own street address — look there first, since the
+          // letterhead's own address (also on the page) belongs to the finance company, not
+          // the owner.
+          const addresseeIndex = lines.findIndex((line) => cleanRoleName(line) === name);
+          const address = addresseeIndex >= 0 ? findAddressNear(lines, addresseeIndex, 1, 3) : null;
+          return clean({
+            purchasedFrom: name,
+            usedVehicleSourceAddress: address?.address,
+            usedVehicleSourceCity: address?.city,
+            usedVehicleSourceState: address?.state,
+            usedVehicleSourceZipCode: address?.zip,
+          });
+        }
+      }
+    }
 
     if (!best) return {};
     return clean({
@@ -1708,6 +1767,16 @@ function extractCmaaAcquisitionDetails(lines) {
 
 function extractKnownAuctionAcquisitionDetails(lines) {
   const fullText = lines.join(' ');
+  // Known-auction invoices are matched by their letterhead/address, not by having a labeled
+  // "Mileage:"/"Odometer:" field — some (OPENLANE) state it inline instead, in a one-line
+  // vehicle description ("2012 Honda Cr-v LX, 111289 miles, <VIN>, color: Gray"). Every
+  // branch below used to return purchasedFrom/address only, so `clean()`'s numeric fallback
+  // (0 for a field it was never given, not null) meant mileage silently came back as 0
+  // rather than being read off the page like it is here. Same pattern already used for
+  // inline mileage on the primary extraction path.
+  const inlineMileage = fullText.match(/\b([\d,]{3,})\s*miles\b/i)?.[1];
+  const mileage = inlineMileage ? Number(inlineMileage.replace(/,/g, '')) : undefined;
+
   if (/\bManheim\b/i.test(fullText) && (/\bMANHEIM\s+NEW\b/i.test(fullText) || /\b123\s+WILLIAMS\s+ST\b/i.test(fullText))) {
     return clean({
       purchasedFrom: 'Manheim New England',
@@ -1715,6 +1784,7 @@ function extractKnownAuctionAcquisitionDetails(lines) {
       usedVehicleSourceCity: 'North Dighton',
       usedVehicleSourceState: 'MA',
       usedVehicleSourceZipCode: '02764',
+      mileage,
     });
   }
 
@@ -1777,6 +1847,7 @@ function extractKnownAuctionAcquisitionDetails(lines) {
       usedVehicleSourceCity: known.city,
       usedVehicleSourceState: known.state,
       usedVehicleSourceZipCode: known.zip,
+      mileage,
     });
   }
 
@@ -2452,7 +2523,11 @@ async function extractVehicleInfoImpl(fileBuffer, mimetype, purpose = "") {
         fallbackResult.year = fallbackResult.year || heuristic.year;
       }
     }
-    return fallbackResult;
+    // Every other extraction path (Vision, Text-LLM, scanned-PDF Vision) already runs its
+    // result through postProcessResult for VIN checksum validation and known-auction name
+    // cleanup — this Word/plain-text fallback path was the one gap, silently skipping
+    // checksum validation entirely for any document that landed here.
+    return postProcessResult(fallbackResult, text, wordPurpose);
   }
 
   return {};
@@ -3571,7 +3646,7 @@ async function ocrImage(fileBuffer) {
 }
 
 // Heuristic: parse Make, Model, Year from raw text when AI misses them
-function parseMakeModelYearFromText(text) {
+export function parseMakeModelYearFromText(text) {
   if (!text) return null;
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (!lines.length) return null;
@@ -3604,6 +3679,17 @@ function parseMakeModelYearFromText(text) {
     .replace(/\s+/g, ' ')
     .trim();
 
+  // A few makes are brand identities, not words — "Bmw" and "Gmc" are wrong the way "Toyota"
+  // title-cased from "TOYOTA" isn't. Title-casing every make uniformly (the previous
+  // behavior) silently mangled these on any document whose source text was upper case, which
+  // used to be masked by this parser's fallback path rarely being exercised end-to-end.
+  const ALL_CAPS_MAKES = new Set(['bmw', 'gmc']);
+  const canonicalMakeCasing = (token) => {
+    const lower = token.toLowerCase();
+    if (ALL_CAPS_MAKES.has(lower)) return lower.toUpperCase();
+    return token[0].toUpperCase() + token.slice(1).toLowerCase();
+  };
+
   const normalizeMake = (value) => {
     if (!value) return value;
     const clean = cleanToken(value);
@@ -3611,10 +3697,10 @@ function parseMakeModelYearFromText(text) {
     const tokens = clean.split(' ').filter(Boolean);
     if (!tokens.length) return '';
     if (tokens.length > 1 && makes.includes(tokens[0].toLowerCase())) {
-      return tokens[0][0].toUpperCase() + tokens[0].slice(1).toLowerCase();
+      return canonicalMakeCasing(tokens[0]);
     }
     const known = tokens.find((token) => makes.includes(token.toLowerCase()));
-    if (known) return known[0].toUpperCase() + known.slice(1).toLowerCase();
+    if (known) return canonicalMakeCasing(known);
     return tokens.map((word) => word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : '').join(' ').trim();
   };
 
@@ -3640,7 +3726,14 @@ function parseMakeModelYearFromText(text) {
       .filter((token) => !bodyTypeRegex.test(token))
       .filter((token) => !colorRegex.test(token))
       .filter((token) => !/^ree$/i.test(token))
-      .filter((token) => !/^manufacturer$/i.test(token));
+      .filter((token) => !/^manufacturer$/i.test(token))
+      // The bare "model: value" pattern above has no stop-word lookahead, so on a packed
+      // row ("MODEL: X3   COLOR 2:") it captures through to the next label's own name —
+      // "Color" survives here even after its "2" is stripped as a trailing digit, since
+      // colorRegex only matches actual color NAMES (black, white, ...), not the label word
+      // itself. Filtering the label vocabulary that can leak in this way is what the two
+      // digit/color filters above were already doing for values; this rounds it out.
+      .filter((token) => !/^(?:color|body|trans|style|cyl|stock|vin|year|make|model|mileage|odometer)$/i.test(token));
     if (!tokens.length) return '';
     const TRIM_CODES = new Set(['LE', 'SE', 'XLE', 'XSE', 'GT', 'LX', 'EX', 'DX', 'RT', 'ST', 'SL', 'LT', 'LS', 'LTZ', 'SS', 'RS', 'SV', 'SR5', 'AWD', 'FWD', '4WD']);
     return tokens
@@ -3685,7 +3778,15 @@ function parseMakeModelYearFromText(text) {
 
   for (const rawLine of lines) {
     const line = rawLine.replace(/[|]+/g, ' ').replace(/\s+/g, ' ').trim();
-    const isBoilerplate = /\b(?:Any\s+Legally\s+Required|Repairs?|Prior\s+To\s+Sale|Warranty|Disclosure|Bill\s+of\s+Sale|Title|Transfer|Certificate|Notice|Lien|Odometer|Exempt|Salvage|Rebuilt|Flood|Branded)\b/i.test(line);
+    // A title-status checkbox row ("NEW  X USED", "SALVAGE REBUILT MODEL: X3   COLOR 2:")
+    // packs its checkbox labels onto the SAME line as a genuine Year/Make/Model/VIN field.
+    // Words like "Salvage"/"Rebuilt"/"Title" below are meant to catch legal-disclosure
+    // paragraphs, but they also appear in these checkbox labels — and a disclosure
+    // paragraph never also carries a colon-delimited vehicle field, so that combination is
+    // the signal that distinguishes a real boilerplate line from a checkbox row that just
+    // happens to share vocabulary with one.
+    const isBoilerplate = /\b(?:Any\s+Legally\s+Required|Repairs?|Prior\s+To\s+Sale|Warranty|Disclosure|Bill\s+of\s+Sale|Title|Transfer|Certificate|Notice|Lien|Odometer|Exempt|Salvage|Rebuilt|Flood|Branded)\b/i.test(line)
+      && !/\b(?:Year|Make|Model|VIN)\s*[:\-]/i.test(line);
     if (isBoilerplate || isVehicleBoilerplateText(line)) continue;
 
     const labeledYear = line.match(/(?:Mfrs?\.?\s*Model\s*Year|Year)\s*[:\-]?\s*((?:19|20)\d{2})/i);
