@@ -1,12 +1,12 @@
 {
-  "name": "auto-profit-hub-server",
+  "name": "dealeros-ai-server",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "cross-env NODE_ENV=production node index.js",
     "build": "prisma generate",
-    "dev": "nodemon index.js"
+    "dev": "cross-env PORT=3001 nodemon index.js"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

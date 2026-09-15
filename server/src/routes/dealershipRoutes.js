@@ -4,10 +4,37 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authenticateToken, authorizeAdmin } from '../middlewares/authMiddleware.js';
 import { injectTenant } from '../middlewares/tenantMiddleware.js';
+import { JWT_SECRET } from '../config/jwt.js';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+// Dealership.slug is a required, unique field, but this endpoint never generated one before
+// calling create() — every self-service registration failed outright with a Prisma
+// "Argument `slug` is missing" error. Slugified from the name, with a short random suffix on
+// a collision (two dealerships choosing the same or very similar name isn't rare) rather than
+// failing registration outright over a cosmetic URL fragment nothing user-facing reads yet.
+function slugifyDealershipName(name) {
+  const base = String(name || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  return base || 'dealership';
+}
+
+async function generateUniqueDealershipSlug(name) {
+  const base = slugifyDealershipName(name);
+  let candidate = base;
+  let attempt = 0;
+  while (await prisma.dealership.findUnique({ where: { slug: candidate } })) {
+    attempt += 1;
+    candidate = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+    if (attempt > 5) break; // extremely unlikely; avoid looping forever
+  }
+  return candidate;
+}
 
 // Public endpoint to register a new dealership and its first admin
 router.post('/register', async (req, res, next) => {
@@ -26,11 +53,12 @@ router.post('/register', async (req, res, next) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const slug = await generateUniqueDealershipSlug(dealershipName);
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Create Dealership
       const dealership = await tx.dealership.create({
-        data: { name: dealershipName }
+        data: { name: dealershipName, slug }
       });
 
       // 2. Create Admin User
