@@ -1,15 +1,29 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, Car, ShoppingCart, 
+import {
+  LayoutDashboard, Car, ShoppingCart,
   Receipt, ChevronLeft, ChevronRight, CalendarDays,
-  LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users, Settings, ShieldCheck, Brain, FileText, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare, Image as ImageIcon
+  LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users, Settings, ShieldCheck, Brain, FileText, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare, Image as ImageIcon,
+  type LucideIcon
 } from 'lucide-react';
 import { useState, memo, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-hooks';
 import { useDealership } from '@/context/DealershipContext';
 
-const navItems = [
+// Explicit shape rather than relying purely on `as const` inference: the Dashboard entry has
+// no `roles` key at all, so the inferred union of the array's element types has one branch
+// without that property — and `item.roles.includes(...)` below can't be checked against a
+// union where some members lack the property. `roles` optional on every element (rather than
+// giving Dashboard a `roles: [...]` list) preserves the existing behavior exactly: an item
+// with no `roles` is visible to every authenticated role, Dashboard included.
+interface NavItem {
+  readonly to: string;
+  readonly icon: LucideIcon;
+  readonly label: string;
+  readonly roles?: readonly string[];
+}
+
+const navItems: readonly NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/inventory', icon: Car, label: 'Inventory', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },

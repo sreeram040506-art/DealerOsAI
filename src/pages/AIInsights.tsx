@@ -510,7 +510,11 @@ export default function AIInsights() {
 
   const summary = data?.summary;
   const highlights = data?.highlights;
-  const insights = data?.insights || [];
+  // Memoized so the reference is stable across renders when data.insights hasn't changed —
+  // `data?.insights || []` on its own hands back a brand-new array every render whenever
+  // insights is empty/undefined, which defeated the memoization on categories/filteredInsights
+  // below (their `[insights]` dependency looked "changed" every render even when nothing did).
+  const insights = useMemo(() => data?.insights || [], [data?.insights]);
   const healthScore = data?.healthScore ?? 0;
 
   // Extract categories dynamically

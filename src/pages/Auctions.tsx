@@ -208,9 +208,9 @@ export default function Auctions() {
               <button
                 className="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
                 onClick={handleImport}
-                disabled={importMutation.isLoading}
+                disabled={importMutation.isPending}
               >
-                {importMutation.isLoading ? "Importing..." : "Import Auction Feed"}
+                {importMutation.isPending ? "Importing..." : "Import Auction Feed"}
               </button>
             </div>
           </section>
@@ -313,9 +313,9 @@ export default function Auctions() {
               <button
                 className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
                 onClick={handleCaptureSubmit}
-                disabled={acquisitionMutation.isLoading}
+                disabled={acquisitionMutation.isPending}
               >
-                {acquisitionMutation.isLoading ? "Saving..." : "Capture Physical Auction"}
+                {acquisitionMutation.isPending ? "Saving..." : "Capture Physical Auction"}
               </button>
             </div>
           </section>

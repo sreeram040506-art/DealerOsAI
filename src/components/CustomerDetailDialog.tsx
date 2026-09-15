@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, Car, Download, FileText } from 'lucide-react';
@@ -22,15 +22,7 @@ export default function CustomerDetailDialog({ customerId, open, onOpenChange }:
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
 
-  useEffect(() => {
-    if (open && customerId) {
-      loadCustomerDetails();
-    } else {
-      setCustomer(null);
-    }
-  }, [open, customerId]);
-
-  const loadCustomerDetails = async () => {
+  const loadCustomerDetails = useCallback(async () => {
     setLoading(true);
     try {
       const response = await apiFetch(`/customers/${customerId}`, token);
@@ -42,7 +34,15 @@ export default function CustomerDetailDialog({ customerId, open, onOpenChange }:
     } finally {
       setLoading(false);
     }
-  };
+  }, [customerId, token, logout, onOpenChange]);
+
+  useEffect(() => {
+    if (open && customerId) {
+      loadCustomerDetails();
+    } else {
+      setCustomer(null);
+    }
+  }, [open, customerId, loadCustomerDetails]);
 
   const handlePreview = (doc: any) => {
     if (!doc.base64) {

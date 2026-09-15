@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageSquare, X, Send, Bot, User, Loader2, Volume2, VolumeX, Mic } from 'lucide-react';
 import { useVoice } from '@/hooks/useVoice';
 import { useAuth } from '@/context/auth-hooks';
@@ -32,7 +32,7 @@ export default function AIChatAssistant() {
     messagesRef.current = messages;
   }, [messages]);
 
-  const sendMessage = async (rawText: string) => {
+  const sendMessage = useCallback(async (rawText: string) => {
     const userMsg = rawText.trim();
     if (!userMsg || isLoadingRef.current) return;
 
@@ -58,20 +58,20 @@ export default function AIChatAssistant() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to communicate with AI');
 
-      const withReply = [...newMessages, { role: 'assistant', content: data.reply }];
+      const withReply: Message[] = [...newMessages, { role: 'assistant', content: data.reply }];
       messagesRef.current = withReply;
       setMessages(withReply);
     } catch (error: any) {
       console.error('Chat error:', error);
       toast.error(error.message || 'Error communicating with AI assistant.');
-      const withError = [...newMessages, { role: 'assistant', content: 'Sorry, I am having trouble accessing the business data right now. Please try again later.' }];
+      const withError: Message[] = [...newMessages, { role: 'assistant', content: 'Sorry, I am having trouble accessing the business data right now. Please try again later.' }];
       messagesRef.current = withError;
       setMessages(withError);
     } finally {
       setIsLoading(false);
       isLoadingRef.current = false;
     }
-  };
+  }, [token]);
 
   const handleVoiceResult = React.useCallback((transcript: string) => {
     setInput(transcript);

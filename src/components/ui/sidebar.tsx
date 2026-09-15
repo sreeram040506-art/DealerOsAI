@@ -20,17 +20,12 @@ const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
-type SidebarContext = {
-  state: "expanded" | "collapsed";
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  openMobile: boolean;
-  setOpenMobile: (open: boolean) => void;
-  isMobile: boolean;
-  toggleSidebar: () => void;
-};
-
-const SidebarContext = React.createContext<SidebarContext | null>(null);
+// SidebarContext (both the type and the Provider/Consumer value) comes from ./sidebar-hooks
+// rather than being redeclared here. It previously WAS redeclared here, shadowing the
+// imported one — meaning this file's <SidebarContext.Provider> populated a context object
+// distinct from the one useSidebar() (in sidebar-hooks.ts) actually reads from, so
+// useSidebar() would throw "must be used within a SidebarProvider" even from directly
+// inside this file's own SidebarProvider. Using the single shared context object fixes that.
 
 const SidebarProvider = React.forwardRef<
   HTMLDivElement,

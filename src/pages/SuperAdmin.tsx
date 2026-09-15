@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/auth-hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,7 +74,7 @@ const SuperAdmin = () => {
     password: ''
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [statsRes, dealsRes, analyticsRes] = await Promise.all([
         fetch(apiUrl('/super-admin/stats'), { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -94,11 +94,11 @@ const SuperAdmin = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token, logout]);
 
   useEffect(() => {
     if (token) fetchData();
-  }, [token]);
+  }, [token, fetchData]);
 
   const handleCreateDealership = async (e: React.FormEvent) => {
     e.preventDefault();

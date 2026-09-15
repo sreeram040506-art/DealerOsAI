@@ -23,6 +23,8 @@ export interface Vehicle {
   reconStage?: string;
   titleNumber?: string;
   daysInInventory: number;
+  createdAt?: string;
+  updatedAt?: string;
   documentBase64?: string | null;
   hasDocument?: boolean;
   hasSourceDocument?: boolean;

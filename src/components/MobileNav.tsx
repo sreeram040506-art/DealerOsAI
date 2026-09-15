@@ -1,7 +1,8 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, Car, ShoppingCart, 
-  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck, Brain, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare, CalendarDays, Image as ImageIcon
+import {
+  LayoutDashboard, Car, ShoppingCart,
+  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck, Brain, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare, CalendarDays, Image as ImageIcon,
+  type LucideIcon
 } from 'lucide-react';
 import { useState, useCallback, memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -9,7 +10,16 @@ import { useAuth } from '@/context/auth-hooks';
 import { useDealership } from '@/context/DealershipContext';
 import { Button } from './ui/button';
 
-const navItems = [
+// See AppSidebar.tsx for why `roles` is typed as optional on every element rather than
+// letting `as const` infer it: one entry per array (Home / Dashboard) omits it entirely.
+interface NavItem {
+  readonly to: string;
+  readonly icon: LucideIcon;
+  readonly label: string;
+  readonly roles?: readonly string[];
+}
+
+const navItems: readonly NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Home' },
   { to: '/inventory', icon: Car, label: 'Cars', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
@@ -17,7 +27,7 @@ const navItems = [
   { to: '/documents-forms', icon: FileArchive, label: 'Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
 ] as const;
 
-const drawerItems = [
+const drawerItems: readonly NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/inventory', icon: Car, label: 'Inventory', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
