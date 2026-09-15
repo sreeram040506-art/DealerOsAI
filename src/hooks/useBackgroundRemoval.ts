@@ -254,8 +254,14 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   // the disc reads as lying behind the car, the way a camera above the turntable would see it.
   // Sizing this against the frame instead only matches when the car happens to fill the shot,
   // and swamps the picture whenever it doesn't.
-  const floorRx = carWidth * 0.71;
+  const floorRx = carWidth * 0.68;
   const halfBand = Math.max(1, (contactBottom - contactTop) / 2);
+
+  // Where the wheels meet the disc, as a fraction of its depth measured from the centre. The
+  // reference platform puts that line about seven-eighths of the way down, so the disc reads
+  // mostly as lying behind the car with only a thin apron in front. Nearer the middle and the
+  // car looks adrift in a wide pool of platform rather than parked on it.
+  const CONTACT_DEPTH = 0.86;
 
   // The platform's far edge has to stay below the roofline. Its depth is derived from the
   // car's WIDTH, but a low sedan is far wider relative to its height than the tall vehicle
@@ -264,11 +270,14 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   // disc's top edge stays inside the vehicle's own height.
   const carTop = car ? car.minY : 0;
   const carHeight = Math.max(1, contactBottom - carTop);
-  const deepestThatClearsRoof = Math.max(1, (contactBottom - (carTop + carHeight * 0.15)) / 1.72);
+  const deepestThatClearsRoof = Math.max(
+    1,
+    (contactBottom - (carTop + carHeight * 0.15)) / (1 + CONTACT_DEPTH)
+  );
   // Seating the wheels still wins over that cap: a car hovering off the disc looks worse than
   // a disc that reaches a little high on a steeply-angled shot.
-  const floorRy = Math.max(Math.min(floorRx * 0.4, deepestThatClearsRoof), halfBand * 1.6);
-  const floorCy = contactBottom - floorRy * 0.72;
+  const floorRy = Math.max(Math.min(floorRx * 0.43, deepestThatClearsRoof), halfBand * 1.6);
+  const floorCy = contactBottom - floorRy * CONTACT_DEPTH;
   const floorCx = carCx;
 
   // Dark charcoal platform. Against the white screen the turntable reads as a solid dark disc,
@@ -281,10 +290,10 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   ctx.translate(floorCx, floorCy);
   ctx.scale(1, floorRy / floorRx);
   const floorGradient = ctx.createRadialGradient(0, 0, floorRx * 0.05, 0, 0, floorRx);
-  floorGradient.addColorStop(0, '#2a2a2e');
-  floorGradient.addColorStop(0.75, '#33333a');
-  floorGradient.addColorStop(0.97, '#3e3e46');
-  floorGradient.addColorStop(1, 'rgba(62,62,70,0)');
+  floorGradient.addColorStop(0, '#33333a');
+  floorGradient.addColorStop(0.75, '#3a3a42');
+  floorGradient.addColorStop(0.97, '#42424b');
+  floorGradient.addColorStop(1, 'rgba(66,66,75,0)');
   ctx.beginPath();
   ctx.arc(0, 0, floorRx, 0, Math.PI * 2);
   ctx.fillStyle = floorGradient;
@@ -297,27 +306,32 @@ async function compositeOntoStudioFloor(blob: Blob): Promise<Blob> {
   ctx.save();
   ctx.beginPath();
   ctx.ellipse(floorCx, floorCy, floorRx * 0.985, floorRy * 0.985, 0, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
   ctx.lineWidth = Math.max(1, Math.round(floorRx * 0.005));
   ctx.stroke();
   ctx.restore();
 
-  // Contact shadow hugging the wheels, so the vehicle grips the platform instead of sitting on
-  // it like a decal. It reads because the platform is charcoal rather than flat black. The blur
-  // scales with the image — a fixed pixel radius is invisible on a 2000px photo and
-  // overwhelming on a thumbnail — and the height falls back to a fraction of the car's width,
-  // since a head-on shot has an almost flat contact band to work from.
+  // Contact shadow pooling under the car so it grips the platform instead of sitting on it like
+  // a decal. The falloff is radial rather than a flat ellipse: a uniform disc of black reads as
+  // a painted blob even once blurred, and at the opacity needed to show up at the tyres it
+  // drags the middle of the platform down to near-black — which is what buried the charcoal
+  // before. Fading to nothing at the rim keeps the darkness where the car actually is. The blur
+  // scales with the image, since a fixed pixel radius is invisible on a 2000px photo and
+  // overwhelming on a thumbnail, and the depth falls back to a fraction of the car's width
+  // because a head-on shot has an almost flat contact band to work from.
+  const shadowRx = carWidth * 0.42;
+  const shadowRy = Math.max(carWidth * 0.045, halfBand * 0.75);
   ctx.save();
-  ctx.filter = `blur(${Math.max(3, Math.round(width * 0.012))}px)`;
+  ctx.filter = `blur(${Math.max(2, Math.round(width * 0.008))}px)`;
+  ctx.translate(carCx, contactBottom - halfBand * 0.3);
+  ctx.scale(1, shadowRy / shadowRx);
+  const shadowGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, shadowRx);
+  shadowGradient.addColorStop(0, 'rgba(0,0,0,0.42)');
+  shadowGradient.addColorStop(0.55, 'rgba(0,0,0,0.24)');
+  shadowGradient.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.beginPath();
-  ctx.ellipse(
-    carCx,
-    contactBottom - halfBand * 0.35,
-    carWidth * 0.44,
-    Math.max(carWidth * 0.035, halfBand * 0.6),
-    0, 0, Math.PI * 2
-  );
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.arc(0, 0, shadowRx, 0, Math.PI * 2);
+  ctx.fillStyle = shadowGradient;
   ctx.fill();
   ctx.restore();
 
