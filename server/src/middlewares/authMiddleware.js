@@ -3,7 +3,9 @@ import { JWT_SECRET } from '../config/jwt.js';
 
 export const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
+  // Header only. Tokens used to be accepted as ?token= for direct-download links, which put
+  // them in server access logs and browser history; downloads now fetch with the header.
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) return res.status(401).json({ message: 'No token provided' });
 
@@ -20,6 +22,13 @@ export const authenticateToken = (req, res, next) => {
 export const authorizeAdmin = (req, res, next) => {
   if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN') {
     return res.status(403).json({ message: 'Admin access required' });
+  }
+  next();
+};
+
+export const authorizeRoles = (...roles) => (req, res, next) => {
+  if (!roles.includes(req.user?.role)) {
+    return res.status(403).json({ message: 'You do not have permission to perform this action' });
   }
   next();
 };

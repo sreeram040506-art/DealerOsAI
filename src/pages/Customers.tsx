@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Car, Download, FileUp, Loader2, Mail, MapPin, Pencil, Phone, Plus, Search, Users } from 'lucide-react';
 import { toast } from '@/components/ui/toast-utils';
 import { useAuth } from '@/context/auth-hooks';
-import { apiFetch, apiUrl, handleApiResponse } from '@/lib/api';
+import { apiFetch, apiUrl, handleApiResponse, downloadFile } from '@/lib/api';
 import CustomerDetailDialog from '@/components/CustomerDetailDialog';
 
 const CUSTOMER_CATEGORIES = ['Bought Vehicle', 'Came for Visit', 'Lead', 'Follow Up', 'Other'] as const;
@@ -609,11 +609,9 @@ export default function Customers() {
                         size="sm"
                         className="text-[10px] font-black uppercase tracking-widest"
                         onClick={() => {
-                          const iframe = document.createElement('iframe');
-                          iframe.style.display = 'none';
-                          iframe.src = apiUrl(`/customers/documents/${doc.id}/download?token=${encodeURIComponent(token || '')}`);
-                          document.body.appendChild(iframe);
-                          setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 60000);
+                          if (!token) return;
+                          downloadFile(`/customers/documents/${doc.id}/download`, token, doc.fileName)
+                            .catch((err) => toast.error(err.message));
                         }}
                       >
                         Download

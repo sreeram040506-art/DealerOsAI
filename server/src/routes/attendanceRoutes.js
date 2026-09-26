@@ -42,6 +42,12 @@ router.get('/', async (req, res, next) => {
       return res.status(400).json({ message: 'from date must be on or before to date' });
     }
 
+    // The response has one entry per day per user, so bound the range.
+    const MAX_RANGE_DAYS = 366;
+    if ((end.getTime() - start.getTime()) / 86400000 > MAX_RANGE_DAYS) {
+      return res.status(400).json({ message: `Date range cannot exceed ${MAX_RANGE_DAYS} days` });
+    }
+
     const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'SUPER_ADMIN';
 
     const users = await prisma.user.findMany({
@@ -135,8 +141,9 @@ router.post('/mark', async (req, res, next) => {
       return res.status(400).json({ message: "status must be 'PRESENT' or 'ABSENT'" });
     }
 
+    // parseDateOnly already returns UTC midnight. Re-zeroing with local setHours() shifted the
+    // stored date back a day on any server east of UTC.
     const day = new Date(d);
-    day.setHours(0, 0, 0, 0);
 
     const existing = await prisma.attendanceRecord.findUnique({
       where: {
@@ -184,8 +191,9 @@ router.patch('/:userId/:date', authorizeAdmin, async (req, res, next) => {
       return res.status(400).json({ message: "status must be 'PRESENT' or 'ABSENT'" });
     }
 
+    // parseDateOnly already returns UTC midnight. Re-zeroing with local setHours() shifted the
+    // stored date back a day on any server east of UTC.
     const day = new Date(d);
-    day.setHours(0, 0, 0, 0);
 
     const targetUser = await prisma.user.findFirst({
       where: { id: userId, dealershipId: req.dealershipId },

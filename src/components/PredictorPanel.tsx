@@ -3,7 +3,7 @@ import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
 
 export default function PredictorPanel() {
-  const { token, logout } = useAuth();
+  const { token, logout, user } = useAuth();
   const [scores, setScores] = useState<any[]>([]);
   const [models, setModels] = useState<any[]>([]);
   const [question, setQuestion] = useState('');
@@ -73,7 +73,10 @@ export default function PredictorPanel() {
         <div className="flex gap-2 items-center">
           <button className="btn" onClick={fetchScores}>Fetch Regional Demand Scores</button>
           <button className="btn" onClick={fetchModels}>List Models</button>
-          <button className="btn" onClick={runCampaign}>Run Swap Campaign</button>
+          {/* Platform-wide action; the server only allows super admins to run it. */}
+          {user?.role === 'SUPER_ADMIN' && (
+            <button className="btn" onClick={runCampaign}>Run Swap Campaign</button>
+          )}
         </div>
         <div className="mt-2">
           {scores.map(s => (

@@ -3,6 +3,23 @@ import prisma from '../db/prisma.js';
 
 const router = express.Router();
 
+// A channel is visible to the dealership that owns it, or — for shared inter-dealership
+// channels, which have no owner — only to its members.
+async function canAccessChannel(channelId, req) {
+  if (!/^[a-f0-9]{24}$/i.test(String(channelId))) return false;
+  const channel = await prisma.channel.findFirst({
+    where: {
+      id: channelId,
+      OR: [
+        { dealershipId: req.dealershipId },
+        { members: { some: { userId: req.user.id } } },
+      ],
+    },
+    select: { id: true },
+  });
+  return Boolean(channel);
+}
+
 // GET /api/communication/channels
 router.get('/channels', async (req, res) => {
   try {
@@ -95,6 +112,9 @@ router.post('/channels', async (req, res) => {
 router.get('/channels/:id/messages', async (req, res) => {
   try {
     const channelId = req.params.id;
+    if (!(await canAccessChannel(channelId, req))) {
+      return res.status(404).json({ message: 'Channel not found' });
+    }
     const messages = await prisma.message.findMany({
       where: { channelId: channelId },
       orderBy: { createdAt: 'asc' },
@@ -134,8 +154,11 @@ router.post('/channels/:id/messages', async (req, res) => {
     const { text } = req.body;
     const userId = req.user.id;
 
-    if (!text || !text.trim()) {
+    if (!text || typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ message: 'Message text is required' });
+    }
+    if (!(await canAccessChannel(channelId, req))) {
+      return res.status(404).json({ message: 'Channel not found' });
     }
 
     const message = await prisma.message.create({

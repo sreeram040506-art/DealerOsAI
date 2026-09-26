@@ -63,7 +63,10 @@ export const validate = (schema) => (req, res, next) => {
     req.body = validData;
     next();
   } catch (error) {
-    const errors = error.errors.map((e) => ({
+    // zod v4 reports problems on `issues`; `errors` was the v3 name and is now undefined.
+    const issues = error?.issues ?? error?.errors;
+    if (!Array.isArray(issues)) return next(error);
+    const errors = issues.map((e) => ({
       path: e.path.join('.'),
       message: e.message,
     }));

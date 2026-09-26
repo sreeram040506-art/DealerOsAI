@@ -79,3 +79,32 @@ export async function handleApiResponse<T>(response: Response, logout?: () => vo
 
   return response.json() as Promise<T>;
 }
+
+/**
+ * Downloads a file from an authenticated endpoint. The token travels in the Authorization
+ * header; it used to be put in the URL (?token=) for a hidden iframe, which leaked it into
+ * server access logs and browser history.
+ */
+export async function downloadFile(path: string, token: string, fallbackName = 'download') {
+  const response = await apiFetch(path, token);
+  if (!response.ok) {
+    let message = `Download failed (${response.status})`;
+    try {
+      message = (await response.json()).message || message;
+    } catch {
+      // non-JSON error body; keep the generic message
+    }
+    throw new Error(message);
+  }
+
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const fileName = /filename="?([^";]+)"?/i.exec(disposition)?.[1] || fallbackName;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}

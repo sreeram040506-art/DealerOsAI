@@ -12,7 +12,7 @@ import SwapNetworkDialog from '@/components/SwapNetworkDialog';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { apiUrl, apiFetch, handleApiResponse } from '@/lib/api';
+import { apiUrl, apiFetch, handleApiResponse, downloadFile } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
@@ -96,13 +96,8 @@ export default function Dashboard() {
     if (type === 'source') typeParam = '&type=source';
     else if (type === 'bill_of_sale') typeParam = '&type=bill_of_sale';
     
-    const downloadUrl = apiUrl(`/vehicles/${vehicle.id}/document?token=${encodeURIComponent(token)}${typeParam}`);
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = downloadUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 60000);
     toast.success(`Downloading ${type.replace('_', ' ')} for ${vehicle.make} ${vehicle.model}...`);
+    downloadFile(`/vehicles/${vehicle.id}/document?${typeParam.slice(1)}`, token).catch((err) => toast.error(err.message));
   };
 
   // Map data with fallbacks (memoized to avoid stale closures / infinite re-renders)

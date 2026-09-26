@@ -115,7 +115,7 @@ export default function App() {
                   </ProtectedRoute>
                 } />
                 <Route path="/marketing" element={
-                  <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
+                  <ProtectedRoute roles={['ADMIN']}>
                     <Advertising />
                   </ProtectedRoute>
                 } />
@@ -140,12 +140,12 @@ export default function App() {
                   </ProtectedRoute>
                 } />
                 <Route path="/advertising" element={
-                  <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
+                  <ProtectedRoute roles={['ADMIN']}>
                     <Advertising />
                   </ProtectedRoute>
                 } />
                 <Route path="/expenses" element={
-                  <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
+                  <ProtectedRoute roles={['ADMIN']}>
                     <Expenses />
                   </ProtectedRoute>
                 } />

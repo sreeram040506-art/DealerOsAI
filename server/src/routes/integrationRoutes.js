@@ -1,6 +1,8 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
 
+import { pickFields } from '../utils/pickFields.js';
+
 const router = express.Router();
 
 router.get('/', async (req, res, next) => {
@@ -41,7 +43,9 @@ router.put('/:id', async (req, res, next) => {
   try {
     const existing = await prisma.integrationConnection.findFirst({ where: { id: req.params.id, dealershipId: req.dealershipId } });
     if (!existing) return res.status(404).json({ message: 'Integration not found' });
-    const { lastSyncAt, ...rest } = req.body;
+    const { lastSyncAt, ...rest } = pickFields(req.body, [
+      'name', 'provider', 'status', 'webhookUrl', 'lastSyncAt', 'errorMessage', 'metadata',
+    ]);
     const row = await prisma.integrationConnection.update({
       where: { id: req.params.id },
       data: {

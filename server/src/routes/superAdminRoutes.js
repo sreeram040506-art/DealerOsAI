@@ -2,12 +2,13 @@ import express from 'express';
 import prisma from '../db/prisma.js';
 import bcrypt from 'bcryptjs';
 import { authenticateToken, authorizeSuperAdmin } from '../middlewares/authMiddleware.js';
+import { requireActiveAccount, invalidateAccountCache } from '../middlewares/tenantMiddleware.js';
 
 const router = express.Router();
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
 // All routes here require Super Admin privileges
-router.use(authenticateToken, authorizeSuperAdmin);
+router.use(authenticateToken, requireActiveAccount, authorizeSuperAdmin);
 
 // 1. Get Platform Stats
 router.get('/stats', async (req, res, next) => {
@@ -170,6 +171,7 @@ router.delete('/dealerships/:id', async (req, res, next) => {
     }
 
     await prisma.dealership.delete({ where: { id: req.params.id } });
+    invalidateAccountCache();
 
     console.warn(`[SuperAdmin] Dealership "${dealership.name}" (${req.params.id}) deleted by ${req.user?.email}. Removed:`, deleted);
     res.json({
@@ -192,6 +194,7 @@ router.patch('/dealerships/:id/toggle', async (req, res, next) => {
       where: { id: req.params.id },
       data: { isActive: !dealership.isActive }
     });
+    invalidateAccountCache();
 
     res.json(updated);
   } catch (err) {

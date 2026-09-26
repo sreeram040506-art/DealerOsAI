@@ -48,14 +48,12 @@ router.get('/swap-network', async (req, res, next) => {
         dealershipId: { not: req.dealershipId },
         status: 'Available',
       },
+      // Partner dealerships' purchase prices and repair costs are their private business data,
+      // so only listing details go out — no purchase or repair records.
       include: {
         dealership: {
           select: { id: true, name: true, phone: true, email: true, slug: true }
-        },
-        purchase: {
-          select: { totalPurchaseCost: true, purchasePrice: true, transportCost: true }
-        },
-        repairs: true
+        }
       }
     });
 
@@ -63,11 +61,6 @@ router.get('/swap-network', async (req, res, next) => {
     const swapVehicles = vehicles.map(v => {
       const purchaseDate = v.purchaseDate ? new Date(v.purchaseDate) : new Date(v.createdAt);
       const days = v.daysInInventory || Math.max(0, Math.floor((now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24)));
-      const purchasePrice = v.purchase?.purchasePrice || 0;
-      const transportCost = v.purchase?.transportCost || 0;
-      const partsCost = v.repairs?.reduce((sum, r) => sum + (r.partsCost || 0), 0) || 0;
-      const laborCost = v.repairs?.reduce((sum, r) => sum + (r.laborCost || 0), 0) || 0;
-      const totalCostBasis = purchasePrice + transportCost + partsCost + laborCost;
 
       return {
         id: v.id,
@@ -80,8 +73,6 @@ router.get('/swap-network', async (req, res, next) => {
         status: v.status,
         reconStage: v.reconStage,
         daysInInventory: days,
-        purchasePrice,
-        totalCostBasis,
         dealership: v.dealership
       };
     }).filter(v => v.daysInInventory >= 90);
@@ -120,9 +111,12 @@ router.post('/swap-network/propose', async (req, res, next) => {
     // Fetch my vehicle if provided
     let myVehicle = null;
     if (myVehicleId) {
-      myVehicle = await prisma.vehicle.findUnique({
-        where: { id: myVehicleId }
+      myVehicle = await prisma.vehicle.findFirst({
+        where: { id: myVehicleId, dealershipId: myDealershipId }
       });
+      if (!myVehicle) {
+        return res.status(404).json({ message: 'The vehicle you offered was not found in your inventory.' });
+      }
     }
 
     // Fetch my dealership details
@@ -249,7 +243,7 @@ router.get('/:id/document', async (req, res, next) => {
 
     const buffer = Buffer.from(base64, 'base64');
     
-    const safeFileName = `${prefix}${vehicle.make}_${vehicle.model}_${(vehicle.vin || 'unk').slice(-4)}.${extension}`;
+    const safeFileName = `${prefix}${vehicle.make}_${vehicle.model}_${(vehicle.vin || 'unk').slice(-4)}.${extension}`.replace(/[^\w.\- ]+/g, '_');
     const contentType = extension === 'pdf' ? 'application/pdf' : 'image/jpeg';
 
     res.writeHead(200, {

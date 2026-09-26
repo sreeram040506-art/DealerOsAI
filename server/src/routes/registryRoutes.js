@@ -4,6 +4,8 @@ import prisma from '../db/prisma.js';
 import { fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
 import { readFile } from 'fs/promises';
 
+import { pickFields } from '../utils/pickFields.js';
+
 const router = express.Router();
 const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 
@@ -126,7 +128,13 @@ router.get('/:id/data', async (req, res, next) => {
 router.patch('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    // documentBase64 is regenerated below and the source upload is immutable, so neither is editable.
+    const updates = pickFields(req.body, [
+      'vin', 'make', 'model', 'year', 'color', 'mileage', 'titleNumber', 'purchaseDate',
+      'purchasedFrom', 'sellerAddress', 'sellerCity', 'sellerState', 'sellerZip', 'documentType',
+      'disposedTo', 'disposedAddress', 'disposedCity', 'disposedState', 'disposedZip',
+      'disposedDate', 'disposedPrice', 'disposedOdometer', 'disposedDlNumber', 'disposedDlState',
+    ]);
 
     // 1. Get current log to ensure it exists and belongs to THIS dealership
     const currentLog = await prisma.documentRegistry.findFirst({
@@ -275,7 +283,7 @@ router.get('/:id/download', async (req, res, next) => {
        extension = 'pdf';
     }
 
-    const safeFileName = `${prefix}${(log.documentType || 'Document').replace(/\s+/g, '_')}_${(log.sourceFileName || 'log').split('.')[0]}.${extension}`;
+    const safeFileName = `${prefix}${(log.documentType || 'Document').replace(/\s+/g, '_')}_${(log.sourceFileName || 'log').split('.')[0]}.${extension}`.replace(/[^\w.\- ]+/g, '_');
     
     const contentType = extension === 'pdf' ? 'application/pdf' : 
                         extension === 'png' ? 'image/png' : 

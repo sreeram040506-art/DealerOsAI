@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { runSwapCampaign } from '../services/interDealershipCampaign.js';
+import { authorizeSuperAdmin } from '../middlewares/authMiddleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -322,7 +323,8 @@ router.post('/assistant', async (req, res, next) => {
 });
 
 // POST /predictor/campaign/run - manually trigger the inter-dealership swap campaign
-router.post('/campaign/run', async (req, res, next) => {
+// Platform-wide: posts proposals into every dealership's channels, so it is not a per-tenant action.
+router.post('/campaign/run', authorizeSuperAdmin, async (req, res, next) => {
   try {
     const result = await runSwapCampaign();
     res.json(result);

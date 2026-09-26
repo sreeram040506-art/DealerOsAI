@@ -1,13 +1,14 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
-import { authenticateToken, authorizeAdmin } from '../middlewares/authMiddleware.js';
+import { authorizeAdmin, authorizeRoles } from '../middlewares/authMiddleware.js';
 import { validate, advertisingSchema } from '../utils/validators.js';
 import { adsCache } from '../utils/cache.js';
 
 const router = express.Router();
 
-// Only Admin can see/manage advertising spend
-router.use(authorizeAdmin);
+// Managers can read advertising spend (Reports and Cash Flow are built from it); only Admin can change it.
+const canRead = authorizeRoles('ADMIN', 'MANAGER', 'SUPER_ADMIN');
+router.use((req, res, next) => (req.method === 'GET' ? canRead : authorizeAdmin)(req, res, next));
 
 router.get('/', async (req, res, next) => {
   try {

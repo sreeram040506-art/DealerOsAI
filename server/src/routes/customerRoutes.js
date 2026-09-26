@@ -356,7 +356,7 @@ router.get('/documents/:docId/download', async (req, res, next) => {
     res.writeHead(200, {
       'Content-Type': doc.mimeType || 'application/octet-stream',
       'Content-Length': buffer.length,
-      'Content-Disposition': `attachment; filename="${doc.fileName || 'customer-document'}"`,
+      'Content-Disposition': `attachment; filename="${String(doc.fileName || 'customer-document').replace(/[^\w.\- ]+/g, '_')}"`,
     });
     res.end(buffer);
   } catch (err) {

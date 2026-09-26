@@ -13,7 +13,7 @@ import EditSaleDialog from '@/components/EditSaleDialog';
 import { Vehicle } from '@/types/inventory';
 import { FileText, Trash2, Loader2, Receipt, ShoppingCart, Download, Upload, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, downloadFile } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 import { 
   DropdownMenu, 
@@ -106,13 +106,8 @@ export default function Sales() {
     if (type === 'source') typeParam = '&type=source';
     else if (type === 'sale') typeParam = '&type=sale';
     
-    const downloadUrl = apiUrl(`/vehicles/${vehicle.id}/document?token=${encodeURIComponent(token)}${typeParam}`);
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = downloadUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 60000);
     toast.success(`Downloading ${type.replace('_', ' ')} for ${vehicle.make} ${vehicle.model}...`);
+    downloadFile(`/vehicles/${vehicle.id}/document?${typeParam.slice(1)}`, token).catch((err) => toast.error(err.message));
   };
 
   const handleUploadBillOfSale = (vin?: string) => {

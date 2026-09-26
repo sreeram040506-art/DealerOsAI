@@ -3,6 +3,8 @@ import prisma from '../db/prisma.js';
 import { extractVehicleInfo } from '../../services/documentParser.js';
 import { upload } from '../config/upload.js';
 
+import { pickFields } from '../utils/pickFields.js';
+
 const router = express.Router();
 
 function normalizeVin(value = '') {
@@ -110,7 +112,10 @@ router.put('/:id', async (req, res, next) => {
     const existing = await prisma.insurancePolicy.findFirst({ where: { id: req.params.id, dealershipId: req.dealershipId } });
     if (!existing) return res.status(404).json({ message: 'Insurance policy not found' });
 
-    const { effectiveDate, expirationDate, ...rest } = req.body;
+    const { effectiveDate, expirationDate, ...rest } = pickFields(req.body, [
+      'provider', 'policyNumber', 'effectiveDate', 'expirationDate', 'coverage', 'customerName',
+      'vin', 'make', 'model', 'year', 'status', 'notes',
+    ]);
     const row = await prisma.insurancePolicy.update({
       where: { id: req.params.id },
       data: {

@@ -14,7 +14,7 @@ import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import VinDecoderDialog from '@/components/VinDecoderDialog';
 import ReconKanbanBoard from '@/components/ReconKanbanBoard';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, downloadFile } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 import { 
   AlertDialog, 
@@ -138,13 +138,8 @@ export default function Inventory() {
     // Using a different endpoint for direct vehicle download if available, 
     // or leveraging the registry endpoint if that's how the backend is structured.
     // Assuming /vehicles/:id/download exists based on naming conventions
-    const downloadUrl = apiUrl(`/vehicles/${vehicle.id}/document?token=${encodeURIComponent(token)}${typeParam}`);
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = downloadUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 60000);
     toast.success(`Downloading ${type.replace('_', ' ')} for ${vehicle.make} ${vehicle.model}...`);
+    downloadFile(`/vehicles/${vehicle.id}/document?${typeParam.slice(1)}`, token).catch((err) => toast.error(err.message));
   };
 
 

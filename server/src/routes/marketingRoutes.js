@@ -1,8 +1,12 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
 import { channelPublisherMap } from '../services/channels/publishers.js';
+import { authorizeRoles } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
+
+// Marketing is an Admin/Manager module in the UI; enforce that here too.
+router.use(authorizeRoles('ADMIN', 'MANAGER', 'SUPER_ADMIN'));
 
 const DEFAULT_CHANNELS = [
   'Facebook Marketplace',

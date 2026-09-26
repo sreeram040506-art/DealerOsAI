@@ -1,5 +1,6 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
+import { authorizeRoles } from '../middlewares/authMiddleware.js';
 import Jimp from 'jimp';
 
 const router = express.Router();
@@ -993,9 +994,18 @@ async function loadContext(dealershipId) {
   };
 }
 
+// Full insights (profit, cost and health analytics) are for Admin/Manager. Staff still get the
+// per-vehicle aging tips that the shared dashboard shows next to each vehicle.
+const INSIGHT_ROLES = ['ADMIN', 'MANAGER', 'SUPER_ADMIN'];
+
 router.get('/', async (req, res, next) => {
   try {
     const context = await loadContext(req.dealershipId);
+
+    if (!INSIGHT_ROLES.includes(req.user.role)) {
+      return res.json({ agingRecommendations: generateAgingRecommendations(context) });
+    }
+
     const summary = context.summary;
 
     // Generate dynamic, data-driven insights
@@ -1021,7 +1031,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.post('/ask', async (req, res, next) => {
+router.post('/ask', authorizeRoles(...INSIGHT_ROLES), async (req, res, next) => {
   try {
     const question = String(req.body.question || '').trim();
     const attachmentList = Array.isArray(req.body.attachments) ? req.body.attachments : [];

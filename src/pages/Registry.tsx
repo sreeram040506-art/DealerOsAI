@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { formatSafeDate } from '@/lib/dateUtils';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/context/auth-hooks';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, downloadFile } from '@/lib/api';
 import { FileArchive, Download, Search, FileText, Pencil, Trash2, Eye, Filter, Receipt, ShoppingCart } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -58,13 +58,8 @@ export default function Registry() {
     if (type === 'source') typeParam = '&type=source';
     else if (type === 'sale') typeParam = '&type=sale';
     
-    const downloadUrl = apiUrl(`/registry/${id}/download?token=${encodeURIComponent(token)}${typeParam}`);
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = downloadUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 60000);
     toast.success(`Downloading ${customName}...`);
+    downloadFile(`/registry/${id}/download?${typeParam.slice(1)}`, token).catch((err) => toast.error(err.message));
   };
 
   const handleDelete = async (id: string) => {

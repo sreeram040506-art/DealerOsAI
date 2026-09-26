@@ -183,8 +183,8 @@ export default function SwapNetworkDialog({ open, onOpenChange, myVehicles }: Sw
 
                     <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
                       <div className="text-right">
-                        <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest">Est. Cost Basis</p>
-                        <p className="text-sm font-black text-foreground tabular-nums">${vehicle.totalCostBasis.toLocaleString()}</p>
+                        <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest">Days in Stock</p>
+                        <p className="text-sm font-black text-foreground tabular-nums">{vehicle.daysInInventory}</p>
                       </div>
                       <Button
                         size="sm"

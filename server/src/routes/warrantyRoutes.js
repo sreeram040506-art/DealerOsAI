@@ -3,6 +3,8 @@ import prisma from '../db/prisma.js';
 import { extractVehicleInfo } from '../../services/documentParser.js';
 import { upload } from '../config/upload.js';
 
+import { pickFields } from '../utils/pickFields.js';
+
 const router = express.Router();
 
 function normalizeVin(value = '') {
@@ -105,7 +107,10 @@ router.put('/:id', async (req, res, next) => {
   try {
     const existing = await prisma.warrantyContract.findFirst({ where: { id: req.params.id, dealershipId: req.dealershipId } });
     if (!existing) return res.status(404).json({ message: 'Warranty contract not found' });
-    const { expirationDate, ...rest } = req.body;
+    const { expirationDate, ...rest } = pickFields(req.body, [
+      'warrantyCompany', 'coverageType', 'expirationMiles', 'expirationDate', 'claimsCount',
+      'customerName', 'vin', 'make', 'model', 'year', 'status', 'notes',
+    ]);
     const row = await prisma.warrantyContract.update({
       where: { id: req.params.id },
       data: {

@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useInventory } from '@/hooks/useInventory';
 import { useAuth } from '@/context/auth-hooks';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, downloadFile } from '@/lib/api';
 import { useNotes } from '@/hooks/useNotes';
 import DocumentViewerDialog from './DocumentViewerDialog';
 
@@ -120,13 +120,8 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     if (type === 'source') typeParam = '&type=source';
     else if (type === 'sale') typeParam = '&type=sale';
     
-    const downloadUrl = apiUrl(`/vehicles/${vehicle.id}/document?token=${encodeURIComponent(token)}${typeParam}`);
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = downloadUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 60000);
     toast.success(`Downloading ${type.replace('_', ' ')}...`);
+    downloadFile(`/vehicles/${vehicle.id}/document?${typeParam.slice(1)}`, token).catch((err) => toast.error(err.message));
   };
 
   const handleRepairPreview = (repair: any) => {

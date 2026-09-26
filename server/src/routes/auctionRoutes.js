@@ -2,6 +2,8 @@ import express from 'express';
 import prisma from '../db/prisma.js';
 import { ingestAuctionFeed } from '../services/auctionConnectorService.js';
 
+import { pickFields } from '../utils/pickFields.js';
+
 const router = express.Router();
 
 function computeRecommendedMaxBid({ estimatedValue, transportEstimate }) {
@@ -89,7 +91,7 @@ router.patch('/:id/bid', async (req, res, next) => {
     if (!existing) return res.status(404).json({ message: 'Auction vehicle not found' });
 
     const { maxBid, winningBid, bidStatus, status, notes, estimatedValue, transportEstimate } = req.body;
-    const merged = { ...existing, ...req.body };
+    const merged = { ...existing, ...pickFields(req.body, ['maxBid', 'estimatedValue', 'transportEstimate']) };
 
     const row = await prisma.auctionVehicle.update({
       where: { id: req.params.id },
@@ -135,11 +137,17 @@ router.put('/:id', async (req, res, next) => {
   try {
     const existing = await prisma.auctionVehicle.findFirst({ where: { id: req.params.id, dealershipId: req.dealershipId } });
     if (!existing) return res.status(404).json({ message: 'Auction vehicle not found' });
-    const merged = { ...existing, ...req.body };
+    const updates = pickFields(req.body, [
+      'auctionSource', 'sourceProvider', 'sourceItemId', 'lotNumber', 'laneNumber', 'vin', 'year',
+      'make', 'model', 'mileage', 'condition', 'seller', 'auctionDate', 'estimatedValue',
+      'marketValue', 'localDemandScore', 'maxBid', 'winningBid', 'transportEstimate', 'bidStatus',
+      'status', 'notes',
+    ]);
+    const merged = { ...existing, ...updates };
     const row = await prisma.auctionVehicle.update({
       where: { id: req.params.id },
       data: {
-        ...req.body,
+        ...updates,
         auctionDate: req.body.auctionDate ? new Date(req.body.auctionDate) : existing.auctionDate,
         recommendedMaxBid: computeRecommendedMaxBid(merged),
       },

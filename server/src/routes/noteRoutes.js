@@ -22,6 +22,12 @@ router.get('/vehicle/:vehicleId', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   const { vehicleId, customerName, phone, email, note } = req.body;
   try {
+    const vehicle = await prisma.vehicle.findFirst({
+      where: { id: vehicleId, dealershipId: req.dealershipId },
+      select: { id: true }
+    });
+    if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
+
     const customerNote = await prisma.customerNote.create({
       data: {
         vehicleId,
