@@ -2,6 +2,8 @@ import express from 'express';
 import prisma from '../db/prisma.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
 
+import { resolveOpenAiKey } from '../services/dealershipSettings.js';
+
 const router = express.Router();
 
 function getBasePurchaseCost(purchase) {
@@ -30,9 +32,10 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'History must be an array' });
     }
 
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-    if (!openaiApiKey || openaiApiKey === 'YOUR_OPENAI_API_KEY_HERE') {
-      return res.status(503).json({ error: 'AI Assistant is not configured on this server.' });
+    // The dealership's own key, else the platform's; null if the dealership turned AI off.
+    const openaiApiKey = await resolveOpenAiKey(req.dealershipId);
+    if (!openaiApiKey) {
+      return res.status(503).json({ error: 'The AI assistant is turned off or not configured for this dealership.' });
     }
 
     // 1. Gather Business Context

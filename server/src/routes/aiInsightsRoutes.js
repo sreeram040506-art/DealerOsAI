@@ -3,6 +3,8 @@ import prisma from '../db/prisma.js';
 import { authorizeRoles } from '../middlewares/authMiddleware.js';
 import Jimp from 'jimp';
 
+import { resolveOpenAiKey } from '../services/dealershipSettings.js';
+
 const router = express.Router();
 
 function money(value) {
@@ -490,9 +492,9 @@ function buildRuleBasedAnswer(question, context, attachmentAnalysis) {
   };
 }
 
-async function getOpenAiAnswer({ question, context, attachmentAnalysis, answerPlan }) {
-  const openaiApiKey = process.env.OPENAI_API_KEY;
-  if (!openaiApiKey || openaiApiKey === 'YOUR_OPENAI_API_KEY_HERE') {
+async function getOpenAiAnswer({ dealershipId, question, context, attachmentAnalysis, answerPlan }) {
+  const openaiApiKey = await resolveOpenAiKey(dealershipId);
+  if (!openaiApiKey) {
     return null;
   }
 
@@ -1053,6 +1055,7 @@ router.post('/ask', authorizeRoles(...INSIGHT_ROLES), async (req, res, next) => 
     const answerPlan = buildRuleBasedAnswer(question, context, attachmentAnalysis);
 
     const openAiAnswer = await getOpenAiAnswer({
+      dealershipId: req.dealershipId,
       question,
       context,
       attachmentAnalysis,

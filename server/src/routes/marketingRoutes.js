@@ -1,7 +1,7 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
 import { authorizeRoles } from '../middlewares/authMiddleware.js';
-import { SUPPORTED_CHANNELS } from '../services/channels/publishers.js';
+import { getDealershipSettings } from '../services/dealershipSettings.js';
 import {
   ACTIVE_STATUSES,
   CONDITIONS,
@@ -49,10 +49,14 @@ function serializeListing(listing) {
   };
 }
 
-function parseChannels(input, fallback = SUPPORTED_CHANNELS) {
-  if (!Array.isArray(input)) return fallback;
-  const channels = [...new Set(input.map(String))].filter((c) => SUPPORTED_CHANNELS.includes(c));
-  return channels;
+// Only channels this dealership has turned on in its marketing settings.
+async function enabledChannels(req) {
+  return (await getDealershipSettings(req.dealershipId)).marketing.enabledChannels;
+}
+
+function parseChannels(input, allowed, fallback = allowed) {
+  if (!Array.isArray(input)) return fallback.filter((c) => allowed.includes(c));
+  return [...new Set(input.map(String))].filter((c) => allowed.includes(c));
 }
 
 // Validates uploaded photos (data URLs) and stores each in its own document.
@@ -95,8 +99,12 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.get('/options', (req, res) => {
-  res.json({ channels: SUPPORTED_CHANNELS, conditions: CONDITIONS });
+router.get('/options', async (req, res, next) => {
+  try {
+    res.json({ channels: await enabledChannels(req), conditions: CONDITIONS });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/generate', async (req, res, next) => {
@@ -107,7 +115,7 @@ router.post('/generate', async (req, res, next) => {
     let mileage = toNumber(req.body.mileage);
     let price = toNumber(req.body.pricing);
     const condition = String(req.body.condition || '').trim();
-    const channels = parseChannels(req.body.channels);
+    const channels = parseChannels(req.body.channels, await enabledChannels(req));
     let vehicle = null;
 
     if (vehicleId) {
@@ -168,7 +176,7 @@ router.post('/generate', async (req, res, next) => {
       mileage,
       condition,
       price,
-    });
+    }, req.dealershipId);
 
     const photoIds = await storePhotos(req.body.photos, req.dealershipId, null);
     const created = await prisma.marketingListing.create({
@@ -249,7 +257,7 @@ router.patch('/:id', async (req, res, next) => {
       data.condition = req.body.condition;
     }
     if (req.body.channels !== undefined) {
-      const channels = parseChannels(req.body.channels, []);
+      const channels = parseChannels(req.body.channels, await enabledChannels(req), []);
       if (!channels.length) return res.status(400).json({ message: 'Choose at least one channel.' });
       data.channels = channels;
     }
@@ -298,7 +306,7 @@ router.post('/:id/publish', async (req, res, next) => {
       }
     }
 
-    const channels = parseChannels(req.body.channels, listing.channels);
+    const channels = parseChannels(req.body.channels, await enabledChannels(req), listing.channels);
     if (!channels.length) return res.status(400).json({ message: 'Choose at least one channel.' });
 
     // Links must point at whichever frontend the staff member is using right now.

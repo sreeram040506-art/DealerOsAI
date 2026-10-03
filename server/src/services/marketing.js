@@ -1,5 +1,6 @@
 import prisma from '../db/prisma.js';
 import { channelPublisherMap, SUPPORTED_CHANNELS } from './channels/publishers.js';
+import { getDealershipSecrets, getDealershipSettings, resolveOpenAiKey } from './dealershipSettings.js';
 
 export const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Needs Work'];
 export const ACTIVE_STATUSES = ['DRAFT', 'SCHEDULED', 'PUBLISHED'];
@@ -21,10 +22,11 @@ export function resolvePublicOrigin(req) {
 
 // ── Listing copy ─────────────────────────────────────────────────────────────────────────
 
-// "Low miles" is only claimed when it is true: under 12k miles per year of age.
-function isLowMileage(mileage, year) {
+// "Low miles" is only claimed when it is true: under the dealership's miles-per-year
+// threshold (12k by default) for the vehicle's age.
+function isLowMileage(mileage, year, perYear = 12000) {
   const age = Math.max(1, new Date().getFullYear() - (Number(year) || new Date().getFullYear()));
-  return mileage > 0 && mileage < age * 12000;
+  return mileage > 0 && mileage < age * perYear;
 }
 
 function hashtagFor(word) {
@@ -40,7 +42,7 @@ function hashtagFor(word) {
 export function buildTemplateCopy(facts) {
   const { vehicleSpecs, year, make, model, color, mileage, condition, price } = facts;
   const miles = `${mileage.toLocaleString()} miles`;
-  const lowMiles = isLowMileage(mileage, year);
+  const lowMiles = isLowMileage(mileage, year, facts.lowMileagePerYear);
 
   const seoTitle = `${vehicleSpecs} | ${mileage.toLocaleString()} mi | $${price.toLocaleString()}`;
   const description = [
@@ -62,13 +64,17 @@ export function buildTemplateCopy(facts) {
 }
 
 /**
- * Writes the description, ad copy, bullets and hashtags with the model when OPENAI_API_KEY is
- * set. The title and price stay deterministic, and anything unusable falls back to the template.
+ * Writes the description, ad copy, bullets and hashtags with the model when the dealership has
+ * AI enabled and a key is available (its own, or the platform's). The title and price stay
+ * deterministic, and anything unusable falls back to the template.
  */
-export async function buildListingCopy(facts) {
-  const template = buildTemplateCopy(facts);
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || apiKey === 'YOUR_OPENAI_API_KEY_HERE') return template;
+export async function buildListingCopy(facts, dealershipId) {
+  const settings = dealershipId ? await getDealershipSettings(dealershipId) : null;
+  const factsWithThreshold = { ...facts, lowMileagePerYear: settings?.marketing.lowMileagePerYear ?? 12000 };
+  const template = buildTemplateCopy(factsWithThreshold);
+  const apiKey = await resolveOpenAiKey(dealershipId);
+  if (!apiKey) return template;
+  facts = factsWithThreshold;
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -89,7 +95,7 @@ export async function buildListingCopy(facts) {
               'Reply as JSON: {"description": string (2-4 sentences), "adCopy": string (1-2 sentences), ' +
               '"featureBullets": string[] (3-5 items), "hashtags": string[] (4-7 items, each starting with #)}.',
           },
-          { role: 'user', content: JSON.stringify({ ...facts, lowMileage: isLowMileage(facts.mileage, facts.year) }) },
+          { role: 'user', content: JSON.stringify({ ...facts, lowMileage: isLowMileage(facts.mileage, facts.year, facts.lowMileagePerYear) }) },
         ],
       }),
     });
@@ -116,7 +122,12 @@ export async function buildListingCopy(facts) {
 
 export async function publishListing(listing, channels) {
   const origin = listing.leadAttribution?.publicOrigin || '';
+  const [settings, secrets] = await Promise.all([
+    getDealershipSettings(listing.dealershipId),
+    getDealershipSecrets(listing.dealershipId),
+  ]);
   const payload = {
+    facebook: { pageId: settings.marketing.facebookPageId, token: secrets.facebookAccessToken },
     title: listing.seoTitle,
     description: listing.description,
     cta: listing.adCopy,
@@ -151,7 +162,8 @@ export async function publishDueListings() {
   for (const listing of due) {
     try {
       if (await archiveIfVehicleSold(listing)) continue;
-      await publishListing(listing, listing.channels.filter((c) => SUPPORTED_CHANNELS.includes(c)));
+      const { marketing } = await getDealershipSettings(listing.dealershipId);
+      await publishListing(listing, listing.channels.filter((c) => marketing.enabledChannels.includes(c)));
       console.log(`[Marketing] Published scheduled listing ${listing.id}`);
     } catch (err) {
       console.error(`[Marketing] Scheduled publish failed for ${listing.id}:`, err.message);

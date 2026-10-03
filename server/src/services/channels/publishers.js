@@ -34,14 +34,13 @@ async function safeJsonFetch(url, options) {
   return parsed;
 }
 
-// Posts to the dealership's Facebook Page (the Graph API has no Marketplace endpoint for
-// dealers). The link points at the public listing page, which carries the photos.
+// Posts to the dealership's own Facebook Page, configured in its settings (the Graph API has
+// no Marketplace endpoint for dealers). The link points at the public listing page.
 export async function publishToFacebook(payload) {
   const channel = 'Facebook Marketplace';
-  const token = process.env.FACEBOOK_ACCESS_TOKEN;
-  const pageId = process.env.FACEBOOK_PAGE_ID;
+  const { pageId, token } = payload.facebook || {};
   if (!token || !pageId) {
-    return notConnected(channel, payload, 'Facebook is not connected (FACEBOOK_ACCESS_TOKEN / FACEBOOK_PAGE_ID unset).');
+    return notConnected(channel, payload, 'Facebook is not connected. Add your Page ID and access token in Settings → Marketing.');
   }
 
   try {

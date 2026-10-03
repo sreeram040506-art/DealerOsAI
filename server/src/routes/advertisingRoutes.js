@@ -4,6 +4,8 @@ import { authorizeAdmin, authorizeRoles } from '../middlewares/authMiddleware.js
 import { validate, advertisingSchema } from '../utils/validators.js';
 import { adsCache } from '../utils/cache.js';
 
+import { resolveOpenAiKey } from '../services/dealershipSettings.js';
+
 const router = express.Router();
 
 // Managers can read advertising spend (Reports and Cash Flow are built from it); only Admin can change it.
@@ -38,9 +40,9 @@ router.post('/generate-copy', async (req, res, next) => {
 
     if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
 
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-    if (!openaiApiKey || openaiApiKey === 'YOUR_OPENAI_API_KEY_HERE') {
-      return res.status(503).json({ message: 'OpenAI API key not configured' });
+    const openaiApiKey = await resolveOpenAiKey(req.dealershipId);
+    if (!openaiApiKey) {
+      return res.status(503).json({ message: 'AI is turned off or not configured for this dealership.' });
     }
 
     const prompt = `Write a compelling and engaging Facebook/Google ad for a ${vehicle.year} ${vehicle.make} ${vehicle.model} in ${vehicle.color} with ${vehicle.mileage} miles. Highlight its features and create urgency for the buyer. Keep it concise.`;

@@ -9,6 +9,8 @@ import { authorizeSuperAdmin } from '../middlewares/authMiddleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+import { resolveOpenAiKey } from '../services/dealershipSettings.js';
+
 const router = express.Router();
 const MODEL_DIR = path.join(__dirname, '../../data/predictor-models');
 const LATEST_MODEL_PATH = path.join(__dirname, '../../data/demand_model_latest.json');
@@ -264,8 +266,8 @@ router.post('/assistant', async (req, res, next) => {
     const dealerId = req.dealershipId;
     const myVehicles = await prisma.vehicle.findMany({ where: { dealershipId: dealerId, status: 'Available' }, include: { purchase: true, repairs: true } });
 
-    // If OPENAI_API_KEY present, call OpenAI for richer parsing
-    const OPENAI_KEY = process.env.OPENAI_API_KEY;
+    // Richer answers when the dealership has AI enabled and a key is available.
+    const OPENAI_KEY = await resolveOpenAiKey(dealerId);
     if (OPENAI_KEY) {
       try {
         const system = `You are a dealership inventory assistant. Answer with practical recommendations and short clear bullets for swap and inventory actions. Use the context but do not invent unsupported details.`;

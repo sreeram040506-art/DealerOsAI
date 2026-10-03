@@ -154,7 +154,7 @@ router.delete('/dealerships/:id', async (req, res, next) => {
       'customer', 'advertisingExpense', 'businessExpense', 'insurancePolicy', 'warrantyContract',
       'auctionVehicle', 'complianceAuditLog', 'complianceRecord', 'marketingLead',
       'marketingListing', 'marketingPhoto', 'notification', 'vehicle', 'message', 'channelMember', 'channel',
-      'attendanceRecord', 'integrationConnection', 'user',
+      'attendanceRecord', 'integrationConnection', 'dealershipSettings', 'user',
     ];
 
     const deleted = {};

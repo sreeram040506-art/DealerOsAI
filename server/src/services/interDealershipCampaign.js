@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import prisma from '../db/prisma.js';
+import { swapNetworkParticipants } from './dealershipSettings.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -59,26 +60,6 @@ async function getOrCreateSharedChannel(dealerA, dealerB, senderId, membersA, me
   return channel;
 }
 
-async function publishToInterDealershipChannels(message, senderId) {
-  const channels = await prisma.channel.findMany({ where: { type: 'INTER_DEALERSHIP' } });
-  const results = [];
-  for (const channel of channels) {
-    try {
-      const created = await prisma.message.create({
-        data: {
-          channelId: channel.id,
-          senderId,
-          text: message
-        }
-      });
-      results.push({ channel: channel.name, status: 'posted', messageId: created.id });
-    } catch (error) {
-      results.push({ channel: channel.name, status: 'failed', error: error.message });
-    }
-  }
-  return results;
-}
-
 export async function runSwapCampaign() {
   const model = loadLatestModel();
   if (!model || !model.items) {
@@ -89,13 +70,18 @@ export async function runSwapCampaign() {
     .sort((a, b) => (b.score || 0) - (a.score || 0))
     .slice(0, TOP_DEMAND_COUNT);
 
-  const dealerships = await prisma.dealership.findMany({ select: { id: true, name: true, slug: true } });
+  // Only dealerships that opted into the swap network take part.
+  const participants = await swapNetworkParticipants();
+  const dealerships = await prisma.dealership.findMany({
+    where: { id: { in: [...participants] }, isActive: true },
+    select: { id: true, name: true, slug: true },
+  });
   if (!dealerships.length) {
     return { success: false, message: 'No dealerships found' };
   }
 
   const allVehicles = await prisma.vehicle.findMany({
-    where: { status: 'Available' },
+    where: { status: 'Available', dealershipId: { in: dealerships.map((d) => d.id) } },
     include: { purchase: true }
   });
 
@@ -168,6 +154,7 @@ export async function runSwapCampaign() {
     ? `📣 Inter-Dealership Swap Campaign Summary\n${summaryEntries.join('\n')}\n\nMessages have been posted to shared swap channels and inter-dealership channels.`
     : '📣 Inter-Dealership Swap Campaign Summary\nNo high-confidence swap proposals were available at this time.';
 
-  const broadcastResults = await publishToInterDealershipChannels(summaryText, posterId);
-  return { success: true, proposals, broadcastResults };
+  // The summary used to be posted into every inter-dealership channel, showing each
+  // dealership's swaps to all the others. Proposals already go to each pair's shared channel.
+  return { success: true, proposals, summary: summaryText };
 }

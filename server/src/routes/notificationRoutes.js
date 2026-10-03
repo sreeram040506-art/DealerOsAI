@@ -34,18 +34,14 @@ router.post('/', async (req, res, next) => {
       },
     });
 
-    // Fire notifications in the background
-    const dealership = await prisma.dealership.findUnique({
-      where: { id: req.dealershipId }
-    });
-
+    // Fire notifications in the background through this dealership's own channels.
     dispatchNotification({
+      dealershipId: req.dealershipId,
+      event: 'manualAlerts',
       title,
       message,
       severity: severity || 'MEDIUM',
       type,
-      recipientEmail: dealership?.email || 'manager@dealeros.ai',
-      recipientPhone: dealership?.phone || null
     }).catch(err => console.error('Error dispatching notifications:', err));
 
     res.status(201).json(row);

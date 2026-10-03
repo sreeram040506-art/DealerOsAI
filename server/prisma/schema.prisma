@@ -646,3 +646,16 @@ model MarketingPhoto {
   @@index([listingId])
   @@index([dealershipId])
 }
+
+// One per dealership. `settings` holds non-secret preferences (merged over defaults in
+// services/dealershipSettings.js); `secrets` is an AES-256-GCM encrypted JSON blob of that
+// dealership's own integration credentials, never returned to the browser.
+model DealershipSettings {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  dealershipId String   @unique @db.ObjectId
+  settings     Json?
+  secrets      String?
+  updatedById  String?  @db.ObjectId
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}

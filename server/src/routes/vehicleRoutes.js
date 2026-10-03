@@ -7,6 +7,7 @@ import { vehicleCache } from '../utils/cache.js';
 import { fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
 import { decodeVin, fetchRecalls } from '../services/vinDecoder.js';
 import { upload } from '../config/upload.js';
+import { getDealershipSettings, swapNetworkParticipants } from '../services/dealershipSettings.js';
 
 const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 
@@ -41,11 +42,18 @@ router.get('/vin-decode/:vin', async (req, res, next) => {
 });
 
 // GET /vehicles/swap-network - fetch aging vehicles from other dealerships
+// Opt-in on both sides: a dealership only sees, and is only seen by, dealerships that turned
+// on the swap network in their settings.
 router.get('/swap-network', async (req, res, next) => {
   try {
+    const participants = await swapNetworkParticipants();
+    if (!participants.has(req.dealershipId)) {
+      return res.status(403).json({ message: 'Join the dealer swap network in Settings to see partner inventory.', code: 'SWAP_NETWORK_DISABLED' });
+    }
+    const partnerIds = [...participants].filter((id) => id !== req.dealershipId);
     const vehicles = await prisma.vehicle.findMany({
       where: {
-        dealershipId: { not: req.dealershipId },
+        dealershipId: { in: partnerIds },
         status: 'Available',
       },
       // Partner dealerships' purchase prices and repair costs are their private business data,
@@ -57,6 +65,9 @@ router.get('/swap-network', async (req, res, next) => {
       }
     });
 
+    // Each partner decides how long a car must sit before it is offered for swaps.
+    const minDays = new Map(await Promise.all(partnerIds.map(async (id) =>
+      [id, (await getDealershipSettings(id)).swapNetwork.minDaysInStock])));
     const now = new Date();
     const swapVehicles = vehicles.map(v => {
       const purchaseDate = v.purchaseDate ? new Date(v.purchaseDate) : new Date(v.createdAt);
@@ -75,7 +86,7 @@ router.get('/swap-network', async (req, res, next) => {
         daysInInventory: days,
         dealership: v.dealership
       };
-    }).filter(v => v.daysInInventory >= 90);
+    }).filter(v => v.daysInInventory >= (minDays.get(v.dealership.id) ?? 90));
 
     res.json(swapVehicles);
   } catch (err) {
@@ -106,6 +117,14 @@ router.post('/swap-network/propose', async (req, res, next) => {
     const targetDealershipId = targetVehicle.dealershipId;
     if (targetDealershipId === myDealershipId) {
       return res.status(400).json({ message: 'Cannot propose a swap with your own dealership.' });
+    }
+    const participants = await swapNetworkParticipants();
+    if (!participants.has(myDealershipId)) {
+      return res.status(403).json({ message: 'Join the dealer swap network in Settings first.', code: 'SWAP_NETWORK_DISABLED' });
+    }
+    if (!participants.has(targetDealershipId)) {
+      // Same response as a missing vehicle: don't reveal inventory of non-participants.
+      return res.status(404).json({ message: 'Target vehicle not found.' });
     }
 
     // Fetch my vehicle if provided

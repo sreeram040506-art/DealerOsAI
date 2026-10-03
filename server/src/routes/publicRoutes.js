@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import prisma from '../db/prisma.js';
 import { bumpListingMetric, listingStatus, normalizeSource } from '../services/marketing.js';
 import { photoUrl } from './marketingRoutes.js';
+import { dispatchNotification } from '../services/notificationDispatcher.js';
 
 // Unauthenticated routes behind every marketing tracking link: buyers open a listing, it
 // counts the view for the channel the link was posted on, and their inquiry becomes a lead.
@@ -122,15 +123,15 @@ router.post('/listings/:id/inquiry', inquiryLimiter, async (req, res, next) => {
       },
     });
     await bumpListingMetric(listing, 'inquiries', source);
-    await prisma.notification.create({
-      data: {
-        type: 'MARKETING_LEAD',
-        title: `New inquiry: ${listing.vehicleSpecs}`,
-        message: `${name} (${phone || email}) via ${source}${message ? `: ${message.slice(0, 200)}` : ''}`,
-        severity: 'HIGH',
-        dealershipId: listing.dealershipId,
-      },
-    });
+    const alert = {
+      title: `New inquiry: ${listing.vehicleSpecs}`,
+      message: `${name} (${phone || email}) via ${source}${message ? `: ${message.slice(0, 200)}` : ''}`,
+      severity: 'HIGH',
+    };
+    await prisma.notification.create({ data: { type: 'MARKETING_LEAD', ...alert, dealershipId: listing.dealershipId } });
+    // Email/SMS/Slack per the dealership's own notification settings; never blocks the buyer.
+    dispatchNotification({ dealershipId: listing.dealershipId, event: 'newLead', type: 'MARKETING_LEAD', ...alert })
+      .catch((err) => console.error('[Marketing] Lead alert failed:', err.message));
 
     res.status(201).json({ ok: true });
   } catch (err) {

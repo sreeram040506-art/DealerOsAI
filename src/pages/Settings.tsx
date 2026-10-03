@@ -9,9 +9,14 @@ import { toast } from '@/components/ui/toast-utils';
 import { Building2, Save, Upload, MapPin, Phone, Mail, Loader2 } from 'lucide-react';
 import { apiUrl } from '@/lib/api';
 import AppLayout from '@/components/AppLayout';
+import QueryErrorState from '@/components/QueryErrorState';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useDealershipSettings } from '@/hooks/useDealershipSettings';
+import { AiSettings, MarketingSettings, NotificationSettings, SwapNetworkSettings } from '@/components/settings/SettingsSections';
 
 const Settings = () => {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
+  const dealershipSettings = useDealershipSettings();
   const { refreshProfile } = useDealership();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -91,20 +96,56 @@ const Settings = () => {
 
   if (isLoading) {
     return (
-      <div className="flex h-[80vh] items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
+      <AppLayout>
+        <div className="flex h-[80vh] items-center justify-center">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        </div>
+      </AppLayout>
     );
   }
+
+  const settingsData = dealershipSettings.data;
+  const sectionProps = settingsData && {
+    data: settingsData,
+    save: dealershipSettings.save,
+    saving: dealershipSettings.isSaving,
+    test: dealershipSettings.test,
+    testing: dealershipSettings.testing,
+  };
+  const sectionBody = (render: (props: NonNullable<typeof sectionProps>) => React.ReactNode) =>
+    dealershipSettings.isLoading ? (
+      <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+    ) : dealershipSettings.isError || !sectionProps ? (
+      <QueryErrorState title="Could not load settings" description="The request failed." onRetry={() => dealershipSettings.refetch()} />
+    ) : (
+      render(sectionProps)
+    );
 
   return (
     <AppLayout>
       <div className="max-w-4xl mx-auto p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-display font-bold text-foreground">Dealership Settings</h1>
-          <p className="text-muted-foreground">Manage your dealership profile and branding</p>
+          <p className="text-muted-foreground">These settings apply only to {profile.name || 'your dealership'}.</p>
         </div>
 
+        <Tabs defaultValue="profile" className="space-y-6">
+          <div className="overflow-x-auto">
+            <TabsList>
+              <TabsTrigger value="profile">Profile</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
+              <TabsTrigger value="marketing">Marketing</TabsTrigger>
+              <TabsTrigger value="ai">AI</TabsTrigger>
+              <TabsTrigger value="network">Dealer network</TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="notifications">{sectionBody((p) => <NotificationSettings {...p} />)}</TabsContent>
+          <TabsContent value="marketing">{sectionBody((p) => <MarketingSettings {...p} />)}</TabsContent>
+          <TabsContent value="ai">{sectionBody((p) => <AiSettings {...p} />)}</TabsContent>
+          <TabsContent value="network">{sectionBody((p) => <SwapNetworkSettings {...p} />)}</TabsContent>
+
+          <TabsContent value="profile">
         <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Logo Section */}
           <Card className="md:col-span-1 bg-muted/30 border-border/50">
@@ -199,6 +240,8 @@ const Settings = () => {
             </CardFooter>
           </Card>
         </form>
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   );

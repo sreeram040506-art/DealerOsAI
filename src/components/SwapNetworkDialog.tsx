@@ -16,20 +16,23 @@ interface SwapNetworkDialogProps {
 }
 
 export default function SwapNetworkDialog({ open, onOpenChange, myVehicles }: SwapNetworkDialogProps) {
-  const { token, logout } = useAuth();
+  const { token, logout, user } = useAuth();
   const navigate = useNavigate();
   const [selectedPartnerVehicle, setSelectedPartnerVehicle] = useState<any | null>(null);
   const [selectedMyVehicleId, setSelectedMyVehicleId] = useState<string>('cash');
 
   // Fetch partner aging vehicles
-  const { data: partnerVehicles = [], isLoading } = useQuery({
+  // The network is opt-in per dealership; the server answers 403 until this one joins.
+  const { data: network, isLoading } = useQuery({
     queryKey: ['partner-swap-network'],
     queryFn: async () => {
       const response = await apiFetch('/vehicles/swap-network', token);
-      return handleApiResponse<any[]>(response, logout);
+      if (response.status === 403) return { joined: false as const, vehicles: [] as any[] };
+      return { joined: true as const, vehicles: await handleApiResponse<any[]>(response, logout) };
     },
     enabled: open && !!token,
   });
+  const partnerVehicles = network?.vehicles ?? [];
 
   // Propose Swap mutation
   const proposeMutation = useMutation({
@@ -54,7 +57,7 @@ export default function SwapNetworkDialog({ open, onOpenChange, myVehicles }: Sw
       navigate(`/communication?channelId=${data.channelId}`);
     },
     onError: (error) => {
-      toast.error('Failed to send swap proposal.');
+      toast.error(error instanceof Error ? error.message : 'Failed to send swap proposal.');
       console.error(error);
     }
   });
@@ -155,6 +158,18 @@ export default function SwapNetworkDialog({ open, onOpenChange, myVehicles }: Sw
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Loader2 className="w-8 h-8 text-primary animate-spin" />
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Scanning partner lots...</p>
+              </div>
+            ) : network && !network.joined ? (
+              <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <p className="text-sm font-semibold text-foreground">Your dealership hasn't joined the swap network.</p>
+                <p className="max-w-sm text-xs text-muted-foreground">
+                  The network is opt-in: only dealerships that join can see each other's aging stock.
+                </p>
+                {user?.role === 'ADMIN' ? (
+                  <Button size="sm" onClick={() => { onOpenChange(false); navigate('/settings'); }}>Open settings</Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Ask your dealership admin to turn it on in Settings.</p>
+                )}
               </div>
             ) : partnerVehicles.length > 0 ? (
               <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
