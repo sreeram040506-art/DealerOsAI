@@ -108,3 +108,8 @@ export async function downloadFile(path: string, token: string, fallbackName = '
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
+
+/** Resolves server-relative asset paths (e.g. listing photos under /api) against the API origin. */
+export function assetUrl(path: string) {
+  return path.startsWith('/api/') ? `${API_ORIGIN}${path}` : path;
+}

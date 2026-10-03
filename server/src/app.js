@@ -33,6 +33,7 @@ import marketingRoutes from './routes/marketingRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
 import communicationRoutes from './routes/communicationRoutes.js';
 import predictorRoutes from './routes/predictorRoutes.js';
+import publicRoutes from './routes/publicRoutes.js';
 
 
 const app = express();
@@ -125,6 +126,8 @@ import { injectTenant } from './middlewares/tenantMiddleware.js';
 
 // Mount routers
 app.use('/api/auth', authRoutes);
+// Unauthenticated: public listing pages and the buyer inquiry form behind marketing links.
+app.use('/api/public', publicRoutes);
 app.use('/api/dealerships', dealershipRoutes);
 
 // Protected Business Routes (Auto-inject dealership context)

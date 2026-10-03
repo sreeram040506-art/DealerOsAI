@@ -1,114 +1,148 @@
 import { useMemo, useState } from 'react';
+import {
+  AlertTriangle, Archive, Copy, Eye, Loader2, Megaphone, MessageSquare, Pencil, Scissors,
+  Search, Send, Sparkles, Trash2, Undo2, Upload, Users, X,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import AppLayout from '@/components/AppLayout';
 import QueryErrorState from '@/components/QueryErrorState';
+import AddAdvertisingDialog from '@/components/AddAdvertisingDialog';
+import ListingEditorDialog from '@/components/marketing/ListingEditorDialog';
+import PublishDialog from '@/components/marketing/PublishDialog';
+import LeadsDialog from '@/components/marketing/LeadsDialog';
+import { ChannelPicker, Pill } from '@/components/marketing/shared';
+import { CHANNEL_STATUS, LISTING_STATUS_STYLE, copyText, readFileAsDataUrl } from '@/components/marketing/marketingUtils';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, Sparkles, Megaphone, AlertTriangle, Plus, Upload, X, Image as ImageIcon, Users, ExternalLink, Scissors, Undo2, Loader2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBackgroundRemoval, dataUrlToBlob } from '@/hooks/useBackgroundRemoval';
-import { toast } from 'sonner';
-import { useMarketing } from '@/hooks/useMarketing';
+import { useMarketing, type MarketingListing } from '@/hooks/useMarketing';
 import { useInventory } from '@/hooks/useInventory';
 import { useAdvertising } from '@/hooks/useAdvertising';
 import { useAuth } from '@/context/auth-hooks';
-import AddAdvertisingDialog from '@/components/AddAdvertisingDialog';
-import { apiUrl } from '@/lib/api';
+import { assetUrl } from '@/lib/api';
+import { compressImage } from '@/lib/imageCompress';
 import { formatCurrency } from '@/lib/utils';
+import type { AdvertisingExpense } from '@/types/inventory';
 
 interface AdvertisingProps {
   isSubpage?: boolean;
 }
 
-const CHANNELS = [
-  'Facebook Marketplace',
-  'Instagram',
-  'TikTok',
-  'Dealer Website',
-  'Craigslist',
-  'YouTube Shorts',
-  'Google Vehicle Listings',
-];
+const EMPTY_FORM = { vehicleId: '', vin: '', vehicleSpecs: '', mileage: '', condition: '', pricing: '' };
+
+function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="stat-card">
+      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
 
 export default function Advertising({ isSubpage = false }: AdvertisingProps) {
-  const { listings, isLoading: marketingLoading, isError: marketingError, generateListing, updateSchedule, updateAnalytics, publishListing, captureLead, isSaving } = useMarketing();
-  const { ads, isLoading: adsLoading, isError: adsError } = useAdvertising();
+  const marketing = useMarketing();
+  const { listings, summary, options, leads } = marketing;
+  const { ads, isLoading: adsLoading, isError: adsError, deleteAd } = useAdvertising();
   const { vehicles } = useInventory();
-  const { token } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [form, setForm] = useState({
-    vehicleId: '',
-    vin: '',
-    vehicleSpecs: '',
-    photos: '',
-    mileage: '',
-    condition: '',
-    pricing: '',
-  });
+  const { user } = useAuth();
+  // Campaign spend is admin-managed (the API rejects changes from other roles).
+  const canManageCampaigns = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
 
-  const [advertisingDialogOpen, setAdvertisingDialogOpen] = useState(false);
-  const [editingAd, setEditingAd] = useState<any>(null);
+  const channels = options?.channels ?? [];
+  const conditions = options?.conditions ?? [];
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [formChannels, setFormChannels] = useState<string[] | null>(null);
+  const selectedChannels = formChannels ?? channels;
+
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   // Pre-cutout versions, keyed by index, so a background removal can be undone.
   const [originalImages, setOriginalImages] = useState<Record<number, string>>({});
   const [activeBgIndex, setActiveBgIndex] = useState<number | null>(null);
-  const { removeBackgroundToDataUrl, isProcessing: isRemovingBg, progress: bgProgress } =
-    useBackgroundRemoval();
+  const { removeBackgroundToDataUrl, isProcessing: isRemovingBg, progress: bgProgress } = useBackgroundRemoval();
   const [isDragging, setIsDragging] = useState(false);
-  const [leadsDialogOpen, setLeadsDialogOpen] = useState(false);
-  const [leads, setLeads] = useState<any[]>([]);
 
-  const filteredListings = useMemo(
-    () => listings.filter((row) => `${row.vin} ${row.vehicleSpecs} ${row.seoTitle}`.toLowerCase().includes(searchTerm.toLowerCase())),
-    [listings, searchTerm],
+  const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
+  const [editingAd, setEditingAd] = useState<AdvertisingExpense | null>(null);
+  const [adToDelete, setAdToDelete] = useState<AdvertisingExpense | null>(null);
+  const [leadsOpen, setLeadsOpen] = useState(false);
+  const [editingListing, setEditingListing] = useState<MarketingListing | null>(null);
+  const [publishingListing, setPublishingListing] = useState<MarketingListing | null>(null);
+  const [listingToDelete, setListingToDelete] = useState<MarketingListing | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+
+  const forSale = useMemo(() => vehicles.filter((v) => v.status !== 'Sold'), [vehicles]);
+  const term = searchTerm.trim().toLowerCase();
+
+  const filteredAds = useMemo(
+    () => ads.filter((ad) => `${ad.campaignName} ${ad.platform}`.toLowerCase().includes(term)),
+    [ads, term],
   );
+  const filteredListings = useMemo(
+    () => listings
+      .filter((row) => showArchived || row.status !== 'ARCHIVED')
+      .filter((row) => `${row.vin} ${row.vehicleSpecs} ${row.seoTitle}`.toLowerCase().includes(term)),
+    [listings, term, showArchived],
+  );
+  const campaignResults = useMemo(
+    () => new Map((summary?.campaigns ?? []).map((c) => [c.id, c])),
+    [summary],
+  );
+  const newLeads = leads.filter((l) => l.status === 'NEW').length;
+
+  // ── Photos ─────────────────────────────────────────────────────────────────────────────
 
   const handleImageUpload = async (files: FileList | null) => {
     if (!files) return;
-    
-    const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
     if (imageFiles.length === 0) {
       toast.error('Please select image files only');
       return;
     }
-
-    const base64Images: string[] = [];
-    
+    const added: string[] = [];
     for (const file of imageFiles) {
       try {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        base64Images.push(base64);
-      } catch (error) {
+        added.push(await compressImage(await readFileAsDataUrl(file)));
+      } catch {
         toast.error(`Failed to process ${file.name}`);
       }
     }
-
-    setUploadedImages(prev => [...prev, ...base64Images]);
-    toast.success(`${base64Images.length} image(s) added`);
+    setUploadedImages((prev) => [...prev, ...added]);
   };
 
   const handleRemoveImage = (index: number) => {
-    setUploadedImages(prev => prev.filter((_, i) => i !== index));
-    setOriginalImages(prev => { const next = { ...prev }; delete next[index]; return next; });
+    setUploadedImages((prev) => prev.filter((_, i) => i !== index));
+    setOriginalImages((prev) => {
+      const next: Record<number, string> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        const i = Number(k);
+        if (i < index) next[i] = v;
+        else if (i > index) next[i - 1] = v;
+      }
+      return next;
+    });
   };
 
-  // Cuts the background out of one photo, leaving a transparent PNG. The original is kept
+  // Cuts the background out of one photo, leaving a transparent image. The original is kept
   // so the operator can undo a result they don't like without re-uploading.
   const handleRemoveBackground = async (index: number) => {
     const source = uploadedImages[index];
     if (!source) return;
     setActiveBgIndex(index);
     try {
-      const cutout = await removeBackgroundToDataUrl(await dataUrlToBlob(source));
-      setOriginalImages(prev => ({ ...prev, [index]: source }));
-      setUploadedImages(prev => prev.map((img, i) => (i === index ? cutout : img)));
+      const cutout = await compressImage(await removeBackgroundToDataUrl(await dataUrlToBlob(source)));
+      setOriginalImages((prev) => ({ ...prev, [index]: source }));
+      setUploadedImages((prev) => prev.map((img, i) => (i === index ? cutout : img)));
       toast.success('Background removed');
     } catch (err) {
-      console.error(err);
       toast.error(err instanceof Error ? err.message : 'Could not remove the background');
     } finally {
       setActiveBgIndex(null);
@@ -118,331 +152,253 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
   const handleRestoreOriginal = (index: number) => {
     const original = originalImages[index];
     if (!original) return;
-    setUploadedImages(prev => prev.map((img, i) => (i === index ? original : img)));
-    setOriginalImages(prev => { const next = { ...prev }; delete next[index]; return next; });
+    setUploadedImages((prev) => prev.map((img, i) => (i === index ? original : img)));
+    setOriginalImages((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
   };
 
   const handleRemoveAllBackgrounds = async () => {
     for (let i = 0; i < uploadedImages.length; i++) {
-      if (originalImages[i]) continue; // already cut out
+      if (originalImages[i]) continue;
       await handleRemoveBackground(i);
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
+  // ── Listing builder ────────────────────────────────────────────────────────────────────
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleImageUpload(e.dataTransfer.files);
-  };
-
-  const fetchLeads = async () => {
-    try {
-      const response = await fetch(apiUrl('/marketing/leads/list'), {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setLeads(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch leads:', error);
+  const selectVehicle = (id: string) => {
+    if (id === 'none') {
+      setForm(EMPTY_FORM);
+      return;
     }
+    const v = forSale.find((veh) => veh.id === id);
+    if (!v) return;
+    setForm({
+      vehicleId: v.id,
+      vin: v.vin || '',
+      vehicleSpecs: `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim(),
+      mileage: v.mileage !== undefined ? String(v.mileage) : '',
+      condition: '',
+      // The advertised price, never the purchase cost.
+      pricing: v.askingPrice ? String(v.askingPrice) : '',
+    });
   };
 
-  const handleOpenLeadsDialog = () => {
-    fetchLeads();
-    setLeadsDialogOpen(true);
-  };
+  const missing = [
+    !form.vin.trim() && 'VIN',
+    !form.vehicleSpecs.trim() && 'vehicle',
+    form.mileage === '' && 'mileage',
+    !form.condition && 'condition',
+    !(Number(form.pricing) > 0) && 'asking price',
+    selectedChannels.length === 0 && 'a channel',
+  ].filter(Boolean) as string[];
 
   const handleGenerate = async () => {
+    if (missing.length) {
+      toast.error(`Add ${missing.join(', ')}`);
+      return;
+    }
     try {
-      const photosToUse = uploadedImages.length > 0 ? uploadedImages : form.photos.split(',').map((p) => p.trim()).filter(Boolean);
-      
-      const created = await generateListing({
+      const created = await marketing.generateListing({
         vehicleId: form.vehicleId || undefined,
         vin: form.vin,
         vehicleSpecs: form.vehicleSpecs,
-        photos: photosToUse,
+        photos: uploadedImages,
         mileage: Number(form.mileage),
         condition: form.condition,
         pricing: Number(form.pricing),
-        channels: CHANNELS,
+        channels: selectedChannels,
       });
-      await publishListing({ id: created.id, channels: CHANNELS });
-      toast.success('AI listing generated and scheduled.');
-      setForm({ vehicleId: '', vin: '', vehicleSpecs: '', photos: '', mileage: '', condition: '', pricing: '' });
+      toast.success('Draft created. Review the text, then publish.');
+      setForm(EMPTY_FORM);
+      setFormChannels(null);
       setUploadedImages([]);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to generate listing');
+      setOriginalImages({});
+      setEditingListing(created);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create the listing');
     }
   };
 
-  if (marketingLoading || adsLoading) return <div className="p-8 text-center text-muted-foreground">Loading marketing distribution...</div>;
-  if (marketingError || adsError) {
-    const errorState = <QueryErrorState title="Could not load marketing data" description="The data request failed." />;
-    return isSubpage ? errorState : <AppLayout>{errorState}</AppLayout>;
+  // ── Listing actions ────────────────────────────────────────────────────────────────────
+
+  const archive = async (listing: MarketingListing) => {
+    try {
+      await marketing.archiveListing(listing.id);
+      toast.success('Listing archived');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not archive');
+    }
+  };
+
+  const confirmDeleteListing = async () => {
+    if (!listingToDelete) return;
+    try {
+      await marketing.deleteListing(listingToDelete.id);
+      toast.success('Listing deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete');
+    } finally {
+      setListingToDelete(null);
+    }
+  };
+
+  const confirmDeleteAd = async () => {
+    if (!adToDelete) return;
+    try {
+      await deleteAd(adToDelete.id);
+      toast.success('Campaign deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete');
+    } finally {
+      setAdToDelete(null);
+    }
+  };
+
+  const copyPublicLink = async (listing: MarketingListing) => {
+    try {
+      await copyText(`${window.location.origin}${listing.publicPath}`);
+      toast.success('Public link copied');
+    } catch {
+      toast.error('Could not copy to the clipboard');
+    }
+  };
+
+  const wrap = (node: React.ReactNode) => (isSubpage ? <>{node}</> : <AppLayout>{node}</AppLayout>);
+
+  if (marketing.isLoading || adsLoading) {
+    return wrap(
+      <div className="flex items-center justify-center p-12 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading marketing…
+      </div>,
+    );
   }
+  if (marketing.isError || adsError) {
+    return wrap(<QueryErrorState title="Could not load marketing data" description="The data request failed." />);
+  }
+
+  const fmt = (n: number | null | undefined) => (n === null || n === undefined ? '—' : formatCurrency(n));
 
   const content = (
     <div className="space-y-8">
       {!isSubpage && (
-        <>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">Multi-Channel Distribution</h1>
-              <p className="text-muted-foreground mt-1 text-sm font-medium">AI-powered listing generation, scheduling, analytics, and lead attribution.</p>
-            </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search VIN or title..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full border-border bg-muted/50 pl-10 text-foreground focus-visible:ring-primary/50"
-              />
-            </div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">Marketing</h1>
+            <p className="text-muted-foreground mt-1 text-sm font-medium">Create listings, publish them to channels, and track the leads they bring in.</p>
           </div>
-
-          {/* MARKETING ARCHITECTURE SECTION */}
-          <div className="border-t border-border pt-8">
-            <h2 className="text-2xl font-bold font-display tracking-tight mb-6">Marketing Architecture</h2>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Core Marketing Ledgers */}
-              <div className="stat-card">
-                <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
-                  <div className="w-1 h-6 bg-primary rounded-full"></div>
-                  Core Marketing Ledgers
-                </h3>
-                <ul className="space-y-2">
-                  <li className="flex items-start gap-3">
-                    <span className="text-primary font-bold text-lg">•</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Listing Registry</p>
-                      <p className="text-xs text-muted-foreground">Vehicle specs, photos, pricing per channel</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-primary font-bold text-lg">•</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Channel Ledger</p>
-                      <p className="text-xs text-muted-foreground">Facebook, Instagram, TikTok, Craigslist, YouTube, etc.</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-primary font-bold text-lg">•</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Analytics Ledger</p>
-                      <p className="text-xs text-muted-foreground">Impressions, clicks, conversions by channel</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-primary font-bold text-lg">•</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Lead Attribution</p>
-                      <p className="text-xs text-muted-foreground">Capture source, campaign, contact info</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-primary font-bold text-lg">•</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Campaign Tracking</p>
-                      <p className="text-xs text-muted-foreground">Schedule, publish, monitor performance</p>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Automatic Marketing Events */}
-              <div className="stat-card">
-                <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
-                  <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
-                  Automatic Marketing Events
-                </h3>
-                <ul className="space-y-2">
-                  <li className="flex items-start gap-3">
-                    <span className="text-blue-500 font-bold text-lg">→</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Listing Generation</p>
-                      <p className="text-xs text-muted-foreground">AI creates SEO titles, descriptions, hashtags</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-blue-500 font-bold text-lg">→</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Channel Publication</p>
-                      <p className="text-xs text-muted-foreground">Schedule posts across all platforms</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-blue-500 font-bold text-lg">→</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Performance Tracking</p>
-                      <p className="text-xs text-muted-foreground">Monitor impressions, clicks, conversions</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-blue-500 font-bold text-lg">→</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Lead Capture</p>
-                      <p className="text-xs text-muted-foreground">Collect buyer inquiries from all sources</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-blue-500 font-bold text-lg">→</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Attribution Analysis</p>
-                      <p className="text-xs text-muted-foreground">Track which channels convert best</p>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Marketing AI Analysis */}
-              <div className="stat-card">
-                <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
-                  <div className="w-1 h-6 bg-green-500 rounded-full"></div>
-                  Marketing AI Analysis
-                </h3>
-                <ul className="space-y-2">
-                  <li className="flex items-start gap-3">
-                    <span className="text-green-500 font-bold text-lg">✓</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Content Optimization</p>
-                      <p className="text-xs text-muted-foreground">AI generates compelling titles & descriptions</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-green-500 font-bold text-lg">✓</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Pricing Recommendations</p>
-                      <p className="text-xs text-muted-foreground">Market-based pricing optimization</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-green-500 font-bold text-lg">✓</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Channel Selection</p>
-                      <p className="text-xs text-muted-foreground">Recommend best-performing platforms</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-green-500 font-bold text-lg">✓</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">Performance Anomalies</p>
-                      <p className="text-xs text-muted-foreground">Flag underperforming campaigns</p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-green-500 font-bold text-lg">✓</span>
-                    <div>
-                      <p className="font-medium text-foreground text-sm">ROI Analysis</p>
-                      <p className="text-xs text-muted-foreground">Calculate return on ad spend per channel</p>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-            </div>
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search campaigns and listings..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full border-border bg-muted/50 pl-10"
+            />
           </div>
-        </>
+        </div>
       )}
 
-      {/* Advertising Campaigns Section */}
+      {/* Summary */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatTile
+          label="Live listings"
+          value={String(summary?.listings.published ?? 0)}
+          hint={`${summary?.listings.scheduled ?? 0} scheduled · ${summary?.listings.drafts ?? 0} drafts`}
+        />
+        <StatTile label="Leads this week" value={String(summary?.leads.thisWeek ?? 0)} hint={`${summary?.leads.total ?? 0} total · ${newLeads} not yet contacted`} />
+        <StatTile label="Ad spend" value={fmt(summary?.spend.total ?? 0)} hint={`${fmt(summary?.spend.active ?? 0)} on active campaigns`} />
+        <StatTile label="Spend per lead" value={fmt(summary?.costPerLead)} hint="All ad spend ÷ all leads" />
+      </div>
+
+      {/* Campaigns */}
       <section className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h2 className="text-xl font-bold">Advertising Campaigns</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xl font-bold">Ad campaigns</h2>
           <div className="flex gap-2">
-            <Button 
-              onClick={handleOpenLeadsDialog}
-              variant="outline"
-              className="h-10 px-4 font-black uppercase tracking-widest text-[10px] shadow-sm transition-all"
-            >
-              <Users className="w-4 h-4 mr-2" />
-              View Leads
+            <Button onClick={() => setLeadsOpen(true)} variant="outline" className="h-10">
+              <Users className="mr-2 h-4 w-4" /> Leads{newLeads > 0 ? ` (${newLeads} new)` : ''}
             </Button>
-            <Button 
-              onClick={() => {
-                setEditingAd(null);
-                setAdvertisingDialogOpen(true);
-              }}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 font-black uppercase tracking-widest text-[10px] shadow-sm transition-all"
-            >
-              <Megaphone className="w-4 h-4 mr-2" />
-              Launch Campaign
-            </Button>
+            {canManageCampaigns && (
+              <Button onClick={() => { setEditingAd(null); setCampaignDialogOpen(true); }} className="h-10">
+                <Megaphone className="mr-2 h-4 w-4" /> Add campaign
+              </Button>
+            )}
           </div>
         </div>
 
-        <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border bg-secondary/50">
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Campaign</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Platform</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Status</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Spend vs Budget</th>
-                  <th className="text-right px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Actions</th>
+                <tr className="border-b border-border bg-secondary/50 text-left text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                  <th className="px-6 py-4">Campaign</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Spend vs budget</th>
+                  <th className="px-6 py-4">Leads</th>
+                  <th className="px-6 py-4">Cost / lead</th>
+                  <th className="px-6 py-4">Result</th>
+                  {canManageCampaigns && <th className="px-6 py-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
-                {ads.map((ad) => {
-                  const isOverBudget = ad.budgetLimit && ad.amountSpent >= ad.budgetLimit;
+                {filteredAds.map((ad) => {
+                  const isOverBudget = Boolean(ad.budgetLimit && ad.amountSpent >= ad.budgetLimit);
+                  const result = campaignResults.get(ad.id);
                   return (
-                    <tr 
-                      key={ad.id} 
-                      className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors ${isOverBudget ? 'bg-destructive/10' : ''}`}
-                    >
-                      <td className="px-6 py-4 font-bold text-foreground text-sm">
-                        <div className="flex items-center gap-2">
-                          {isOverBudget && <AlertTriangle className="w-4 h-4 text-destructive" />}
+                    <tr key={ad.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${isOverBudget ? 'bg-destructive/10' : ''}`}>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex items-center gap-2 font-bold">
+                          {isOverBudget && <AlertTriangle className="h-4 w-4 text-destructive" />}
                           {ad.campaignName}
                         </div>
+                        <div className="text-xs text-muted-foreground">{ad.platform}</div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-foreground">{ad.platform}</td>
-                      <td className="px-6 py-4 text-sm text-foreground">
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          ad.status === 'Active' ? 'bg-green-500/20 text-green-500' :
-                          ad.status === 'Paused' ? 'bg-yellow-500/20 text-yellow-500' :
-                          'bg-muted text-muted-foreground'
-                        }`}>
+                      <td className="px-6 py-4 text-sm">
+                        <Pill className={
+                          (ad.status || 'Active') === 'Active' ? 'bg-green-500/15 text-green-700 dark:text-green-400'
+                            : ad.status === 'Paused' ? 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400'
+                            : 'bg-muted text-muted-foreground'
+                        }>
                           {ad.status || 'Active'}
-                        </span>
+                        </Pill>
                       </td>
-                      <td className={`px-6 py-4 text-sm font-medium ${isOverBudget ? 'text-destructive font-bold' : 'text-foreground'}`}>
+                      <td className={`px-6 py-4 text-sm tabular-nums ${isOverBudget ? 'font-bold text-destructive' : ''}`}>
                         {formatCurrency(ad.amountSpent)} {ad.budgetLimit ? `/ ${formatCurrency(ad.budgetLimit)}` : ''}
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditingAd(ad);
-                            setAdvertisingDialogOpen(true);
-                          }}
-                        >
-                          Edit
-                        </Button>
-                      </td>
+                      {result?.attributable ? (
+                        <>
+                          <td className="px-6 py-4 text-sm tabular-nums">{result.leads}</td>
+                          <td className="px-6 py-4 text-sm tabular-nums">{fmt(result.costPerLead)}</td>
+                          <td className="px-6 py-4 text-sm">
+                            {result.sold
+                              ? <>Sold {fmt(result.saleRevenue)}{result.returnOnAdSpend ? <span className="text-muted-foreground"> · {result.returnOnAdSpend.toFixed(1)}× spend</span> : null}</>
+                              : <span className="text-muted-foreground">Not sold yet</span>}
+                          </td>
+                        </>
+                      ) : (
+                        <td colSpan={3} className="px-6 py-4 text-xs text-muted-foreground">
+                          Link a vehicle to this campaign to track its leads and sale.
+                        </td>
+                      )}
+                      {canManageCampaigns && (
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <Button variant="ghost" size="sm" onClick={() => { setEditingAd(ad); setCampaignDialogOpen(true); }}>Edit</Button>
+                          <Button variant="ghost" size="sm" className="text-destructive" aria-label="Delete campaign" onClick={() => setAdToDelete(ad)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
-                {ads.length === 0 && (
+                {filteredAds.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                      No active advertising campaigns.
+                    <td colSpan={canManageCampaigns ? 7 : 6} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                      {ads.length ? 'No campaigns match your search.' : 'No ad campaigns yet.'}
                     </td>
                   </tr>
                 )}
@@ -452,332 +408,280 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
         </div>
       </section>
 
-      {/* Marketing Listings Section */}
+      {/* Listing builder */}
       <section className="stat-card space-y-4">
-        <h2 className="text-lg font-semibold">Listing Generation Pipeline</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            value={form.vehicleId}
-            onChange={(e) => {
-              const selectedId = e.target.value;
-              if (!selectedId) {
-                setForm({
-                  vehicleId: '',
-                  vin: '',
-                  vehicleSpecs: '',
-                  photos: '',
-                  mileage: '',
-                  condition: '',
-                  pricing: '',
-                });
-                return;
-              }
-              const v = vehicles.find((veh) => veh.id === selectedId);
-              if (v) {
-                setForm({
-                  vehicleId: v.id,
-                  vin: v.vin || '',
-                  vehicleSpecs: `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim(),
-                  photos: '',
-                  mileage: v.mileage !== undefined ? String(v.mileage) : '',
-                  condition: 'Excellent',
-                  pricing: v.purchasePrice !== undefined ? String(v.purchasePrice) : '',
-                });
-              }
-            }}
-          >
-            <option value="">Select Inventory Vehicle (optional)</option>
-            {vehicles.map((v) => (
-              <option key={v.id} value={v.id}>{[v.year, v.make, v.model, v.vin].filter(Boolean).join(' ')}</option>
-            ))}
-          </select>
-          <Input placeholder="VIN" value={form.vin} onChange={(e) => setForm({ ...form, vin: e.target.value })} />
-          <Input placeholder="Vehicle Specs (Year Make Model Trim)" value={form.vehicleSpecs} onChange={(e) => setForm({ ...form, vehicleSpecs: e.target.value })} />
-          <Input placeholder="Mileage" type="number" value={form.mileage} onChange={(e) => setForm({ ...form, mileage: e.target.value })} />
-          <Input placeholder="Condition" value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} />
-          <Input placeholder="Pricing" type="number" value={form.pricing} onChange={(e) => setForm({ ...form, pricing: e.target.value })} />
+        <div>
+          <h2 className="text-lg font-semibold">New listing</h2>
+          <p className="text-xs text-muted-foreground">Creates a draft you can review and edit before anything is published.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="space-y-1 md:col-span-3">
+            <Label>Inventory vehicle</Label>
+            <Select value={form.vehicleId || 'none'} onValueChange={selectVehicle}>
+              <SelectTrigger><SelectValue placeholder="Select a vehicle (optional)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not in inventory — enter details below</SelectItem>
+                {forSale.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>{[v.year, v.make, v.model, v.vin].filter(Boolean).join(' ')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>VIN</Label>
+            <Input value={form.vin} onChange={(e) => setForm({ ...form, vin: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Vehicle (year make model trim)</Label>
+            <Input value={form.vehicleSpecs} onChange={(e) => setForm({ ...form, vehicleSpecs: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Mileage</Label>
+            <Input type="number" min="0" value={form.mileage} onChange={(e) => setForm({ ...form, mileage: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Condition</Label>
+            <Select value={form.condition} onValueChange={(v) => setForm({ ...form, condition: v })}>
+              <SelectTrigger><SelectValue placeholder="Choose condition" /></SelectTrigger>
+              <SelectContent>
+                {conditions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Asking price ($)</Label>
+            <Input type="number" min="1" placeholder="Advertised price" value={form.pricing} onChange={(e) => setForm({ ...form, pricing: e.target.value })} />
+            {form.vehicleId && !form.pricing && (
+              <p className="text-[11px] text-muted-foreground">This vehicle has no asking price yet; the one you enter is saved to it.</p>
+            )}
+          </div>
         </div>
 
-        {/* Image Upload Section */}
+        {/* Photos */}
         <div className="space-y-3">
           <div
-            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
-              isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/30'
-            }`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            className={`cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/30'}`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+            onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleImageUpload(e.dataTransfer.files); }}
             onClick={() => document.getElementById('image-upload-input')?.click()}
           >
-            <input
-              id="image-upload-input"
-              type="file"
-              multiple
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handleImageUpload(e.target.files)}
-            />
-            <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">
-              {isDragging ? 'Drop images here' : 'Click to upload or drag & drop images'}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF up to 10MB each</p>
+            <input id="image-upload-input" type="file" multiple accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e.target.files)} />
+            <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+            <p className="text-sm font-medium">{isDragging ? 'Drop photos here' : 'Click to upload or drag & drop photos'}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Photos are resized in your browser before upload.</p>
           </div>
 
-          {/* Image Previews */}
           {uploadedImages.length > 0 && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={isRemovingBg}
-                  onClick={handleRemoveAllBackgrounds}
-                >
-                  {isRemovingBg ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Scissors className="w-4 h-4 mr-2" />
-                  )}
+                <Button type="button" variant="outline" size="sm" disabled={isRemovingBg} onClick={handleRemoveAllBackgrounds}>
+                  {isRemovingBg ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Scissors className="mr-2 h-4 w-4" />}
                   Remove background on all
                 </Button>
                 <p className="text-xs text-muted-foreground">
                   {isRemovingBg
-                    ? `${bgProgress.stage ?? 'Working'}${
-                        bgProgress.ratio !== null ? ` — ${Math.round(bgProgress.ratio * 100)}%` : ''
-                      }${activeBgIndex !== null ? ` (photo ${activeBgIndex + 1} of ${uploadedImages.length})` : ''}`
-                    : `Runs in your browser — photos are never uploaded for this. Around 40 seconds per photo${
-                        uploadedImages.length > 1 ? `, so roughly ${Math.ceil((uploadedImages.length * 40) / 60)} min for all ${uploadedImages.length}` : ''
-                      }.`}
+                    ? `${bgProgress.stage ?? 'Working'}${bgProgress.ratio !== null ? ` — ${Math.round(bgProgress.ratio * 100)}%` : ''}${activeBgIndex !== null ? ` (photo ${activeBgIndex + 1} of ${uploadedImages.length})` : ''}`
+                    : 'Runs in your browser. Around 40 seconds per photo.'}
                 </p>
               </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
                 {uploadedImages.map((image, index) => (
-                  <div key={index} className="relative group">
-                    <img
-                      src={image}
-                      alt={`Upload ${index + 1}`}
-                      className="w-full h-24 object-cover rounded-lg border border-border bg-muted"
-                    />
-
+                  <div key={index} className="group relative">
+                    <img src={image} alt={`Upload ${index + 1}`} className="h-24 w-full rounded-lg border border-border bg-muted object-cover" />
                     {activeBgIndex === index && (
                       <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50">
-                        <Loader2 className="w-5 h-5 animate-spin text-white" />
+                        <Loader2 className="h-5 w-5 animate-spin text-white" />
                       </div>
                     )}
-
-                    <div className="absolute bottom-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute bottom-1 left-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       {originalImages[index] ? (
-                        <button
-                          type="button"
-                          title="Restore the original photo"
-                          onClick={(e) => { e.stopPropagation(); handleRestoreOriginal(index); }}
-                          className="p-1 rounded bg-background/90 border border-border text-foreground hover:bg-background"
-                        >
-                          <Undo2 className="w-3 h-3" />
+                        <button type="button" title="Restore the original photo" onClick={() => handleRestoreOriginal(index)} className="rounded border border-border bg-background/90 p-1">
+                          <Undo2 className="h-3 w-3" />
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          title="Remove background"
-                          disabled={isRemovingBg}
-                          onClick={(e) => { e.stopPropagation(); handleRemoveBackground(index); }}
-                          className="p-1 rounded bg-background/90 border border-border text-foreground hover:bg-background disabled:opacity-50"
-                        >
-                          <Scissors className="w-3 h-3" />
+                        <button type="button" title="Remove background" disabled={isRemovingBg} onClick={() => handleRemoveBackground(index)} className="rounded border border-border bg-background/90 p-1 disabled:opacity-50">
+                          <Scissors className="h-3 w-3" />
                         </button>
                       )}
                     </div>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveImage(index);
-                      }}
-                      className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
+                    <button type="button" aria-label="Remove photo" onClick={() => handleRemoveImage(index)} className="absolute right-1 top-1 rounded-full bg-destructive p-1 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                      <X className="h-3 w-3" />
                     </button>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          {/* Fallback: URL Input */}
-          {uploadedImages.length === 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Or paste URLs:</span>
-              <Input
-                placeholder="Photos (comma-separated URLs)"
-                value={form.photos}
-                onChange={(e) => setForm({ ...form, photos: e.target.value })}
-                className="flex-1"
-              />
-            </div>
-          )}
         </div>
-        <p className="text-xs text-muted-foreground">Channels: {CHANNELS.join(', ')}</p>
-        <Button onClick={handleGenerate} disabled={isSaving} className="bg-primary text-primary-foreground">
-          <Sparkles className="w-4 h-4 mr-2" />
-          {isSaving ? 'Generating...' : 'Generate + Publish Ad'}
+
+        <div className="space-y-2">
+          <Label>Channels</Label>
+          <ChannelPicker channels={channels} selected={selectedChannels} onChange={setFormChannels} />
+        </div>
+
+        <Button onClick={handleGenerate} disabled={marketing.isGenerating}>
+          {marketing.isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+          {marketing.isGenerating ? 'Writing listing…' : 'Create draft'}
         </Button>
       </section>
 
-      <div className="bg-card rounded-xl border border-border overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-secondary/50">
-                <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">VIN</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">SEO Title</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Channels</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Analytics</th>
-                <th className="text-right px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredListings.map((row) => {
-                const analytics = row.analytics || {};
-                return (
-                  <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-6 py-4 font-bold text-foreground text-sm">{row.vin}</td>
-                    <td className="px-6 py-4 text-sm text-foreground">{row.seoTitle}</td>
-                    <td className="px-6 py-4 text-xs text-muted-foreground">{row.channels.join(', ')}</td>
-                    <td className="px-6 py-4 text-xs text-muted-foreground">
-                      Impr: {analytics.impressions || 0} | Clicks: {analytics.clicks || 0} | Leads: {analytics.leads || 0}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            const existing = Array.isArray(row.scheduledPosts) ? row.scheduledPosts : [];
-                            const next = existing.map((item: any) => ({ ...item, status: 'SCHEDULED' }));
-                            await updateSchedule({ id: row.id, scheduledPosts: next });
-                            toast.success('Scheduled posts updated.');
-                          }}
-                        >
-                          Schedule
+      {/* Listings */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xl font-bold">Listings</h2>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            Show archived
+          </label>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-secondary/50 text-left text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                  <th className="px-6 py-4">Listing</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Channels</th>
+                  <th className="px-6 py-4">Results</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredListings.map((row) => {
+                  const posts = Array.isArray(row.scheduledPosts) ? row.scheduledPosts : [];
+                  const thumb = row.photoUrls?.[0];
+                  return (
+                    <tr key={row.id} className="border-b border-border align-top last:border-0 hover:bg-muted/30">
+                      <td className="px-6 py-4">
+                        <div className="flex gap-3">
+                          {thumb
+                            ? <img src={assetUrl(thumb)} alt="" className="h-12 w-16 shrink-0 rounded border border-border bg-muted object-cover" />
+                            : <div className="h-12 w-16 shrink-0 rounded border border-dashed border-border" />}
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold">{row.vehicleSpecs}</p>
+                            <p className="text-xs text-muted-foreground">{formatCurrency(row.pricing)} · {row.mileage.toLocaleString()} mi · {row.vin}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Pill className={LISTING_STATUS_STYLE[row.status]}>{row.status}</Pill>
+                        {row.status === 'SCHEDULED' && row.scheduledFor && (
+                          <p className="mt-1 text-xs text-muted-foreground">{new Date(row.scheduledFor).toLocaleString()}</p>
+                        )}
+                        {row.status === 'ARCHIVED' && row.archivedReason && (
+                          <p className="mt-1 text-xs text-muted-foreground">{row.archivedReason}</p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {row.status === 'PUBLISHED' && posts.length ? (
+                          <div className="flex max-w-xs flex-wrap gap-1">
+                            {posts.map((p) => (
+                              <Pill key={p.channel} className={CHANNEL_STATUS[p.status]?.style ?? 'bg-muted'}>
+                                {p.channel}: {CHANNEL_STATUS[p.status]?.label ?? p.status}
+                              </Pill>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="max-w-xs text-xs text-muted-foreground">{row.channels.join(', ')}</p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-muted-foreground whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" /> {row.analytics?.views ?? 0} views</span>
+                        <br />
+                        <span className="inline-flex items-center gap-1"><MessageSquare className="h-3 w-3" /> {row.analytics?.inquiries ?? 0} inquiries</span>
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        {row.status !== 'ARCHIVED' && (
+                          <>
+                            <Button variant="ghost" size="sm" onClick={() => setEditingListing(row)} aria-label="Edit listing"><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="outline" size="sm" onClick={() => setPublishingListing(row)}>
+                              <Send className="mr-1 h-3 w-3" /> {row.status === 'PUBLISHED' ? 'Channels' : 'Publish'}
+                            </Button>
+                            {row.status === 'PUBLISHED' && (
+                              <Button variant="ghost" size="sm" onClick={() => copyPublicLink(row)} aria-label="Copy public link"><Copy className="h-4 w-4" /></Button>
+                            )}
+                            <Button variant="ghost" size="sm" onClick={() => archive(row)} aria-label="Archive listing"><Archive className="h-4 w-4" /></Button>
+                          </>
+                        )}
+                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setListingToDelete(row)} aria-label="Delete listing">
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            await updateAnalytics({
-                              id: row.id,
-                              analytics: {
-                                impressions: (analytics.impressions || 0) + 200,
-                                clicks: (analytics.clicks || 0) + 17,
-                                leads: (analytics.leads || 0) + 3,
-                              },
-                              leadAttribution: {
-                                byChannel: {
-                                  ...(row.leadAttribution?.byChannel || {}),
-                                  'Facebook Marketplace': ((row.leadAttribution?.byChannel?.['Facebook Marketplace']) || 0) + 1,
-                                },
-                              },
-                            });
-                            toast.success('Analytics + lead attribution updated.');
-                          }}
-                        >
-                          Track
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            await captureLead({
-                              id: row.id,
-                              source: 'Facebook Marketplace',
-                              campaign: row.vin,
-                              leadName: 'New Buyer',
-                            });
-                            toast.success('Lead captured from marketing channel.');
-                            // Refresh leads if dialog is open
-                            if (leadsDialogOpen) {
-                              fetchLeads();
-                            }
-                          }}
-                        >
-                          Capture Lead
-                        </Button>
-                      </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredListings.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                      {listings.length ? 'No listings match.' : 'No listings yet. Create one above.'}
                     </td>
                   </tr>
-                );
-              })}
-              {filteredListings.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                    No generated listings yet. Use the pipeline above to create one.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-      <AddAdvertisingDialog open={advertisingDialogOpen} onOpenChange={setAdvertisingDialogOpen} ad={editingAd} />
-      
-      {/* Leads Dialog */}
-      <Dialog open={leadsDialogOpen} onOpenChange={setLeadsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-card border-border text-foreground">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black font-display tracking-tight text-foreground uppercase flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Captured Marketing Leads
-            </DialogTitle>
-          </DialogHeader>
-          
-          {leads.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">No leads captured yet</p>
-              <p className="text-xs text-muted-foreground mt-1">Leads will appear here when captured from marketing channels</p>
-            </div>
-          ) : (
-            <div className="mt-4">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-secondary/50">
-                      <th className="text-left px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Source</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Campaign</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Lead Name</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Contact</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Captured</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leads.map((lead) => (
-                      <tr key={lead.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 text-sm font-medium text-foreground">{lead.source}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{lead.campaign || '-'}</td>
-                        <td className="px-4 py-3 text-sm text-foreground">{lead.leadName || '-'}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">
-                          {lead.leadPhone && <div className="text-xs">{lead.leadPhone}</div>}
-                          {lead.leadEmail && <div className="text-xs">{lead.leadEmail}</div>}
-                          {!lead.leadPhone && !lead.leadEmail && '-'}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">
-                          {new Date(lead.createdAt).toLocaleDateString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      </section>
+
+      {canManageCampaigns && <AddAdvertisingDialog open={campaignDialogOpen} onOpenChange={setCampaignDialogOpen} ad={editingAd} />}
+
+      <ListingEditorDialog
+        listing={editingListing}
+        channels={channels}
+        conditions={conditions}
+        onOpenChange={(open) => !open && setEditingListing(null)}
+        onSave={marketing.updateListing}
+        saving={marketing.isUpdating}
+      />
+      <PublishDialog
+        listing={publishingListing}
+        channels={channels}
+        onOpenChange={(open) => !open && setPublishingListing(null)}
+        onPublish={marketing.publishListing}
+        publishing={marketing.isPublishing}
+      />
+      <LeadsDialog
+        open={leadsOpen}
+        onOpenChange={setLeadsOpen}
+        leads={leads}
+        loading={marketing.leadsLoading}
+        error={marketing.leadsError}
+        onRetry={() => marketing.refetchLeads()}
+        onStatusChange={marketing.setLeadStatus}
+        onConvert={marketing.convertLead}
+      />
+
+      <AlertDialog open={Boolean(listingToDelete)} onOpenChange={(open) => !open && setListingToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this listing?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The listing and its photos are removed and its public page stops working. Leads it brought in are kept.
+              To just stop advertising, archive it instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteListing} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={Boolean(adToDelete)} onOpenChange={(open) => !open && setAdToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete campaign "{adToDelete?.campaignName}"?</AlertDialogTitle>
+            <AlertDialogDescription>Its spend will no longer count in your marketing or expense totals.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteAd} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 
-  return isSubpage ? content : <AppLayout>{content}</AppLayout>;
+  return wrap(content);
 }

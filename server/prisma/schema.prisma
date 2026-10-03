@@ -76,6 +76,7 @@ model Vehicle {
   purchaseDate      DateTime
   status            String   @default("Available")
   reconStage        String   @default("None") // None, Acquired, Detailing, Inspection, Repairing, Ready
+  askingPrice       Float?   // Advertised price; marketing never falls back to the purchase cost
   titleNumber       String?
   daysInInventory   Int      @default(0)
   createdAt         DateTime @default(now())
@@ -486,11 +487,19 @@ model MarketingListing {
   hashtags         String[]
   featureBullets   String[]
   adCopy           String
-  ctaOptimization  String
-  formattedListing String
+  ctaOptimization  String?
+  formattedListing String?
 
-  scheduledPosts   Json?
-  analytics        Json?
+  // DRAFT -> SCHEDULED/PUBLISHED -> ARCHIVED. Null on listings created before statuses existed.
+  status           String?
+  scheduledFor     DateTime?
+  publishedAt      DateTime?
+  archivedAt       DateTime?
+  archivedReason   String?
+  copySource       String?  // AI or TEMPLATE
+
+  scheduledPosts   Json?    // per-channel publish results
+  analytics        Json?    // { views, inquiries, byChannel: { [channel]: { views, inquiries } } }
   leadAttribution  Json?
 
   createdAt        DateTime @default(now())
@@ -513,6 +522,9 @@ model MarketingLead {
   leadName       String?
   leadPhone      String?
   leadEmail      String?
+  message        String?
+  status         String?  // NEW, CONTACTED, CONVERTED
+  customerId     String?  @db.ObjectId
   createdAt      DateTime @default(now())
 
   dealershipId   String     @db.ObjectId
@@ -619,4 +631,18 @@ model Message {
   updatedAt    DateTime @updatedAt
 
   @@index([channelId, createdAt])
+}
+
+// Listing photos live one per document: embedding them in MarketingListing.photos let a few
+// phone photos push a listing past MongoDB's 16MB document limit.
+model MarketingPhoto {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  listingId    String?  @db.ObjectId
+  mimeType     String
+  dataBase64   String
+  createdAt    DateTime @default(now())
+  dealershipId String   @db.ObjectId
+
+  @@index([listingId])
+  @@index([dealershipId])
 }

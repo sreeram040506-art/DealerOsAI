@@ -494,6 +494,7 @@ router.get('/', async (req, res, next) => {
           color: v.color,
           status: v.status,
           reconStage: v.reconStage,
+          askingPrice: v.askingPrice ?? null, // the advertised price is not confidential
           purchaseDate: v.purchaseDate,
           createdAt: v.createdAt,
           updatedAt: v.updatedAt,
@@ -678,7 +679,7 @@ router.patch('/:id', async (req, res, next) => {
       purchasedFrom, purchasePrice, paymentMethod, transportCost, buyerFee,
       inspectionCost, registrationCost, titleNumber,
       sellerAddress, sellerCity, sellerState, sellerZip,
-      reconStage
+      reconStage, askingPrice
     } = req.body;
 
     const vehicleId = req.params.id;
@@ -708,6 +709,11 @@ router.patch('/:id', async (req, res, next) => {
           ...(color !== undefined && { color }),
           ...(status !== undefined && { status }),
           ...(reconStage !== undefined && { reconStage }),
+          ...(askingPrice !== undefined && {
+            askingPrice: askingPrice === null || askingPrice === '' || !Number.isFinite(Number(askingPrice)) || Number(askingPrice) <= 0
+              ? null
+              : Number(askingPrice),
+          }),
           ...(titleNumber !== undefined && { titleNumber: titleNumber || null }),
           ...(purchaseDate && { purchaseDate: new Date(purchaseDate) }),
         }

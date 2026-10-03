@@ -183,6 +183,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     sellerState: '',
     sellerZip: '',
     purchasePrice: '',
+    askingPrice: '',
     transportCost: '',
     inspectionCost: '',
     registrationCost: '',
@@ -252,6 +253,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
       sellerState: vehicle.purchase?.sellerState || '',
       sellerZip: vehicle.purchase?.sellerZip || '',
       purchasePrice: String(vehicle.purchase?.purchasePrice || ''),
+      askingPrice: vehicle.askingPrice ? String(vehicle.askingPrice) : '',
       transportCost: String(vehicle.purchase?.transportCost || ''),
       inspectionCost: String(vehicle.purchase?.inspectionCost || ''),
       registrationCost: String(vehicle.purchase?.registrationCost || ''),
@@ -276,6 +278,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           year: parseInt(editForm.year),
           mileage: parseInt(editForm.mileage),
           purchasePrice: parseFloat(editForm.purchasePrice) || 0,
+          askingPrice: parseFloat(editForm.askingPrice) || null,
           transportCost: parseFloat(editForm.transportCost) || 0,
           inspectionCost: parseFloat(editForm.inspectionCost) || 0,
           registrationCost: parseFloat(editForm.registrationCost) || 0,
@@ -590,6 +593,10 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                        <Input type="number" value={editForm.purchasePrice} onChange={e => setEditForm({...editForm, purchasePrice: e.target.value})} className="bg-muted border-primary/20 h-9 text-sm font-bold text-primary" />
                     </div>
                     <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Asking Price ($)</Label>
+                       <Input type="number" min="0" placeholder="Advertised price" value={editForm.askingPrice} onChange={e => setEditForm({...editForm, askingPrice: e.target.value})} className="bg-muted border-border h-9 text-sm" />
+                    </div>
+                    <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Transport ($)</Label>
                        <Input type="number" value={editForm.transportCost} onChange={e => setEditForm({...editForm, transportCost: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
@@ -625,6 +632,10 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               <div className="bg-secondary/10 border border-border/40 rounded-xl p-4 space-y-3">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-primary">Purchase Breakdown</h4>
                 <div className="space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Asking Price</span>
+                    <span className="font-bold text-foreground">{vehicle.askingPrice ? `$${vehicle.askingPrice.toLocaleString()}` : 'Not set'}</span>
+                  </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Purchase Price</span>
                     <span className="font-bold text-foreground">${(vehicle.purchasePrice || vehicle.purchase?.purchasePrice || 0).toLocaleString()}</span>

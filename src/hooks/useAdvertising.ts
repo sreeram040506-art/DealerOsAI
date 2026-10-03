@@ -13,7 +13,8 @@ export function useAdvertising() {
       const response = await apiFetch('/advertising', token);
       return handleApiResponse<AdvertisingExpense[]>(response, logout);
     },
-    enabled: !!token && user?.role === 'ADMIN',
+    // Managers can read campaigns (the server allows it); only admins can change them.
+    enabled: !!token && ['ADMIN', 'MANAGER', 'SUPER_ADMIN'].includes(user?.role ?? ''),
     staleTime: 60000,
   });
 

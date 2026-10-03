@@ -34,6 +34,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Communication = lazy(() => import("./pages/Communication"));
 const Attendance = lazy(() => import("./pages/Attendance"));
 const PhotoStudio = lazy(() => import("./pages/PhotoStudio"));
+const PublicListing = lazy(() => import("./pages/PublicListing"));
 
 // Preload manager — memoized to prevent re-renders from parent
 const PreloadManager = memo(function PreloadManager() {
@@ -88,6 +89,8 @@ export default function App() {
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                {/* Public: buyers open marketing listings from links, with no login. */}
+                <Route path="/l/:id" element={<PublicListing />} />
                 
                 <Route path="/" element={
                   <ProtectedRoute>
@@ -115,7 +118,7 @@ export default function App() {
                   </ProtectedRoute>
                 } />
                 <Route path="/marketing" element={
-                  <ProtectedRoute roles={['ADMIN']}>
+                  <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
                     <Advertising />
                   </ProtectedRoute>
                 } />

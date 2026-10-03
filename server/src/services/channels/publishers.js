@@ -1,14 +1,21 @@
-async function publishMock(channel, payload, reason = null) {
-  const postId = `${channel.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
-  return {
-    channel,
-    status: 'PUBLISHED',
-    externalPostId: postId,
-    publishedAt: new Date().toISOString(),
-    permalink: payload?.trackingUrl || '',
-    mode: reason ? 'MOCK_FALLBACK' : 'MOCK',
-    note: reason,
-  };
+// Each publisher reports what actually happened. These used to return status 'PUBLISHED' for
+// channels with no integration at all, and even when a live Facebook post failed, so the
+// marketing page claimed posts that never went out.
+//
+//   POSTED         – the listing is live on that channel (permalink is where)
+//   NOT_CONNECTED  – no integration for this channel yet; post it manually with the
+//                    channel's tracking link so inquiries are still attributed to it
+//   FAILED         – an integration exists but the post was rejected (error says why)
+
+function result(channel, status, extra = {}) {
+  return { channel, status, at: new Date().toISOString(), ...extra };
+}
+
+function notConnected(channel, payload, why) {
+  return result(channel, 'NOT_CONNECTED', {
+    note: why,
+    trackingUrl: payload.trackingUrlFor(channel),
+  });
 }
 
 async function safeJsonFetch(url, options) {
@@ -27,61 +34,48 @@ async function safeJsonFetch(url, options) {
   return parsed;
 }
 
+// Posts to the dealership's Facebook Page (the Graph API has no Marketplace endpoint for
+// dealers). The link points at the public listing page, which carries the photos.
 export async function publishToFacebook(payload) {
+  const channel = 'Facebook Marketplace';
   const token = process.env.FACEBOOK_ACCESS_TOKEN;
   const pageId = process.env.FACEBOOK_PAGE_ID;
-  if (!token || !pageId) return publishMock('Facebook Marketplace', payload, 'FACEBOOK_ACCESS_TOKEN/PAGE_ID missing');
+  if (!token || !pageId) {
+    return notConnected(channel, payload, 'Facebook is not connected (FACEBOOK_ACCESS_TOKEN / FACEBOOK_PAGE_ID unset).');
+  }
 
   try {
-    const message = [payload.title, payload.description, payload.cta, payload.trackingUrl].filter(Boolean).join('\n\n');
-    const result = await safeJsonFetch(`https://graph.facebook.com/v20.0/${pageId}/feed`, {
+    const link = payload.trackingUrlFor(channel);
+    const message = [payload.title, payload.description, payload.cta].filter(Boolean).join('\n\n');
+    const response = await safeJsonFetch(`https://graph.facebook.com/v20.0/${pageId}/feed`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, ...(link.startsWith('http') ? { link } : {}) }),
     });
-    return {
-      channel: 'Facebook Marketplace',
-      status: 'PUBLISHED',
-      externalPostId: result?.id || null,
-      publishedAt: new Date().toISOString(),
-      permalink: payload?.trackingUrl || '',
-      mode: 'LIVE_API',
-    };
+    return result(channel, 'POSTED', { externalPostId: response?.id || null, permalink: link });
   } catch (error) {
-    return publishMock('Facebook Marketplace', payload, `Facebook publish failed: ${error.message}`);
+    return result(channel, 'FAILED', { error: error.message });
   }
 }
 
-export async function publishToInstagram(payload) {
-  return publishMock('Instagram', payload, 'Instagram Graph publish adapter pending');
-}
-
-export async function publishToTikTok(payload) {
-  return publishMock('TikTok', payload, 'TikTok publish adapter pending');
-}
-
+// The dealer website channel is this app's own public listing page, so it is genuinely live
+// the moment the listing is published.
 export async function publishToDealerWebsite(payload) {
-  return publishMock('Dealer Website', payload);
+  const channel = 'Dealer Website';
+  return result(channel, 'POSTED', { permalink: payload.trackingUrlFor(channel) });
 }
 
-export async function publishToCraigslist(payload) {
-  return publishMock('Craigslist', payload, 'Craigslist publish adapter pending');
-}
-
-export async function publishToYoutubeShorts(payload) {
-  return publishMock('YouTube Shorts', payload, 'YouTube publish adapter pending');
-}
-
-export async function publishToGoogleVehicleListings(payload) {
-  return publishMock('Google Vehicle Listings', payload, 'Google Vehicle Listings feed adapter pending');
-}
+const pending = (channel, name) => async (payload) =>
+  notConnected(channel, payload, `${name} has no integration yet — copy the listing text and post it with the tracking link.`);
 
 export const channelPublisherMap = {
   'Facebook Marketplace': publishToFacebook,
-  Instagram: publishToInstagram,
-  TikTok: publishToTikTok,
+  Instagram: pending('Instagram', 'Instagram'),
+  TikTok: pending('TikTok', 'TikTok'),
   'Dealer Website': publishToDealerWebsite,
-  Craigslist: publishToCraigslist,
-  'YouTube Shorts': publishToYoutubeShorts,
-  'Google Vehicle Listings': publishToGoogleVehicleListings,
+  Craigslist: pending('Craigslist', 'Craigslist'),
+  'YouTube Shorts': pending('YouTube Shorts', 'YouTube'),
+  'Google Vehicle Listings': pending('Google Vehicle Listings', 'Google Vehicle Listings'),
 };
+
+export const SUPPORTED_CHANNELS = Object.keys(channelPublisherMap);

@@ -14,6 +14,7 @@ import cron from 'node-cron';
 import { train } from './scripts/trainDemandModel.mjs';
 import { runSwapCampaign } from './src/services/interDealershipCampaign.js';
 import { ensureSuperAdmin } from './src/seeds/ensureSuperAdmin.js';
+import { publishDueListings } from './src/services/marketing.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -42,6 +43,15 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 
   // Schedule weekly retraining of demand model (Sunday 03:00 UTC)
   try {
+    // Publish marketing listings whose scheduled time has arrived.
+    cron.schedule('* * * * *', async () => {
+      try {
+        await publishDueListings();
+      } catch (e) {
+        console.error('[Marketing] Scheduled publishing failed', e);
+      }
+    });
+
     cron.schedule('0 3 * * 0', async () => {
       console.log('[Predictor] Weekly retrain starting');
       try {

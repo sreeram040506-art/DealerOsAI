@@ -245,6 +245,16 @@ router.post('/', upload.single('file'), validate(saleSchema), async (req, res, n
         where: { id: vehicleId, dealershipId: req.dealershipId },
         data: { status: 'Sold' }
       });
+      // A sold car must stop being advertised. (Listings are also re-checked whenever the
+      // marketing page or a public listing loads, which covers other ways a car gets sold.)
+      await tx.marketingListing.updateMany({
+        where: {
+          vehicleId,
+          dealershipId: req.dealershipId,
+          OR: [{ status: { in: ['DRAFT', 'SCHEDULED', 'PUBLISHED'] } }, { status: null }],
+        },
+        data: { status: 'ARCHIVED', archivedAt: new Date(), archivedReason: 'Vehicle sold', scheduledFor: null },
+      });
       await upsertCustomerFromSale(tx, req, {
         customerName,
         email,
