@@ -133,13 +133,20 @@ export default function Dashboard() {
     profit: s.profit
   })), [sales]);
 
+  // Inventory and Units Sold cover the current calendar year only; earlier years are
+  // searched from the Inventory and Sold Vehicles pages.
+  const currentYear = new Date().getFullYear();
+  const { inventoryThisYear, onLotNow, soldThisYear } = useMemo(() => ({
+    inventoryThisYear: vehicles.filter(v => new Date(v.purchaseDate).getFullYear() === currentYear).length,
+    onLotNow: vehicles.filter(v => v.status !== 'Sold' && v.status !== 'Returned').length,
+    soldThisYear: sales.filter(s => new Date(s.saleDate).getFullYear() === currentYear).length,
+  }), [vehicles, sales, currentYear]);
+
   const agingVehicles = useMemo(() => {
     return vehicles
       .filter(v => v.status !== 'Sold' && v.status !== 'Returned')
-      .map(v => {
-        const days = v.daysInInventory || Math.max(0, Math.floor((Date.now() - new Date(v.purchaseDate).getTime()) / (1000 * 60 * 60 * 24)));
-        return { ...v, calculatedDays: days };
-      })
+      // daysInInventory is computed by the server from the purchase date
+      .map(v => ({ ...v, calculatedDays: v.daysInInventory ?? 0 }))
       .filter(v => v.calculatedDays >= 45)
       .sort((a, b) => b.calculatedDays - a.calculatedDays);
   }, [vehicles]);
@@ -177,7 +184,7 @@ export default function Dashboard() {
               </div>
             )}
             <button 
-              onClick={() => window.location.href = '/inventory'}
+              onClick={() => navigate('/inventory')}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
             >
               <Car className="w-4 h-4" aria-hidden="true" />
@@ -187,9 +194,22 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3" role="region" aria-label="Key metrics">
-          <StatCard label="Inventory" value={isLoading ? "..." : String(vehicles.length)} icon={Car} />
-          <StatCard label="Units Sold" value={isLoading ? "..." : String(sales.length)} icon={ShoppingCart} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 gap-3" role="region" aria-label="Key metrics">
+          <StatCard
+            label={`Inventory ${currentYear}`}
+            value={isLoading ? "..." : String(inventoryThisYear)}
+            hint={isLoading ? undefined : `${onLotNow} on the lot now`}
+            icon={Car}
+            onClick={() => navigate('/inventory')}
+            actionLabel="View"
+          />
+          <StatCard
+            label={`Units Sold ${currentYear}`}
+            value={isLoading ? "..." : String(soldThisYear)}
+            icon={ShoppingCart}
+            onClick={() => navigate('/sales')}
+            actionLabel="View"
+          />
           {!isStaff && (
             <>
               <StatCard label="Inventory Value" value={isLoading ? "..." : `$${inventoryValue.toLocaleString()}`} icon={Package} />
@@ -214,7 +234,7 @@ export default function Dashboard() {
             icon={CalendarDays} 
             iconClassName="bg-primary/10 text-primary border border-primary/20" 
             onClick={() => navigate('/attendance')}
-            className="cursor-pointer transition-all hover:scale-105 active:scale-95"
+            actionLabel="View"
           />
         </div>
 
@@ -227,34 +247,34 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Button
               onClick={() => navigate('/inventory')}
-              className="h-auto flex-col gap-2 py-4 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
+              className="h-auto flex-col gap-1.5 py-3 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
               variant="outline"
             >
-              <Car className="w-6 h-6 text-primary" />
+              <Car className="w-5 h-5 text-primary" />
               <span className="font-bold">Add Vehicle</span>
             </Button>
             <Button
               onClick={() => navigate('/sales')}
-              className="h-auto flex-col gap-2 py-4 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
+              className="h-auto flex-col gap-1.5 py-3 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
               variant="outline"
             >
-              <ShoppingCart className="w-6 h-6 text-success" />
+              <ShoppingCart className="w-5 h-5 text-success" />
               <span className="font-bold">New Deal</span>
             </Button>
             <Button
               onClick={() => navigate('/customers')}
-              className="h-auto flex-col gap-2 py-4 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
+              className="h-auto flex-col gap-1.5 py-3 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
               variant="outline"
             >
-              <Users className="w-6 h-6 text-info" />
+              <Users className="w-5 h-5 text-info" />
               <span className="font-bold">Add Customer</span>
             </Button>
             <Button
               onClick={() => navigate('/ai-insights')}
-              className="h-auto flex-col gap-2 py-4 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
+              className="h-auto flex-col gap-1.5 py-3 rounded-xl shadow-sm border border-border/50 hover:bg-muted/50 bg-card text-foreground"
               variant="outline"
             >
-              <Sparkles className="w-6 h-6 text-warning" />
+              <Sparkles className="w-5 h-5 text-warning" />
               <span className="font-bold">Ask AI</span>
             </Button>
           </div>

@@ -22,6 +22,7 @@ export interface Vehicle {
   status: VehicleStatus;
   reconStage?: string;
   askingPrice?: number | null;
+  stockNumber?: string | null;
   titleNumber?: string;
   daysInInventory: number;
   createdAt?: string;

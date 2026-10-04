@@ -4,6 +4,8 @@ import { authenticateToken } from '../middlewares/authMiddleware.js';
 
 import { resolveOpenAiKey } from '../services/dealershipSettings.js';
 
+import { daysInStock } from '../utils/vehicleStock.js';
+
 const router = express.Router();
 
 function getBasePurchaseCost(purchase) {
@@ -75,7 +77,8 @@ router.post('/', async (req, res, next) => {
           model: true,
           year: true,
           status: true,
-          daysInInventory: true,
+          purchaseDate: true,
+          createdAt: true,
           purchase: {
             select: {
               sellerName: true,
@@ -106,7 +109,7 @@ router.post('/', async (req, res, next) => {
       vin: v.vin.slice(-6), // save tokens, just last 6
       veh: `${v.year} ${v.make} ${v.model}`,
       status: v.status,
-      days: v.daysInInventory,
+      days: daysInStock(v),
       src: v.purchase?.sellerName || 'Unknown',
       cost: getBasePurchaseCost(v.purchase),
       profit: v.sale?.profit || 0

@@ -11,6 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import { resolveOpenAiKey } from '../services/dealershipSettings.js';
 
+import { daysInStock } from '../utils/vehicleStock.js';
+
 const router = express.Router();
 const MODEL_DIR = path.join(__dirname, '../../data/predictor-models');
 const LATEST_MODEL_PATH = path.join(__dirname, '../../data/demand_model_latest.json');
@@ -273,7 +275,7 @@ router.post('/assistant', async (req, res, next) => {
         const system = `You are a dealership inventory assistant. Answer with practical recommendations and short clear bullets for swap and inventory actions. Use the context but do not invent unsupported details.`;
         const topItemsSummary = topItems.slice(0, 10).map(i => `${i.make} ${i.model} (score:${Math.round((i.score || 0) * 100)})`).join('; ') || 'No recent demand data available';
         const vehicleSummary = myVehicles.slice(0, 10).map(v => {
-          const days = v.daysInInventory || 0;
+          const days = daysInStock(v);
           return `${v.make} ${v.model} ${v.year} (${days}d in stock)`;
         }).join('; ') || 'No available vehicles found';
 
@@ -306,18 +308,17 @@ router.post('/assistant', async (req, res, next) => {
     if (text.includes('swap') || text.includes('swap candidates') || text.includes('good swap')) {
       const now = new Date();
       const suggestions = myVehicles.map(v => {
-        const purchaseDate = v.purchaseDate ? new Date(v.purchaseDate) : (v.purchase?.purchaseDate ? new Date(v.purchase.purchaseDate) : new Date(v.createdAt));
-        const days = v.daysInInventory || Math.max(0, Math.floor((now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24)));
+        const days = daysInStock(v, now);
         return { id: v.id, vin: v.vin, make: v.make, model: v.model, year: v.year, daysInInventory: days };
       }).filter(s => s.daysInInventory >= 60);
 
-      const final = suggestions.length ? suggestions : myVehicles.map(v => ({ id: v.id, vin: v.vin, make: v.make, model: v.model, year: v.year, daysInInventory: v.daysInInventory }));
+      const final = suggestions.length ? suggestions : myVehicles.map(v => ({ id: v.id, vin: v.vin, make: v.make, model: v.model, year: v.year, daysInInventory: daysInStock(v) }));
       return res.json({ intent: 'swap_suggestions', suggestions: final.slice(0, 25), attachments: attachmentReports });
     }
 
     // Generic fallback
     const now = new Date();
-    const results = myVehicles.map(v => ({ id: v.id, make: v.make, model: v.model, year: v.year, daysInInventory: v.daysInInventory }));
+    const results = myVehicles.map(v => ({ id: v.id, make: v.make, model: v.model, year: v.year, daysInInventory: daysInStock(v) }));
     res.json({ intent: 'fallback', results, attachments: attachmentReports });
   } catch (err) {
     next(err);

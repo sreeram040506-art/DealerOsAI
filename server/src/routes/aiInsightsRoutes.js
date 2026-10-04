@@ -5,6 +5,8 @@ import Jimp from 'jimp';
 
 import { resolveOpenAiKey } from '../services/dealershipSettings.js';
 
+import { daysInStock } from '../utils/vehicleStock.js';
+
 const router = express.Router();
 
 function money(value) {
@@ -968,9 +970,12 @@ async function loadContext(dealershipId) {
     }),
   ]);
 
+  // Days on lot are computed: the stored daysInInventory field is never kept up to date.
+  const vehiclesWithAge = vehicles.map((v) => ({ ...v, daysInInventory: daysInStock(v) }));
+
   const context = buildDealershipSnapshot({
     dealership,
-    vehicles,
+    vehicles: vehiclesWithAge,
     purchases,
     sales,
     expenses,
@@ -983,7 +988,7 @@ async function loadContext(dealershipId) {
 
   return {
     dealership,
-    vehicles,
+    vehicles: vehiclesWithAge,
     purchases,
     sales,
     expenses,

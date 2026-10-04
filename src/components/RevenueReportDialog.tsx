@@ -6,6 +6,11 @@ import { FileDown, DollarSign } from 'lucide-react';
 import { Sale } from '@/types/inventory';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { vehicleName } from '@/lib/vehicleAging';
+
+const money = (n: number | null | undefined) => `$${(Number(n) || 0).toLocaleString()}`;
+// Missing parts are skipped so a sale whose vehicle lacks a year never prints "undefined".
+const saleVehicleLabel = (s: Sale) => (s.vehicle ? vehicleName(s.vehicle) : '') || 'Unknown vehicle';
 
 interface RevenueReportDialogProps {
   open: boolean;
@@ -18,33 +23,36 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
 
   // Aggregation Logic
   const getAggregatedData = () => {
-    const map = new Map<string, { count: number, revenue: number, profit: number }>();
+    // Keyed by a sortable value ("2026-03") with a separate display label ("Mar 2026"):
+    // sorting the labels as text put April before March and August before January.
+    const map = new Map<string, { period: string, count: number, revenue: number, profit: number }>();
     
     sales.forEach(s => {
       const date = new Date(s.saleDate);
-      let key = 'All Time';
+      if (Number.isNaN(date.getTime())) return;
+      let key = 'all';
+      let period = 'All Time';
       
       if (filter === 'monthly') {
-        key = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        period = date.toLocaleString('default', { month: 'short', year: 'numeric' });
       } else if (filter === 'yearly') {
         key = String(date.getFullYear());
+        period = key;
       }
       
-      const existing = map.get(key) || { count: 0, revenue: 0, profit: 0 };
+      const existing = map.get(key) || { period, count: 0, revenue: 0, profit: 0 };
       map.set(key, { 
+        period,
         count: existing.count + 1, 
-        revenue: existing.revenue + s.salePrice, 
-        profit: existing.profit + s.profit 
+        revenue: existing.revenue + (Number(s.salePrice) || 0), 
+        profit: existing.profit + (Number(s.profit) || 0) 
       });
     });
 
-    const items = Array.from(map.entries()).map(([period, data]) => ({ period, ...data }));
-    
-    // Sort descending by period (very basic sort)
-    if (filter !== 'all') {
-      items.sort((a, b) => b.period.localeCompare(a.period));
-    }
-    return items;
+    return Array.from(map.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([, data]) => data);
   };
 
   const aggregatedData = getAggregatedData();
@@ -65,16 +73,16 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
     const tableRows = aggregatedData.map(data => [
       data.period,
       data.count.toString(),
-      `$${data.revenue.toLocaleString()}`,
-      `$${data.profit.toLocaleString()}`
+      money(data.revenue),
+      money(data.profit)
     ]);
 
     // Add totals row
     tableRows.push([
       "TOTAL",
-      sales.length.toString(),
-      `$${totalRev.toLocaleString()}`,
-      `$${totalProf.toLocaleString()}`
+      aggregatedData.reduce((n, d) => n + d.count, 0).toString(),
+      money(totalRev),
+      money(totalProf)
     ]);
 
     autoTable(doc, {
@@ -92,13 +100,16 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
     doc.text("Recent Transactions Details", 14, finalY + 14);
 
     const detailColumns = ["Date", "Vehicle", "Price", "Profit", "Buyer"];
-    const detailRows = sales.slice(0, 50).map(s => [ // limit to 50 for brief
-      new Date(s.saleDate).toLocaleDateString(),
-      s.vehicle ? `${s.vehicle.year} ${s.vehicle.make} ${s.vehicle.model}` : 'Unknown',
-      `$${s.salePrice.toLocaleString()}`,
-      `$${s.profit.toLocaleString()}`,
-      s.customerName
-    ]);
+    const detailRows = [...sales]
+      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+      .slice(0, 50) // limit to 50 for brief
+      .map(s => [
+        new Date(s.saleDate).toLocaleDateString(),
+        saleVehicleLabel(s),
+        money(s.salePrice),
+        money(s.profit),
+        s.customerName || '—'
+      ]);
 
     autoTable(doc, {
       head: [detailColumns],
@@ -153,11 +164,11 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
                 <div className="flex gap-4 md:gap-8 items-center text-right">
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Revenue</p>
-                    <p className="font-display font-medium text-foreground">${item.revenue.toLocaleString()}</p>
+                    <p className="font-display font-medium text-foreground">{money(item.revenue)}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-primary uppercase font-bold tracking-widest">Profit</p>
-                    <p className="font-display font-bold text-primary">${item.profit.toLocaleString()}</p>
+                    <p className="font-display font-bold text-primary">{money(item.profit)}</p>
                   </div>
                 </div>
               </div>
@@ -173,7 +184,7 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
         <DialogFooter className="sm:justify-between items-center border-t border-border/50 pt-4 mt-2">
           <div className="flex flex-col text-sm">
             <span className="text-muted-foreground text-xs uppercase tracking-widest font-bold">Total Gross</span>
-            <span className="text-xl font-display font-bold">${totalRev.toLocaleString()}</span>
+            <span className="text-xl font-display font-bold">{money(totalRev)}</span>
           </div>
           <Button onClick={generatePDF} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide">
             <FileDown className="w-4 h-4 mr-2" />

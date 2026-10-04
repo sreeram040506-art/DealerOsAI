@@ -77,6 +77,7 @@ model Vehicle {
   status            String   @default("Available")
   reconStage        String   @default("None") // None, Acquired, Detailing, Inspection, Repairing, Ready
   askingPrice       Float?   // Advertised price; marketing never falls back to the purchase cost
+  stockNumber       String?  // YYMM + 5-digit monthly sequence by purchase month, e.g. 260900001
   titleNumber       String?
   daysInInventory   Int      @default(0)
   createdAt         DateTime @default(now())
@@ -658,4 +659,14 @@ model DealershipSettings {
   updatedById  String?  @db.ObjectId
   updatedAt    DateTime @updatedAt
   createdAt    DateTime @default(now())
+}
+
+// Per-dealership, per-month sequence behind stock numbers (period = "YYMM").
+model StockCounter {
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  dealershipId String @db.ObjectId
+  period       String
+  seq          Int    @default(0)
+
+  @@unique([dealershipId, period])
 }

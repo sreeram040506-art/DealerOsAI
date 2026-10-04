@@ -2,6 +2,7 @@ import express from 'express';
 import prisma from '../db/prisma.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
 import Cache from '../utils/cache.js';
+import { daysInStock, ensureStockNumbers } from '../utils/vehicleStock.js';
 
 // Separate caches per role to prevent data leakage
 const dashboardCache = new Cache(120000); // 2 minutes — dashboard data changes less frequently
@@ -13,6 +14,8 @@ router.get('/summary', async (req, res, next) => {
     const isAdmin = req.user.role === 'ADMIN';
     const isStaff = req.user.role === 'STAFF';
     const cacheKey = `dashboard-${req.user.role}-${req.dealershipId}`; // Tenant-specific cache key
+
+    if (await ensureStockNumbers(req.dealershipId)) dashboardCache.delete(cacheKey);
 
     // Check cache first — avoids 5 parallel DB queries on rapid dashboard visits
     const cached = dashboardCache.get(cacheKey);
@@ -52,8 +55,9 @@ router.get('/summary', async (req, res, next) => {
           profit: true,
           saleDate: true,
           customerName: true,
+          // year is needed by the revenue report ("2014 Audi S7"); without it rows read "undefined Audi S7"
           vehicle: {
-            select: { make: true, model: true }
+            select: { year: true, make: true, model: true }
           }
         },
         orderBy: { saleDate: 'desc' }
@@ -76,7 +80,8 @@ router.get('/summary', async (req, res, next) => {
         : Promise.resolve([])
     ]);
 
-    const vehicles = vehiclesResult.status === 'fulfilled' ? vehiclesResult.value : [];
+    const vehicles = (vehiclesResult.status === 'fulfilled' ? vehiclesResult.value : [])
+      .map((v) => ({ ...v, daysInInventory: daysInStock(v) }));
     const sales = salesResult.status === 'fulfilled' ? salesResult.value : [];
     const advertising = advertisingResult.status === 'fulfilled' ? advertisingResult.value : [];
     const expenses = expensesResult.status === 'fulfilled' ? expensesResult.value : [];

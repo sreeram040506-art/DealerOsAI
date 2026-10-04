@@ -1,4 +1,4 @@
-import { LucideIcon } from 'lucide-react';
+import { ChevronRight, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useState, useRef, memo } from 'react';
 
@@ -10,6 +10,10 @@ interface StatCardProps {
   className?: string;
   iconClassName?: string;
   onClick?: () => void;
+  /** Small secondary line under the value, e.g. "12 on the lot now". */
+  hint?: string;
+  /** Shows a "View" link so clickable cards read as navigation. */
+  actionLabel?: string;
 }
 
 // Optimized number animation — uses a ref to track the rAF ID for cleanup,
@@ -79,7 +83,7 @@ function useAnimatedValue(valueStr: string) {
 
 // Memoized to prevent re-renders when parent (dashboard) re-renders
 // but this card's props haven't changed
-const StatCard = memo(function StatCard({ label, value, icon: Icon, trend, className, iconClassName, onClick }: StatCardProps) {
+const StatCard = memo(function StatCard({ label, value, icon: Icon, trend, className, iconClassName, onClick, hint, actionLabel }: StatCardProps) {
   const animatedValue = useAnimatedValue(value);
 
   return (
@@ -98,13 +102,18 @@ const StatCard = memo(function StatCard({ label, value, icon: Icon, trend, class
       {/* Premium glow effect on hover */}
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer" aria-hidden="true" />
       
-      <div className="flex items-center justify-between mb-4 relative z-10">
+      <div className="flex items-center justify-between mb-2.5 relative z-10">
         <div className={cn(
-          "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-transform duration-300 group-hover:scale-110", 
+          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-sm transition-transform duration-300 group-hover:scale-110", 
           iconClassName || "bg-primary/10 text-primary"
         )} aria-hidden="true">
-          <Icon className="w-5 h-5" />
+          <Icon className="w-4 h-4" />
         </div>
+        {actionLabel && onClick && (
+          <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider text-primary">
+            {actionLabel}<ChevronRight className="w-3 h-3" aria-hidden="true" />
+          </span>
+        )}
         {trend && (
           <div className={cn(
             "px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight shadow-sm",
@@ -117,9 +126,10 @@ const StatCard = memo(function StatCard({ label, value, icon: Icon, trend, class
       
       <div className="min-w-0 relative z-10">
         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-1">{label}</p>
-        <p className="text-3xl font-black text-foreground tabular-nums tracking-tight truncate drop-shadow-sm font-display" title={value}>
+        <p className="text-xl sm:text-2xl font-black text-foreground tabular-nums tracking-tight truncate drop-shadow-sm font-display" title={value}>
           {animatedValue}
         </p>
+        {hint && <p className="text-[11px] text-muted-foreground mt-0.5 truncate" title={hint}>{hint}</p>}
       </div>
     </div>
   );

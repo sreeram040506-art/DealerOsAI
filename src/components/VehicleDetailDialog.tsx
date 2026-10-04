@@ -405,7 +405,12 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <DialogTitle className="flex items-center gap-3 text-xl md:text-2xl font-black font-display tracking-tight text-foreground">
               <span className="p-2 bg-primary/10 rounded-lg shrink-0"><Info className="text-primary h-5 w-5" /></span>
-              <span className="truncate">{isEditing ? 'Editing Vehicle Record' : `${vehicle.year} ${vehicle.make} ${vehicle.model}`}</span>
+              <span className="min-w-0">
+                <span className="block truncate">{isEditing ? 'Editing Vehicle Record' : `${vehicle.year} ${vehicle.make} ${vehicle.model}`}</span>
+                {vehicle.stockNumber && (
+                  <span className="block text-xs font-mono font-semibold text-muted-foreground tracking-normal">Stock #{vehicle.stockNumber}</span>
+                )}
+              </span>
             </DialogTitle>
             
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end">

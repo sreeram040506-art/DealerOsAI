@@ -15,6 +15,8 @@ import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import VinDecoderDialog from '@/components/VinDecoderDialog';
 import ReconKanbanBoard from '@/components/ReconKanbanBoard';
 import { apiUrl, downloadFile } from '@/lib/api';
+import AgingBadge from '@/components/AgingBadge';
+import { agingBand, vehicleName } from '@/lib/vehicleAging';
 import { toast } from '@/components/ui/toast-utils';
 import { 
   AlertDialog, 
@@ -51,7 +53,11 @@ export default function Inventory() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'board'>('list');
-  const [sortBy, setSortBy] = useState<'date' | 'status'>('date');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'status'>('newest');
+  // Purchase-date range. Preset ranges fill the dates; "custom" lets the user type them.
+  const [range, setRange] = useState<'all' | 'year' | '30' | '90' | 'custom'>('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const isStaff = user?.role === 'STAFF';
 
   // useDeferredValue keeps the search input responsive while filtering is deferred
@@ -64,10 +70,22 @@ export default function Inventory() {
     if (deferredSearch) {
       const term = deferredSearch.toLowerCase();
       result = result.filter(v =>
-        `${v.make} ${v.model} ${v.vin} ${v.year}`.toLowerCase().includes(term)
+        `${v.stockNumber || ''} ${v.year} ${v.make} ${v.model} ${v.vin} ${v.status}`.toLowerCase().includes(term)
       );
     }
+
+    // Date range applies to the purchase date (when the car came onto the lot).
+    const from = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : null;
+    const to = toDate ? new Date(`${toDate}T23:59:59.999`).getTime() : null;
+    if (from !== null || to !== null) {
+      result = result.filter(v => {
+        const t = new Date(v.purchaseDate).getTime();
+        if (Number.isNaN(t)) return false;
+        return (from === null || t >= from) && (to === null || t <= to);
+      });
+    }
     
+    const purchased = (v: Vehicle) => new Date(v.purchaseDate || v.createdAt || 0).getTime();
     return [...result].sort((a, b) => {
       if (sortBy === 'status') {
         const order: Record<string, number> = { 'Available': 0, 'Reserved': 1, 'Returned': 2, 'Sold': 3 };
@@ -75,11 +93,38 @@ export default function Inventory() {
         const orderB = order[b.status] ?? 99;
         if (orderA !== orderB) return orderA - orderB;
       }
-      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      return sortBy === 'oldest' ? purchased(a) - purchased(b) : purchased(b) - purchased(a);
     });
-  }, [vehicles, deferredSearch, sortBy]);
+  }, [vehicles, deferredSearch, sortBy, fromDate, toDate]);
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading inventory...</div>;
+  const applyRange = (value: typeof range) => {
+    setRange(value);
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const today = new Date();
+    if (value === 'all') { setFromDate(''); setToDate(''); }
+    else if (value === 'year') { setFromDate(`${today.getFullYear()}-01-01`); setToDate(iso(today)); }
+    else if (value === '30' || value === '90') {
+      const start = new Date(today);
+      start.setDate(start.getDate() - Number(value));
+      setFromDate(iso(start)); setToDate(iso(today));
+    }
+  };
+
+  // Aging counts only cover cars still for sale.
+  const unsold = vehicles.filter(v => v.status !== 'Sold');
+  const agingCounts = {
+    '30': unsold.filter(v => agingBand(v.daysInInventory ?? 0) === '30').length,
+    '60': unsold.filter(v => agingBand(v.daysInInventory ?? 0) === '60').length,
+    '90': unsold.filter(v => agingBand(v.daysInInventory ?? 0) === '90').length,
+  };
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="p-8 text-center text-muted-foreground">Loading inventory...</div>
+      </AppLayout>
+    );
+  }
   if (isError) {
     return (
       <AppLayout>
@@ -156,15 +201,20 @@ export default function Inventory() {
                 <span className="text-primary font-bold">{vehicles.length}</span> total vehicles <span className="text-border mx-2">|</span> <span className="text-primary font-bold">{vehicles.filter(v => v.status === 'Available').length}</span> ready for sale
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                className="flex gap-2 h-9 px-3 md:mr-0 mr-auto rounded-xl border-border/50 font-medium text-sm text-foreground bg-card shadow-sm hover:bg-muted/50"
-                onClick={() => setSortBy(sortBy === 'date' ? 'status' : 'date')}
-              >
-                <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
-                Sort: {sortBy === 'status' ? 'Status' : 'Date'}
-              </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 h-9 px-3 rounded-xl border border-border/50 text-sm text-foreground bg-card shadow-sm">
+                <ArrowUpDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                <span className="sr-only">Sort by</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  className="bg-transparent font-medium outline-none cursor-pointer"
+                >
+                  <option value="newest">Newest purchase</option>
+                  <option value="oldest">Oldest purchase</option>
+                  <option value="status">Status</option>
+                </select>
+              </label>
               <div className="flex bg-muted p-1 rounded-xl border border-border/50 mr-2">
                 <button 
                   onClick={() => setViewMode('list')}
@@ -204,14 +254,42 @@ export default function Inventory() {
             </div>
           </div>
 
-          <div className="relative w-full max-w-xl group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <Input
-              placeholder="Search by make, model, VIN or status..."
-              className="pl-12 h-12 bg-card border-border shadow-sm rounded-2xl text-base focus-visible:ring-primary/20 focus-visible:border-primary transition-all"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            <div className="relative w-full max-w-xl group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <Input
+                placeholder="Search by stock #, year, make, model, VIN or status..."
+                className="pl-12 h-12 bg-card border-border shadow-sm rounded-2xl text-base focus-visible:ring-primary/20 focus-visible:border-primary transition-all"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="Purchase date range">
+              <select
+                value={range}
+                onChange={(e) => applyRange(e.target.value as typeof range)}
+                className="h-10 rounded-xl border border-border bg-card px-3 font-medium shadow-sm"
+                aria-label="Purchased"
+              >
+                <option value="all">Purchased: any time</option>
+                <option value="year">This year</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="custom">Custom range</option>
+              </select>
+              {range !== 'all' && (
+                <>
+                  <Input type="date" aria-label="From" value={fromDate} max={toDate || undefined}
+                    onChange={(e) => { setRange('custom'); setFromDate(e.target.value); }} className="h-10 w-[150px] rounded-xl bg-card" />
+                  <span className="text-muted-foreground">to</span>
+                  <Input type="date" aria-label="To" value={toDate} min={fromDate || undefined}
+                    onChange={(e) => { setRange('custom'); setToDate(e.target.value); }} className="h-10 w-[150px] rounded-xl bg-card" />
+                </>
+              )}
+              {(fromDate || toDate || search) && (
+                <span className="text-xs text-muted-foreground">{filtered.length} of {vehicles.length}</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -233,9 +311,17 @@ export default function Inventory() {
             <p className="text-[11px] text-muted-foreground font-medium">Available</p>
             <p className="text-lg font-semibold text-primary mt-0.5">{vehicles.filter(v => v.status === 'Available').length}</p>
           </div>
-          <div className="stat-card min-w-[120px] md:min-w-0 flex-shrink-0 py-3 px-4">
-            <p className="text-[11px] text-warning font-medium">Aging (60+)</p>
-            <p className="text-lg font-semibold text-warning mt-0.5">{vehicles.filter(v => (v.daysInInventory ?? 0) >= 60 && v.status !== 'Sold').length}</p>
+          <div className="stat-card min-w-[100px] md:min-w-0 flex-shrink-0 py-3 px-4">
+            <p className="text-[11px] text-green-700 dark:text-green-400 font-medium">30–59 days</p>
+            <p className="text-lg font-semibold text-green-700 dark:text-green-400 mt-0.5">{agingCounts['30']}</p>
+          </div>
+          <div className="stat-card min-w-[100px] md:min-w-0 flex-shrink-0 py-3 px-4">
+            <p className="text-[11px] text-warning font-medium">60–89 days</p>
+            <p className="text-lg font-semibold text-warning mt-0.5">{agingCounts['60']}</p>
+          </div>
+          <div className="stat-card min-w-[100px] md:min-w-0 flex-shrink-0 py-3 px-4">
+            <p className="text-[11px] text-destructive font-medium">90+ days</p>
+            <p className="text-lg font-semibold text-destructive mt-0.5">{agingCounts['90']}</p>
           </div>
         </div>
 
@@ -258,8 +344,10 @@ export default function Inventory() {
                 
                 <div className="relative z-10 flex justify-between items-start mb-3">
                   <div>
-                    <h3 className="font-bold text-lg text-foreground leading-tight tracking-tight">{vehicle.make} {vehicle.model}</h3>
-                    <p className="text-xs text-muted-foreground font-mono mt-0.5">{vehicle.vin}</p>
+                    <h3 className="font-bold text-lg text-foreground leading-tight tracking-tight">{vehicleName(vehicle)}</h3>
+                    <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                      {vehicle.stockNumber && <span className="font-semibold text-foreground">#{vehicle.stockNumber} · </span>}{vehicle.vin}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {(vehicle.hasDocument || vehicle.hasSourceDocument) && (
@@ -317,14 +405,12 @@ export default function Inventory() {
                 
                 <div className="relative z-10 grid grid-cols-2 gap-4 py-3 border-y border-border/50 my-3 bg-muted/10 rounded-xl px-3">
                   <div>
-                    <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Year / Miles</p>
-                    <p className="text-sm font-bold text-foreground">{vehicle.year} <span className="text-muted-foreground font-normal mx-1">•</span> {vehicle.mileage.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Miles</p>
+                    <p className="text-sm font-bold text-foreground">{vehicle.mileage.toLocaleString()}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Days</p>
-                    <p className={cn("text-sm font-bold", vehicle.daysInInventory >= 60 ? "text-warning" : "text-foreground")}>
-                      {vehicle.daysInInventory}
-                    </p>
+                    <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">On lot</p>
+                    <AgingBadge days={vehicle.daysInInventory ?? 0} sold={vehicle.status === 'Sold'} />
                   </div>
                 </div>
 
@@ -356,17 +442,16 @@ export default function Inventory() {
                 <table className="w-full" role="table" aria-label="Vehicle inventory">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Stock #</th>
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Vehicle</th>
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">VIN</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Year</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Title #</th>
                       {!isStaff && (
                         <>
                           <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Purchase</th>
                           <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Cost</th>
                         </>
                       )}
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Days</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">On lot</th>
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-20"></th>
                     </tr>
@@ -378,13 +463,12 @@ export default function Inventory() {
                         onClick={() => setSelectedVehicle(vehicle)}
                         className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors cursor-pointer group"
                       >
+                        <td className="px-4 py-3 text-sm font-mono font-semibold text-foreground whitespace-nowrap">{vehicle.stockNumber || '—'}</td>
                         <td className="px-4 py-3">
-                          <p className="font-medium text-foreground text-sm">{vehicle.make} {vehicle.model}</p>
+                          <p className="font-medium text-foreground text-sm">{vehicleName(vehicle)}</p>
                           <p className="text-[11px] text-muted-foreground">{vehicle.color} · {vehicle.mileage.toLocaleString()} mi</p>
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{vehicle.vin.slice(-8)}</td>
-                        <td className="px-4 py-3 text-sm text-foreground">{vehicle.year}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground font-medium">{vehicle.titleNumber || '—'}</td>
                         {!isStaff && (
                           <>
                             <td className="px-4 py-3 text-sm font-medium text-foreground tabular-nums">${vehicle.purchasePrice.toLocaleString()}</td>
@@ -392,9 +476,7 @@ export default function Inventory() {
                           </>
                         )}
                         <td className="px-4 py-3">
-                          <span className={cn("text-sm font-medium", vehicle.daysInInventory >= 60 ? "text-warning" : "text-foreground")}>
-                            {vehicle.daysInInventory}
-                          </span>
+                          <AgingBadge days={vehicle.daysInInventory ?? 0} sold={vehicle.status === 'Sold'} />
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
@@ -495,9 +577,9 @@ export default function Inventory() {
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h3 className="font-display font-black text-lg text-foreground tracking-tight group-hover:text-primary transition-colors leading-tight">
-                          {vehicle.year} {vehicle.make}
+                          {vehicleName(vehicle)}
                         </h3>
-                        <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest">{vehicle.model}</p>
+                        {vehicle.stockNumber && <p className="text-muted-foreground text-xs font-mono font-semibold">Stock #{vehicle.stockNumber}</p>}
                       </div>
                       <div className="p-2 bg-muted/50 rounded-xl group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                         <ChevronRight className="w-4 h-4" />
@@ -510,10 +592,8 @@ export default function Inventory() {
                         <p className="text-xs font-bold text-foreground tabular-nums">{vehicle.mileage.toLocaleString()} mi</p>
                       </div>
                       <div>
-                        <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mb-1">Aging</p>
-                        <p className={cn("text-xs font-bold tabular-nums", vehicle.daysInInventory >= 60 ? "text-warning" : "text-foreground")}>
-                          {vehicle.daysInInventory} Days
-                        </p>
+                        <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mb-1">On lot</p>
+                        <AgingBadge days={vehicle.daysInInventory ?? 0} sold={vehicle.status === 'Sold'} />
                       </div>
                     </div>
 

@@ -8,6 +8,7 @@ import { fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
 import { decodeVin, fetchRecalls } from '../services/vinDecoder.js';
 import { upload } from '../config/upload.js';
 import { getDealershipSettings, swapNetworkParticipants } from '../services/dealershipSettings.js';
+import { daysInStock, ensureStockNumbers, generateStockNumber } from '../utils/vehicleStock.js';
 
 const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 
@@ -70,8 +71,7 @@ router.get('/swap-network', async (req, res, next) => {
       [id, (await getDealershipSettings(id)).swapNetwork.minDaysInStock])));
     const now = new Date();
     const swapVehicles = vehicles.map(v => {
-      const purchaseDate = v.purchaseDate ? new Date(v.purchaseDate) : new Date(v.createdAt);
-      const days = v.daysInInventory || Math.max(0, Math.floor((now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const days = daysInStock(v, now);
 
       return {
         id: v.id,
@@ -184,8 +184,7 @@ router.post('/swap-network/propose', async (req, res, next) => {
     // Send the automated trade offer message
     // Compute daysInInventory and cost basis for the target vehicle (fall back to createdAt)
     const now = new Date();
-    const purchaseDate = targetVehicle.purchaseDate ? new Date(targetVehicle.purchaseDate) : (targetVehicle.purchase?.purchaseDate ? new Date(targetVehicle.purchase.purchaseDate) : new Date(targetVehicle.createdAt));
-    const days = targetVehicle.daysInInventory || Math.max(0, Math.floor((now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const days = daysInStock(targetVehicle, now);
 
     const partsCost = (targetVehicle.repairs || []).reduce((sum, r) => sum + (r.partsCost || 0), 0);
     const laborCost = (targetVehicle.repairs || []).reduce((sum, r) => sum + (r.laborCost || 0), 0);
@@ -431,6 +430,9 @@ router.get('/:id/all-documents', async (req, res, next) => {
 router.get('/', async (req, res, next) => {
   try {
     const cacheKey = `vehicle-list:${req.dealershipId}`;
+    // Vehicles created by document scans or imports get their stock number here; a fresh
+    // assignment means the cached list is out of date.
+    if (await ensureStockNumbers(req.dealershipId)) vehicleCache.delete(cacheKey);
     const cachedData = vehicleCache.get(cacheKey);
     if (cachedData) {
       console.log('[Cache] Returning cached vehicle list');
@@ -514,6 +516,8 @@ router.get('/', async (req, res, next) => {
           status: v.status,
           reconStage: v.reconStage,
           askingPrice: v.askingPrice ?? null, // the advertised price is not confidential
+          stockNumber: v.stockNumber ?? null,
+          daysInInventory: daysInStock(v),
           purchaseDate: v.purchaseDate,
           createdAt: v.createdAt,
           updatedAt: v.updatedAt,
@@ -535,6 +539,7 @@ router.get('/', async (req, res, next) => {
 
       return {
         ...v,
+        daysInInventory: daysInStock(v),
         purchase: v.purchase
           ? {
               ...purchaseData,
@@ -633,8 +638,10 @@ router.post('/', validate(vehicleSchema), async (req, res, next) => {
     const totalPurchaseCost = purchasePrice + transportCost + buyerFee + inspectionCost + registrationCost;
     
     // Efficiently create the vehicle with nested relations
+    const stockNumber = await generateStockNumber(req.dealershipId, purchaseDate);
     const vehicle = await prisma.vehicle.create({
       data: {
+        stockNumber,
         vin: normalizedVin,
         make,
         model,
