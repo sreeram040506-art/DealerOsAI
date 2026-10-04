@@ -1,6 +1,7 @@
 import type { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { SoldItem } from './financeReport';
+import { costFlag, purchaseCost, repairsCost, type SoldItem } from './financeReport';
+import type { Vehicle } from '@/types/inventory';
 import { formatSafeDate } from './dateUtils';
 import { money, vehicleLabel } from './reportFormat';
 
@@ -46,6 +47,53 @@ export function addSoldVehiclesTable(doc: jsPDF, items: SoldItem[], startY: numb
   if (items.some((i) => i.flag)) {
     doc.setFontSize(9);
     doc.text('* Purchase price still to be confirmed; profit for these vehicles may change.', 14, endY + 7);
+    endY += 7;
+  }
+  return endY;
+}
+
+/**
+ * Adds every vehicle bought in the period to a cash flow PDF: what was paid, repairs, and the
+ * total. Vehicles whose purchase price still needs confirming are starred. Returns the y
+ * position below the table.
+ */
+export function addPurchasedVehiclesTable(doc: jsPDF, vehicles: Vehicle[], startY: number): number {
+  doc.setFontSize(13);
+  doc.text(`Vehicles purchased (${vehicles.length})`, 14, startY);
+
+  const rows = vehicles.map((v) => ({
+    vehicle: v,
+    cost: purchaseCost(v),
+    repairs: repairsCost(v),
+    flagged: Boolean(costFlag(v)),
+  }));
+  const totals = rows.reduce((t, r) => ({ cost: t.cost + r.cost, repairs: t.repairs + r.repairs }), { cost: 0, repairs: 0 });
+
+  autoTable(doc, {
+    startY: startY + 4,
+    head: [['Date', 'Stock #', 'Vehicle', 'VIN', 'Seller', 'Purchase cost', 'Repairs', 'Total']],
+    body: rows.map(({ vehicle: v, cost, repairs, flagged }) => [
+      formatSafeDate(v.purchaseDate || v.purchase?.purchaseDate),
+      v.stockNumber ?? '',
+      vehicleLabel(v),
+      v.vin ?? '',
+      v.purchase?.sellerName ?? '',
+      `${money(cost)}${flagged ? ' *' : ''}`,
+      money(repairs),
+      money(cost + repairs),
+    ]),
+    foot: rows.length ? [['', '', `Total (${rows.length})`, '', '', money(totals.cost), money(totals.repairs), money(totals.cost + totals.repairs)]] : undefined,
+    theme: 'striped',
+    headStyles: { fillColor: [40, 40, 45] },
+    footStyles: { fillColor: [235, 235, 238], textColor: 20, fontStyle: 'bold' },
+    showHead: 'everyPage',
+    styles: { fontSize: 8 },
+  });
+
+  let endY = finalY(doc);
+  if (rows.some((r) => r.flagged)) {
+    doc.setFontSize(9);
+    doc.text('* Purchase price still to be confirmed; the amount shown may not be what was paid.', 14, endY + 7);
     endY += 7;
   }
   return endY;

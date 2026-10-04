@@ -17,6 +17,7 @@ import { buildCashFlow, flaggedVehicles, inventoryCashTiedUp, sumCash } from '@/
 import { GRANULARITY_LABELS, inRange, yearsPresent } from '@/lib/reportPeriods';
 import { useReportFilters } from '@/lib/reportFilters';
 import { money } from '@/lib/reportFormat';
+import { addPurchasedVehiclesTable } from '@/lib/reportPdf';
 import type { Vehicle } from '@/types/inventory';
 
 interface CashFlowProps {
@@ -111,11 +112,15 @@ export default function CashFlow({ isSubpage = false }: CashFlowProps) {
       headStyles: { fillColor: [40, 40, 45] },
       didParseCell: (hook) => { if (hook.row.index === ordered.length && hook.section === 'body') hook.cell.styles.fontStyle = 'bold'; },
     });
-    if (totals.unverifiedCount > 0) {
-      const endY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-      doc.setFontSize(9);
-      doc.text(`Note: purchases include ${money(totals.unverifiedPurchases)} for ${totals.unverifiedCount} vehicle(s) whose purchase price is still to be confirmed.`, 14, endY + 7);
-    }
+    // The vehicles behind the "Purchases" column, in the order the report is showing.
+    const purchasedVehicles = vehicles
+      .filter((v) => inRange(v.purchaseDate || v.purchase?.purchaseDate, resolved))
+      .sort((a, b) => {
+        const diff = new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime();
+        return filters.order === 'oldest' ? diff : -diff;
+      });
+    const afterPeriods = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+    addPurchasedVehiclesTable(doc, purchasedVehicles, afterPeriods);
     doc.save(`CashFlow_${rangeLabel.replace(/[^\w]+/g, '_')}_${filters.granularity}.pdf`);
   };
 
