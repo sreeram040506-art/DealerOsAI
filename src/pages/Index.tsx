@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 
 // Lazy load charts — recharts is ~200KB and only shown for non-staff users
 const ChartsSection = lazy(() => import('./ChartsSection'));
+const SalesRankingCharts = lazy(() => import('@/components/SalesRankingCharts'));
 
 const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444'];
 
@@ -433,6 +434,13 @@ export default function Dashboard() {
             </div>
           )}
         </section>
+
+        {/* Top-selling and fastest-selling vehicles: counts only, shown to every role */}
+        {!isLoading && (
+          <Suspense fallback={<div className="h-72 rounded-xl border border-border/60 bg-card" role="status" aria-label="Loading sales rankings" />}>
+            <SalesRankingCharts sales={sales} vehicles={vehicles} />
+          </Suspense>
+        )}
 
         {/* Charts */}
         {!isStaff && (
