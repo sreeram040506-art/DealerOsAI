@@ -83,7 +83,7 @@ export default function CommandPalette() {
                 onSelect={() => runCommand(() => navigate('/sales'))}
                 className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-bold hover:bg-primary/10 hover:text-primary cursor-pointer transition-colors aria-selected:bg-primary/10 aria-selected:text-primary"
               >
-                <ShoppingCart className="w-4 h-4" aria-hidden="true" /> Sales Registry
+                <ShoppingCart className="w-4 h-4" aria-hidden="true" /> Sold Vehicles
               </Command.Item>
               <Command.Item 
                 onSelect={() => runCommand(() => navigate('/reports'))}

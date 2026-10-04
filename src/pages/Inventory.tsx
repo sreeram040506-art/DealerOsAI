@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 // Consolidated icon imports — avoids duplicate module references
 import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, ShoppingCart, LayoutGrid, List, Receipt, Download, ArrowUpDown, Kanban } from 'lucide-react';
 import { useState, useMemo, useDeferredValue } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AddVehicleDialog from '@/components/AddVehicleDialog';
@@ -36,6 +37,16 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 
+// Inventory views. "Available" is everything still on the lot (Available, Reserved,
+// Returned); "Sold" is sold vehicles.
+const VIEWS = {
+  available: 'Available',
+  sold: 'Sold',
+  all: 'All',
+} as const;
+type InventoryView = keyof typeof VIEWS;
+const isSold = (v: { status?: string }) => v.status === 'Sold';
+
 const SORT_LABELS = {
   newest: 'Newest purchase',
   oldest: 'Oldest purchase',
@@ -64,6 +75,19 @@ export default function Inventory() {
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'board'>('list');
   const [sortBy, setSortBy] = useState<keyof typeof SORT_LABELS>('newest');
+  // Kept in the URL (?view=sold) so links and the back button land on the same view.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view: InventoryView = (searchParams.get('view') as InventoryView) in VIEWS ? (searchParams.get('view') as InventoryView) : 'available';
+  const setView = (next: InventoryView) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'available') params.delete('view'); else params.set('view', next);
+    setSearchParams(params, { replace: true });
+  };
+  const viewCounts = useMemo(() => ({
+    available: vehicles.filter(v => !isSold(v)).length,
+    sold: vehicles.filter(isSold).length,
+    all: vehicles.length,
+  }), [vehicles]);
   // Purchase-date range (either end optional).
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -75,7 +99,7 @@ export default function Inventory() {
   // useMemo prevents recalculating the filter on unrelated state changes
   // (e.g., opening a dialog, changing view mode)
   const filtered = useMemo(() => {
-    let result = vehicles;
+    let result = view === 'all' ? vehicles : vehicles.filter(v => (view === 'sold') === isSold(v));
     if (deferredSearch) {
       const term = deferredSearch.toLowerCase();
       result = result.filter(v =>
@@ -104,11 +128,17 @@ export default function Inventory() {
       }
       return sortBy === 'oldest' ? purchased(a) - purchased(b) : purchased(b) - purchased(a);
     });
-  }, [vehicles, deferredSearch, sortBy, fromDate, toDate]);
+  }, [vehicles, view, deferredSearch, sortBy, fromDate, toDate]);
 
   const rangeLabel = fromDate && toDate ? `${formatDay(fromDate)} – ${formatDay(toDate)}`
     : fromDate ? `from ${formatDay(fromDate)}`
     : toDate ? `until ${formatDay(toDate)}` : '';
+
+  const emptyMessage = (search || fromDate || toDate)
+    ? 'No vehicles match your search or dates.'
+    : view === 'sold' ? 'No sold vehicles yet.'
+    : view === 'available' ? 'No vehicles on the lot.'
+    : 'No vehicles yet.';
 
   // Aging counts only cover cars still for sale.
   const unsold = vehicles.filter(v => v.status !== 'Sold');
@@ -296,6 +326,33 @@ export default function Inventory() {
           </div>
         </div>
 
+        {/* Available / Sold / All */}
+        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Inventory view">
+          {(Object.keys(VIEWS) as InventoryView[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={view === key}
+              onClick={() => setView(key)}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-xl border px-4 h-10 text-sm font-semibold transition-colors",
+                view === key
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-border bg-card text-foreground hover:bg-muted/50"
+              )}
+            >
+              {VIEWS[key]}
+              <span className={cn(
+                "rounded-md px-1.5 py-0.5 text-xs tabular-nums",
+                view === key ? "bg-primary-foreground/20" : "bg-muted text-muted-foreground"
+              )}>
+                {viewCounts[key]}
+              </span>
+            </button>
+          ))}
+        </div>
+
         {/* Quick Stats */}
         <div className="flex gap-3 overflow-x-auto pb-2 -mx-5 px-5 md:mx-0 md:px-0 scrollbar-hide">
           {!isStaff && (
@@ -432,7 +489,7 @@ export default function Inventory() {
             ))
           ) : (
             <div className="py-16 text-center bg-card/40 rounded-2xl border border-dashed border-border">
-              <p className="text-muted-foreground text-sm font-medium">No vehicles match your search.</p>
+              <p className="text-muted-foreground text-sm font-medium">{emptyMessage}</p>
             </div>
           )}
         </div>
@@ -460,6 +517,11 @@ export default function Inventory() {
                     </tr>
                   </thead>
                   <tbody>
+                    {filtered.length === 0 && (
+                      <tr>
+                        <td colSpan={isStaff ? 6 : 8} className="px-4 py-10 text-center text-sm text-muted-foreground">{emptyMessage}</td>
+                      </tr>
+                    )}
                     {filtered.map((vehicle) => (
                       <tr 
                         key={vehicle.id} 

@@ -135,7 +135,7 @@ export default function Sales() {
     <AppLayout>
       <div className="space-y-5 page-enter">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Sales</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Sold Vehicles</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{sales.length} units finalized</p>
         </div>
 

@@ -22,7 +22,7 @@ interface NavItem {
 const navItems: readonly NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Home' },
   { to: '/inventory', icon: Car, label: 'Cars', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { to: '/sales', icon: ShoppingCart, label: 'Sold', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/customers', icon: Users, label: 'People', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/documents-forms', icon: FileArchive, label: 'Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
 ] as const;
@@ -30,7 +30,7 @@ const navItems: readonly NavItem[] = [
 const drawerItems: readonly NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/inventory', icon: Car, label: 'Inventory', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { to: '/sales', icon: ShoppingCart, label: 'Sold Vehicles', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/customers', icon: Users, label: 'Customers', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/documents-forms', icon: FileText, label: 'Documents & Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/registry', icon: FileArchive, label: 'Registry', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
