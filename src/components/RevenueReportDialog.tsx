@@ -97,12 +97,11 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
     // Vehicle breakdown section
     const finalY = (doc as any).lastAutoTable.finalY || 45;
     doc.setFontSize(16);
-    doc.text("Recent Transactions Details", 14, finalY + 14);
+    doc.text(`All Transactions (${sales.length})`, 14, finalY + 14);
 
     const detailColumns = ["Date", "Vehicle", "Price", "Profit", "Buyer"];
     const detailRows = [...sales]
       .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
-      .slice(0, 50) // limit to 50 for brief
       .map(s => [
         new Date(s.saleDate).toLocaleDateString(),
         saleVehicleLabel(s),

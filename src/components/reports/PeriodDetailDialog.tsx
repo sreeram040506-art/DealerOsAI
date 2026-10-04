@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { buildPnL, sumPnL, type FinanceInputs } from '@/lib/financeReport';
 import { childMonths, type Period } from '@/lib/reportPeriods';
 import { money, vehicleLabel } from '@/lib/reportFormat';
+import { addSoldVehiclesTable } from '@/lib/reportPdf';
 import { formatSafeDate } from '@/lib/dateUtils';
 import type { Vehicle } from '@/types/inventory';
 
@@ -70,21 +71,7 @@ export default function PeriodDetailDialog({
       });
       y = ((doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY || y) + 10;
     }
-    autoTable(doc, {
-      startY: y,
-      head: [['Date', 'Vehicle', 'Stock #', 'Customer', 'Price', 'Cost', 'Repairs', 'Gross profit']],
-      body: sold.map((i) => [
-        formatSafeDate(i.sale.saleDate), vehicleLabel(i.vehicle), i.vehicle?.stockNumber ?? '', i.sale.customerName,
-        money(i.price), `${money(i.cost)}${i.flag ? ' *' : ''}`, money(i.repairs), money(i.gross),
-      ]),
-      theme: 'striped',
-      headStyles: { fillColor: [40, 40, 45] },
-    });
-    if (sold.some((i) => i.flag)) {
-      const endY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-      doc.setFontSize(9);
-      doc.text('* Purchase price still to be confirmed; profit for these vehicles may change.', 14, endY + 7);
-    }
+    addSoldVehiclesTable(doc, sold, y);
     doc.save(`Sold_${view.label.replace(/[^\w]+/g, '_')}.pdf`);
   };
 

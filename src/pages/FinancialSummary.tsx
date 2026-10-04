@@ -16,6 +16,7 @@ import { buildPnL, sumPnL } from '@/lib/financeReport';
 import { GRANULARITY_LABELS, yearsPresent, type Period } from '@/lib/reportPeriods';
 import { useReportFilters } from '@/lib/reportFilters';
 import { money } from '@/lib/reportFormat';
+import { addSoldVehiclesTable } from '@/lib/reportPdf';
 import type { Vehicle } from '@/types/inventory';
 
 interface FinancialSummaryProps {
@@ -69,11 +70,15 @@ export default function FinancialSummary({ isSubpage = false }: FinancialSummary
       headStyles: { fillColor: [34, 64, 211] },
       didParseCell: (hook) => { if (hook.row.index === rows.length && hook.section === 'body') hook.cell.styles.fontStyle = 'bold'; },
     });
-    if (totals.unverified > 0) {
-      const endY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-      doc.setFontSize(9);
-      doc.text(`Note: ${totals.unverified} sold vehicle(s) have a purchase price still to be confirmed; their profit may change.`, 14, endY + 7);
-    }
+    // The full list of vehicles behind those totals, oldest-to-newest or the reverse to match the order shown.
+    const soldVehicles = rows
+      .flatMap((r) => r.sold)
+      .sort((a, b) => {
+        const diff = new Date(a.sale.saleDate).getTime() - new Date(b.sale.saleDate).getTime();
+        return filters.order === 'oldest' ? diff : -diff;
+      });
+    const afterSummary = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+    addSoldVehiclesTable(doc, soldVehicles, afterSummary);
     doc.save(`PnL_${rangeLabel.replace(/[^\w]+/g, '_')}_${filters.granularity}.pdf`);
   };
 
