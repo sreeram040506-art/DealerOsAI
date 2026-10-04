@@ -4,7 +4,7 @@ import { useAuth } from '@/context/auth-hooks';
 import { Vehicle } from '@/types/inventory';
 import { cn } from '@/lib/utils';
 // Consolidated icon imports — avoids duplicate module references
-import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, ShoppingCart, LayoutGrid, List, Receipt, Download, ArrowUpDown, Kanban } from 'lucide-react';
+import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, ShoppingCart, LayoutGrid, List, Receipt, Download, ArrowUpDown, ArrowDown, ArrowUp, Kanban } from 'lucide-react';
 import { useState, useMemo, useDeferredValue } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,8 @@ import {
 const SORT_LABELS = {
   newest: 'Newest purchase',
   oldest: 'Oldest purchase',
+  yearDesc: 'Year (newest first)',
+  yearAsc: 'Year (oldest first)',
   status: 'Status',
 } as const;
 
@@ -111,6 +113,11 @@ export default function Inventory() {
         const orderA = order[a.status] ?? 99;
         const orderB = order[b.status] ?? 99;
         if (orderA !== orderB) return orderA - orderB;
+      }
+      if (sortBy === 'yearDesc' || sortBy === 'yearAsc') {
+        const byYear = (Number(a.year) || 0) - (Number(b.year) || 0);
+        if (byYear !== 0) return sortBy === 'yearAsc' ? byYear : -byYear;
+        // Same model year: newest purchase first.
       }
       return sortBy === 'oldest' ? purchased(a) - purchased(b) : purchased(b) - purchased(a);
     });
@@ -470,7 +477,23 @@ export default function Inventory() {
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Stock #</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Vehicle</th>
+                      <th
+                        className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider"
+                        aria-sort={sortBy === 'yearDesc' ? 'descending' : sortBy === 'yearAsc' ? 'ascending' : 'none'}
+                      >
+                        {/* Click cycles: newest model year -> oldest -> back to the default order. */}
+                        <button
+                          type="button"
+                          onClick={() => setSortBy(sortBy === 'yearDesc' ? 'yearAsc' : sortBy === 'yearAsc' ? 'newest' : 'yearDesc')}
+                          className={cn("inline-flex items-center gap-1 uppercase tracking-wider hover:text-foreground", (sortBy === 'yearDesc' || sortBy === 'yearAsc') && "text-foreground")}
+                          title="Sort by model year"
+                        >
+                          Year &amp; Vehicle
+                          {sortBy === 'yearDesc' ? <ArrowDown className="w-3 h-3" aria-hidden="true" />
+                            : sortBy === 'yearAsc' ? <ArrowUp className="w-3 h-3" aria-hidden="true" />
+                            : <ArrowUpDown className="w-3 h-3 opacity-50" aria-hidden="true" />}
+                        </button>
+                      </th>
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">VIN</th>
                       {!isStaff && (
                         <>
