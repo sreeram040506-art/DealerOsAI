@@ -377,7 +377,7 @@ export default function Dashboard() {
                                 )}
                                 {vehicle.hasBillOfSale && (
                                   <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-foreground cursor-pointer hover:bg-muted/50">
-                                    <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                                    <FileText className="w-3.5 h-3.5 mr-2" /> Bill of Sale
                                   </DropdownMenuItem>
                                 )}
                                 

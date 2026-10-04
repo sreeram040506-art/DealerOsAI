@@ -4,7 +4,7 @@ import { useAuth } from '@/context/auth-hooks';
 import { Vehicle } from '@/types/inventory';
 import { cn } from '@/lib/utils';
 // Consolidated icon imports — avoids duplicate module references
-import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, ShoppingCart, LayoutGrid, List, Receipt, Download, ArrowUpDown, ArrowDown, ArrowUp, Kanban } from 'lucide-react';
+import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, LayoutGrid, List, Receipt, Download, ArrowUpDown, ArrowDown, ArrowUp, Kanban } from 'lucide-react';
 import { useState, useMemo, useDeferredValue } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -408,7 +408,7 @@ export default function Inventory() {
                           )}
                           {vehicle.hasBillOfSale && (
                             <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-foreground cursor-pointer hover:bg-muted/50">
-                              <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                              <FileText className="w-3.5 h-3.5 mr-2" /> Bill of Sale
                             </DropdownMenuItem>
                           )}
                           
@@ -564,7 +564,7 @@ export default function Inventory() {
                                     )}
                                     {vehicle.hasBillOfSale && (
                                       <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-foreground cursor-pointer hover:bg-muted/50">
-                                        <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                                        <FileText className="w-3.5 h-3.5 mr-2" /> Bill of Sale
                                       </DropdownMenuItem>
                                     )}
                                     

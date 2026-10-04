@@ -12,7 +12,7 @@ import { useRepairs } from '@/hooks/useRepairs';
 import { useAdvertising } from '@/hooks/useAdvertising';
 import { useSales } from '@/hooks/useSales';
 import { toast } from '@/components/ui/toast-utils';
-import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart, Trash2, AlertTriangle, FileUp, CheckCircle2, Copy, Users, MessageSquare, Loader2 } from 'lucide-react';
+import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, BadgeDollarSign, Trash2, AlertTriangle, FileUp, CheckCircle2, Copy, Users, MessageSquare, Loader2 } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -452,7 +452,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                         <DropdownMenuItem onClick={() => handleView('source')} className="text-[10px] font-black uppercase cursor-pointer py-2 hover:bg-muted/50"><Receipt className="w-3.5 h-3.5 mr-2" /> Original Source</DropdownMenuItem>
                         )}
                         {vehicle.hasBillOfSale && (
-                        <DropdownMenuItem onClick={() => handleView('bill_of_sale')} className="text-[10px] font-black uppercase cursor-pointer py-2 text-foreground hover:bg-muted/50"><ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleView('bill_of_sale')} className="text-[10px] font-black uppercase cursor-pointer py-2 text-foreground hover:bg-muted/50"><FileText className="w-3.5 h-3.5 mr-2" /> Bill of Sale</DropdownMenuItem>
                         )}
                         
                         <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-t border-border/50 my-1">Download Files</div>
@@ -501,7 +501,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
             </TabsTrigger>
             {vehicle.status !== 'Sold' && (
               <TabsTrigger value="sale" className="data-[state=active]:bg-foreground data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
-                <ShoppingCart className="w-3.5 h-3.5" /> Record Sale
+                <BadgeDollarSign className="w-3.5 h-3.5" /> Record Sale
               </TabsTrigger>
             )}
             <TabsTrigger value="notes" className="data-[state=active]:bg-amber-500 data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
@@ -725,7 +725,11 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
             {vehicle.status === 'Sold' && (
               <div className="mt-4 bg-foreground/5 border border-foreground/20 rounded-xl p-4">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-foreground mb-3">Buyer Information</h4>
-                <BuyerInfoSection vehicleId={vehicle.id} />
+                <BuyerInfoSection
+                  vehicleId={vehicle.id}
+                  onViewBillOfSale={() => handleView('bill_of_sale')}
+                  onDownloadBillOfSale={() => handleDownload('sale')}
+                />
               </div>
             )}
           </TabsContent>
@@ -971,7 +975,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     type="submit"
                     disabled={uploadingSale}
                   >
-                    {uploadingSale ? 'Processing...' : <><ShoppingCart className="w-4 h-4 mr-2" /> Mark as Sold</>}
+                    {uploadingSale ? 'Processing...' : <><BadgeDollarSign className="w-4 h-4 mr-2" /> Mark as Sold</>}
                   </Button>
                 </form>
               </div>
@@ -1096,7 +1100,11 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   );
 }
 
-function BuyerInfoSection({ vehicleId }: { vehicleId: string }) {
+function BuyerInfoSection({ vehicleId, onViewBillOfSale, onDownloadBillOfSale }: {
+  vehicleId: string;
+  onViewBillOfSale: () => void;
+  onDownloadBillOfSale: () => void;
+}) {
   const { sales } = useSales();
   const sale = sales.find(s => s.vehicleId === vehicleId);
 
@@ -1132,20 +1140,27 @@ function BuyerInfoSection({ vehicleId }: { vehicleId: string }) {
       </div>
 
       <div className="pt-4 flex flex-wrap gap-2">
+        {/* This button used to dispatch a 'view-document' event that nothing listened for,
+            so it did nothing. It now opens the dialog's own document viewer. */}
         {sale.hasBillOfSale && (
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="h-8 text-[10px] font-black uppercase tracking-widest border-foreground/30 text-foreground hover:bg-foreground/10"
-            onClick={() => {
-              // We need a way to trigger handleViewDocument from here
-              // Since this is a sub-component, we'll assume the parent has handleViewDocument
-              // For now, let's just use a simple fetch
-              window.dispatchEvent(new CustomEvent('view-document', { detail: { type: 'bill_of_sale', vehicleId: sale.vehicleId } }));
-            }}
-          >
-            <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
-          </Button>
+          <>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="h-8 text-[10px] font-black uppercase tracking-widest border-foreground/30 text-foreground hover:bg-foreground/10"
+              onClick={onViewBillOfSale}
+            >
+              <FileText className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+            </Button>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="h-8 text-[10px] font-black uppercase tracking-widest text-foreground hover:bg-foreground/10"
+              onClick={onDownloadBillOfSale}
+            >
+              <Download className="w-3.5 h-3.5 mr-2" /> Download
+            </Button>
+          </>
         )}
       </div>
     </div>
