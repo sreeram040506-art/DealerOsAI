@@ -37,16 +37,6 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 
-// Inventory views. "Available" is everything still on the lot (Available, Reserved,
-// Returned); "Sold" is sold vehicles.
-const VIEWS = {
-  available: 'Available',
-  sold: 'Sold',
-  all: 'All',
-} as const;
-type InventoryView = keyof typeof VIEWS;
-const isSold = (v: { status?: string }) => v.status === 'Sold';
-
 const SORT_LABELS = {
   newest: 'Newest purchase',
   oldest: 'Oldest purchase',
@@ -75,19 +65,15 @@ export default function Inventory() {
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'board'>('list');
   const [sortBy, setSortBy] = useState<keyof typeof SORT_LABELS>('newest');
-  // Kept in the URL (?view=sold) so links and the back button land on the same view.
+  // Tapping the "Available" box shows only available cars; tapping again shows all.
+  // Kept in the URL (?available=1) so the back button and links keep the filter.
   const [searchParams, setSearchParams] = useSearchParams();
-  const view: InventoryView = (searchParams.get('view') as InventoryView) in VIEWS ? (searchParams.get('view') as InventoryView) : 'available';
-  const setView = (next: InventoryView) => {
+  const onlyAvailable = searchParams.get('available') === '1';
+  const toggleAvailable = () => {
     const params = new URLSearchParams(searchParams);
-    if (next === 'available') params.delete('view'); else params.set('view', next);
+    if (onlyAvailable) params.delete('available'); else params.set('available', '1');
     setSearchParams(params, { replace: true });
   };
-  const viewCounts = useMemo(() => ({
-    available: vehicles.filter(v => !isSold(v)).length,
-    sold: vehicles.filter(isSold).length,
-    all: vehicles.length,
-  }), [vehicles]);
   // Purchase-date range (either end optional).
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -99,7 +85,7 @@ export default function Inventory() {
   // useMemo prevents recalculating the filter on unrelated state changes
   // (e.g., opening a dialog, changing view mode)
   const filtered = useMemo(() => {
-    let result = view === 'all' ? vehicles : vehicles.filter(v => (view === 'sold') === isSold(v));
+    let result = onlyAvailable ? vehicles.filter(v => v.status === 'Available') : vehicles;
     if (deferredSearch) {
       const term = deferredSearch.toLowerCase();
       result = result.filter(v =>
@@ -128,7 +114,7 @@ export default function Inventory() {
       }
       return sortBy === 'oldest' ? purchased(a) - purchased(b) : purchased(b) - purchased(a);
     });
-  }, [vehicles, view, deferredSearch, sortBy, fromDate, toDate]);
+  }, [vehicles, onlyAvailable, deferredSearch, sortBy, fromDate, toDate]);
 
   const rangeLabel = fromDate && toDate ? `${formatDay(fromDate)} – ${formatDay(toDate)}`
     : fromDate ? `from ${formatDay(fromDate)}`
@@ -136,8 +122,7 @@ export default function Inventory() {
 
   const emptyMessage = (search || fromDate || toDate)
     ? 'No vehicles match your search or dates.'
-    : view === 'sold' ? 'No sold vehicles yet.'
-    : view === 'available' ? 'No vehicles on the lot.'
+    : onlyAvailable ? 'No available vehicles.'
     : 'No vehicles yet.';
 
   // Aging counts only cover cars still for sale.
@@ -326,33 +311,6 @@ export default function Inventory() {
           </div>
         </div>
 
-        {/* Available / Sold / All */}
-        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Inventory view">
-          {(Object.keys(VIEWS) as InventoryView[]).map((key) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={view === key}
-              onClick={() => setView(key)}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-xl border px-4 h-10 text-sm font-semibold transition-colors",
-                view === key
-                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                  : "border-border bg-card text-foreground hover:bg-muted/50"
-              )}
-            >
-              {VIEWS[key]}
-              <span className={cn(
-                "rounded-md px-1.5 py-0.5 text-xs tabular-nums",
-                view === key ? "bg-primary-foreground/20" : "bg-muted text-muted-foreground"
-              )}>
-                {viewCounts[key]}
-              </span>
-            </button>
-          ))}
-        </div>
-
         {/* Quick Stats */}
         <div className="flex gap-3 overflow-x-auto pb-2 -mx-5 px-5 md:mx-0 md:px-0 scrollbar-hide">
           {!isStaff && (
@@ -367,10 +325,19 @@ export default function Inventory() {
               </div>
             </>
           )}
-          <div className="stat-card min-w-[120px] md:min-w-0 flex-shrink-0 py-3 px-4">
-            <p className="text-[11px] text-muted-foreground font-medium">Available</p>
+          <button
+            type="button"
+            onClick={toggleAvailable}
+            aria-pressed={onlyAvailable}
+            title={onlyAvailable ? 'Showing only available vehicles. Tap to show all.' : 'Tap to show only available vehicles.'}
+            className={cn(
+              "stat-card min-w-[120px] md:min-w-0 flex-shrink-0 py-3 px-4 text-left cursor-pointer transition-colors",
+              onlyAvailable ? "ring-2 ring-primary bg-primary/10" : "hover:bg-muted/40"
+            )}
+          >
+            <p className="text-[11px] text-muted-foreground font-medium">{onlyAvailable ? 'Showing available' : 'Available'}</p>
             <p className="text-lg font-semibold text-primary mt-0.5">{vehicles.filter(v => v.status === 'Available').length}</p>
-          </div>
+          </button>
           <div className="stat-card min-w-[100px] md:min-w-0 flex-shrink-0 py-3 px-4">
             <p className="text-[11px] text-green-700 dark:text-green-400 font-medium">30–59 days</p>
             <p className="text-lg font-semibold text-green-700 dark:text-green-400 mt-0.5">{agingCounts['30']}</p>
