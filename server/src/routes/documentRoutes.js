@@ -671,11 +671,16 @@ router.post(
         warnings.yearMissing = true;
       }
 
+      // A price that couldn't be read used to be replaced with $10,000, which every report
+      // then counted as a real cost. It is now stored as 0 and flagged so reports can ask for
+      // the real price instead of silently using an invented one.
+      let priceEstimated = false;
       if (!isReasonableVehicleAmount(info.purchasePrice)) {
         if (!warnings) warnings = {};
         warnings.priceMissing = true;
-        console.warn('[DocumentRoute] Purchase price missing after all parsing fallbacks. Using fallback price.');
-        info.purchasePrice = 10000; // Fallback price
+        console.warn('[DocumentRoute] Purchase price missing after all parsing fallbacks. Saving 0 and flagging it for review.');
+        info.purchasePrice = 0;
+        priceEstimated = true;
       }
 
       let pdfBase64Str;
@@ -773,7 +778,7 @@ router.post(
           });
         }
 
-        const purchasePrice = parseCurrency(info.purchasePrice);
+        const purchasePrice = priceEstimated ? 0 : parseCurrency(info.purchasePrice);
         const transportCost = parseCurrency(info.transportCost);
         const repairCost = parseCurrency(info.repairCost);
         const inspectionCost = parseCurrency(info.inspectionCost);
@@ -804,6 +809,7 @@ router.post(
                 inspectionCost,
                 registrationCost,
                 totalPurchaseCost,
+                ...(priceEstimated && { priceEstimated: true }),
                 purchaseDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
                 paymentMethod: 'Bank Transfer',
                 documentBase64: pdfBase64Str,

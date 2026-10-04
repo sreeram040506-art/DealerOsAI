@@ -43,6 +43,8 @@ export interface Vehicle {
     inspectionCost: number;
     registrationCost: number;
     totalPurchaseCost: number;
+    /** True when a scan could not read the price, so it was saved as 0 and needs confirming. */
+    priceEstimated?: boolean | null;
     purchaseDate: string;
   };
   repairs?: Repair[];

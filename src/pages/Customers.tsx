@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { LEAD_SOURCE_OPTIONS, OTHER_SOURCE } from '@/lib/leadSources';
 import { Car, Download, FileUp, Loader2, Mail, MapPin, Pencil, Phone, Plus, Search, Users } from 'lucide-react';
 import { toast } from '@/components/ui/toast-utils';
 import { useAuth } from '@/context/auth-hooks';
@@ -26,7 +27,20 @@ type CustomerMeta = {
   vehicleLabel?: string;
 };
 
+// Select value for "no source chosen" (Radix selects can't use an empty string).
+const NO_SOURCE = 'none';
+
+/** Splits a saved source into the dropdown choice and, for unlisted sources, the typed text. */
+function sourceToForm(saved?: string | null): { leadSource: string; leadSourceOther: string } {
+  const text = (saved ?? '').trim();
+  if (!text) return { leadSource: NO_SOURCE, leadSourceOther: '' };
+  const listed = LEAD_SOURCE_OPTIONS.find((option) => option.toLowerCase() === text.toLowerCase());
+  return listed ? { leadSource: listed, leadSourceOther: '' } : { leadSource: OTHER_SOURCE, leadSourceOther: text };
+}
+
 type CustomerForm = {
+  leadSource: string;
+  leadSourceOther: string;
   firstName: string;
   lastName: string;
   phone: string;
@@ -40,6 +54,8 @@ type CustomerForm = {
 };
 
 const emptyForm: CustomerForm = {
+  leadSource: NO_SOURCE,
+  leadSourceOther: '',
   firstName: '',
   lastName: '',
   phone: '',
@@ -180,6 +196,7 @@ export default function Customers() {
       zip: customer.zip || '',
       category: meta.category,
       vehicleId: meta.vehicleId || NO_VEHICLE,
+      ...sourceToForm(customer.leadSource),
     });
     setVehicleSearch('');
     setFormOpen(true);
@@ -250,6 +267,10 @@ export default function Customers() {
       state: customerForm.state.trim() || null,
       zip: customerForm.zip.trim() || null,
       notes,
+      // null clears a previously saved source
+      leadSource: customerForm.leadSource === NO_SOURCE ? null
+        : customerForm.leadSource === OTHER_SOURCE ? (customerForm.leadSourceOther.trim() || null)
+        : customerForm.leadSource,
     };
 
     setSavingCustomer(true);
@@ -515,6 +536,33 @@ export default function Customers() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Lead Source</Label>
+                <Select value={customerForm.leadSource} onValueChange={(value) => setCustomerForm({ ...customerForm, leadSource: value })}>
+                  <SelectTrigger className="bg-muted/30 border-border h-11" aria-label="Lead source">
+                    <SelectValue placeholder="Where did they come from?" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_SOURCE}>Not recorded</SelectItem>
+                    {LEAD_SOURCE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                    <SelectItem value={OTHER_SOURCE}>Other…</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {customerForm.leadSource === OTHER_SOURCE && (
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Other source</Label>
+                  <Input
+                    value={customerForm.leadSourceOther}
+                    onChange={(event) => setCustomerForm({ ...customerForm, leadSourceOther: event.target.value })}
+                    placeholder="e.g. Billboard, Friend of staff"
+                    maxLength={60}
+                    className="bg-muted/30 border-border h-11"
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Search Inventory Vehicle</Label>
                 <Input value={vehicleSearch} onChange={(event) => setVehicleSearch(event.target.value)} placeholder="Search VIN, make, model..." className="bg-muted/30 border-border h-11" />

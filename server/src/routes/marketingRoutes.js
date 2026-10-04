@@ -425,6 +425,8 @@ router.post('/leads/:id/convert', async (req, res, next) => {
           phone: lead.leadPhone || null,
           notes: [`Inquiry via ${lead.source}${lead.campaign ? ` (${lead.campaign})` : ''}.`, lead.message].filter(Boolean).join('\n'),
           source: 'marketing',
+          // The channel the buyer came through is the customer's lead source.
+          leadSource: lead.source === 'Direct' ? 'Website' : lead.source,
           dealershipId: req.dealershipId,
         },
       });

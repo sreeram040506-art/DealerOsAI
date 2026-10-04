@@ -15,6 +15,8 @@ export interface Customer {
   driverLicense?: string | null;
   notes?: string | null;
   source?: string | null;
+  /** Where the customer came from (CarGurus, Google, Referral, ...). */
+  leadSource?: string | null;
   createdAt: string;
   updatedAt: string;
 }

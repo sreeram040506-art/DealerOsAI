@@ -13,7 +13,8 @@ export function useExpenses() {
       const response = await apiFetch('/expenses', token);
       return handleApiResponse<BusinessExpense[]>(response, logout);
     },
-    enabled: !!token && user?.role === 'ADMIN',
+    // Managers can read expenses (the server allows it); only admins can change them.
+    enabled: !!token && ['ADMIN', 'MANAGER', 'SUPER_ADMIN'].includes(user?.role ?? ''),
     staleTime: 60000,
   });
 

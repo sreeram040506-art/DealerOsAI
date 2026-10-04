@@ -457,6 +457,7 @@ router.get('/', async (req, res, next) => {
             inspectionCost: true,
             registrationCost: true,
             totalPurchaseCost: true,
+            priceEstimated: true,
             purchaseDate: true,
             paymentMethod: true,
           }
@@ -768,6 +769,8 @@ router.patch('/:id', async (req, res, next) => {
             ...(sellerState !== undefined && { sellerState }),
             ...(sellerZip !== undefined && { sellerZip }),
             ...(purchasePrice !== undefined && { purchasePrice: pPrice }),
+            // Entering a real price resolves the "scan couldn't read the price" flag.
+            ...(purchasePrice !== undefined && pPrice > 0 && { priceEstimated: false }),
             ...(buyerFee !== undefined && { buyerFee: bFee }),
             ...(transportCost !== undefined && { transportCost: tCost }),
             ...(inspectionCost !== undefined && { inspectionCost: iCost }),

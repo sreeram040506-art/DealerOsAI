@@ -2,6 +2,12 @@ import express from 'express';
 import prisma from '../db/prisma.js';
 import { upload } from '../config/upload.js';
 
+// Where a customer came from (CarGurus, Google, Referral, or typed in). Trimmed free text.
+const cleanLeadSource = (value) => {
+  const text = String(value ?? '').trim().slice(0, 60);
+  return text || null;
+};
+
 const router = express.Router();
 const META_PREFIX = 'APH_CUSTOMER_META:';
 
@@ -31,7 +37,7 @@ router.get('/', async (req, res, next) => {
 // POST create customer
 router.post('/', async (req, res, next) => {
   try {
-    const { firstName, lastName, email, phone, address, city, state, zip, driverLicense, notes } = req.body;
+    const { firstName, lastName, email, phone, address, city, state, zip, driverLicense, notes, leadSource } = req.body;
     if (!firstName) {
       return res.status(400).json({ message: 'First name is required' });
     }
@@ -47,6 +53,7 @@ router.post('/', async (req, res, next) => {
         zip: zip || null,
         driverLicense: driverLicense || null,
         notes: notes || null,
+        leadSource: cleanLeadSource(leadSource),
         dealershipId: req.dealershipId
       }
     });
@@ -230,7 +237,7 @@ router.get('/:id', async (req, res, next) => {
 // PUT update customer
 router.put('/:id', async (req, res, next) => {
   try {
-    const { firstName, lastName, email, phone, address, city, state, zip, driverLicense, notes } = req.body;
+    const { firstName, lastName, email, phone, address, city, state, zip, driverLicense, notes, leadSource } = req.body;
     if (!firstName) {
       return res.status(400).json({ message: 'First name is required' });
     }
@@ -253,6 +260,8 @@ router.put('/:id', async (req, res, next) => {
         zip: zip || null,
         driverLicense: driverLicense || null,
         notes: notes || null,
+        // Only touched when the form sends it, so older clients don't wipe a saved source.
+        ...(leadSource !== undefined && { leadSource: cleanLeadSource(leadSource) }),
       }
     });
     res.json(customer);

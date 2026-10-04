@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Megaphone, Receipt, TrendingUp, BarChart3, Loader2, PieChart } from 'lucide-react';
+import { Megaphone, TrendingUp, BarChart3, Loader2, PieChart, Users } from 'lucide-react';
 import { useInventory } from '@/hooks/useInventory';
 import { useSales } from '@/hooks/useSales';
 import { useAdvertising } from '@/hooks/useAdvertising';
+import { useCustomers } from '@/hooks/useCustomers';
+import { useAuth } from '@/context/auth-hooks';
 import Advertising from './Advertising';
+import LeadSources from './LeadSources';
 import CashFlowPage from './CashFlow';
 import FinancialSummary from './FinancialSummary';
 import AddAdvertisingDialog from '@/components/AddAdvertisingDialog';
@@ -16,10 +19,14 @@ export default function Reports() {
   const { isLoading: invLoading } = useInventory();
   const { isLoading: salesLoading } = useSales();
   const { isLoading: adsLoading } = useAdvertising();
+  const { isLoading: customersLoading } = useCustomers();
   
   const [advertisingDialogOpen, setAdvertisingDialogOpen] = useState(false);
+  // Only admins can add campaigns; managers can read the reports.
+  const { user } = useAuth();
+  const canAddAdvertising = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   
-  const isGlobalLoading = invLoading || salesLoading || adsLoading;
+  const isGlobalLoading = invLoading || salesLoading || adsLoading || customersLoading;
 
   return (
     <AppLayout>
@@ -33,7 +40,7 @@ export default function Reports() {
             </p>
           </div>
           
-          <div className="flex items-center gap-3">
+          {canAddAdvertising && <div className="flex items-center gap-3">
             <Button 
               onClick={() => setAdvertisingDialogOpen(true)}
               className="bg-primary text-primary-foreground hover:bg-primary/90 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
@@ -41,7 +48,7 @@ export default function Reports() {
               <Megaphone className="w-4 h-4 mr-2" />
               Add Advertising
             </Button>
-          </div>
+          </div>}
         </div>
 
         {isGlobalLoading ? (
@@ -69,6 +76,14 @@ export default function Reports() {
               <span className="md:hidden">Cash</span>
             </TabsTrigger>
             <TabsTrigger 
+              value="lead-sources" 
+              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex items-center gap-2 px-6 rounded-lg text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-sm"
+            >
+              <Users className="w-5 h-5" />
+              <span className="hidden md:inline">Lead Sources</span>
+              <span className="md:hidden">Leads</span>
+            </TabsTrigger>
+            <TabsTrigger 
               value="advertising" 
               className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex items-center gap-2 px-6 rounded-lg text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-sm"
             >
@@ -84,6 +99,9 @@ export default function Reports() {
              </TabsContent>
              <TabsContent value="cash-flow" className="m-0 focus-visible:ring-0">
                 <CashFlowContent />
+             </TabsContent>
+             <TabsContent value="lead-sources" className="m-0 focus-visible:ring-0">
+                <LeadSources />
              </TabsContent>
              <TabsContent value="advertising" className="m-0 focus-visible:ring-0">
                 <AdvertisingContent />

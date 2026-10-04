@@ -138,6 +138,9 @@ model Purchase {
   inspectionCost    Float    @default(0)
   registrationCost  Float    @default(0)
   totalPurchaseCost Float
+  // True when a scan could not read the price. It is stored as 0 and flagged, instead of the
+  // $10,000 placeholder that used to be saved and counted as real money in every report.
+  priceEstimated    Boolean?
   purchaseDate      DateTime
   paymentMethod     String
   documentBase64    String?
@@ -305,7 +308,8 @@ model Customer {
   zip           String?
   driverLicense String?
   notes         String?
-  source        String?  @default("manual") // manual, sale, note
+  source        String?  @default("manual") // manual, sale, note (how the record was created)
+  leadSource    String?  // where the customer came from: CarGurus, Google, Referral, ... (free text)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
