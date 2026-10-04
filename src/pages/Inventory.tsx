@@ -17,6 +17,7 @@ import VinDecoderDialog from '@/components/VinDecoderDialog';
 import ReconKanbanBoard from '@/components/ReconKanbanBoard';
 import { apiUrl, downloadFile } from '@/lib/api';
 import AgingBadge from '@/components/AgingBadge';
+import CopyVin from '@/components/CopyVin';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { agingBand, vehicleName } from '@/lib/vehicleAging';
 import { toast } from '@/components/ui/toast-utils';
@@ -42,8 +43,61 @@ const SORT_LABELS = {
   oldest: 'Oldest purchase',
   yearDesc: 'Year (newest first)',
   yearAsc: 'Year (oldest first)',
+  purchaseDesc: 'Purchase price (high to low)',
+  purchaseAsc: 'Purchase price (low to high)',
+  costDesc: 'Total cost (high to low)',
+  costAsc: 'Total cost (low to high)',
+  daysDesc: 'Days on lot (most first)',
+  daysAsc: 'Days on lot (fewest first)',
   status: 'Status',
 } as const;
+type SortKey = keyof typeof SORT_LABELS;
+
+// Column sorts. Each has a "Desc" and "Asc" key; the value is what the column shows.
+type SortField = 'year' | 'purchase' | 'cost' | 'days';
+const FINANCIAL_SORTS: SortKey[] = ['purchaseDesc', 'purchaseAsc', 'costDesc', 'costAsc'];
+
+const totalCost = (v: Vehicle) =>
+  ((v.totalPurchaseCost || v.purchase?.totalPurchaseCost || 0))
+  + ((v.repairCost || v.repairs?.reduce((s, r) => s + (r.partsCost || 0) + (r.laborCost || 0), 0) || 0));
+
+const SORT_VALUE: Record<SortField, (v: Vehicle) => number> = {
+  year: (v) => Number(v.year) || 0,
+  purchase: (v) => Number(v.purchasePrice ?? v.purchase?.purchasePrice) || 0,
+  cost: totalCost,
+  days: (v) => Number(v.daysInInventory) || 0,
+};
+
+/** Header that cycles high-to-low, low-to-high, then back to the default order. */
+function SortableHeader({ label, field, sortBy, onSort, title }: {
+  label: string;
+  field: SortField;
+  sortBy: SortKey;
+  onSort: (next: SortKey) => void;
+  title: string;
+}) {
+  const desc = `${field}Desc` as SortKey;
+  const asc = `${field}Asc` as SortKey;
+  const active = sortBy === desc || sortBy === asc;
+  return (
+    <th
+      className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider"
+      aria-sort={sortBy === desc ? 'descending' : sortBy === asc ? 'ascending' : 'none'}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortBy === desc ? asc : sortBy === asc ? 'newest' : desc)}
+        className={cn("inline-flex items-center gap-1 uppercase tracking-wider hover:text-foreground", active && "text-foreground")}
+        title={title}
+      >
+        {label}
+        {sortBy === desc ? <ArrowDown className="w-3 h-3" aria-hidden="true" />
+          : sortBy === asc ? <ArrowUp className="w-3 h-3" aria-hidden="true" />
+          : <ArrowUpDown className="w-3 h-3 opacity-50" aria-hidden="true" />}
+      </button>
+    </th>
+  );
+}
 
 const formatDay = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -66,7 +120,7 @@ export default function Inventory() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'board'>('list');
-  const [sortBy, setSortBy] = useState<keyof typeof SORT_LABELS>('newest');
+  const [sortBy, setSortBy] = useState<SortKey>('newest');
   // Tapping the "Available" box shows only available cars; tapping again shows all.
   // Kept in the URL (?available=1) so the back button and links keep the filter.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -114,10 +168,12 @@ export default function Inventory() {
         const orderB = order[b.status] ?? 99;
         if (orderA !== orderB) return orderA - orderB;
       }
-      if (sortBy === 'yearDesc' || sortBy === 'yearAsc') {
-        const byYear = (Number(a.year) || 0) - (Number(b.year) || 0);
-        if (byYear !== 0) return sortBy === 'yearAsc' ? byYear : -byYear;
-        // Same model year: newest purchase first.
+      const columnSort = /^(year|purchase|cost|days)(Desc|Asc)$/.exec(sortBy);
+      if (columnSort) {
+        const value = SORT_VALUE[columnSort[1] as SortField];
+        const diff = value(a) - value(b);
+        if (diff !== 0) return columnSort[2] === 'Asc' ? diff : -diff;
+        // Equal values: newest purchase first.
       }
       return sortBy === 'oldest' ? purchased(a) - purchased(b) : purchased(b) - purchased(a);
     });
@@ -238,7 +294,7 @@ export default function Inventory() {
                 <PopoverContent align="start" className="w-72 space-y-4">
                   <div className="space-y-1.5">
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sort by</p>
-                    {(Object.keys(SORT_LABELS) as (keyof typeof SORT_LABELS)[]).map((key) => (
+                    {(Object.keys(SORT_LABELS) as SortKey[]).filter((key) => !isStaff || !FINANCIAL_SORTS.includes(key)).map((key) => (
                       <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
                         <input type="radio" name="inventory-sort" checked={sortBy === key} onChange={() => setSortBy(key)} />
                         {SORT_LABELS[key]}
@@ -379,9 +435,8 @@ export default function Inventory() {
                 <div className="relative z-10 flex justify-between items-start mb-3">
                   <div>
                     <h3 className="font-bold text-lg text-foreground leading-tight tracking-tight">{vehicleName(vehicle)}</h3>
-                    <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                      {vehicle.stockNumber && <span className="font-semibold text-foreground">#{vehicle.stockNumber} · </span>}{vehicle.vin}
-                    </p>
+                    {vehicle.stockNumber && <p className="text-xs text-muted-foreground font-mono font-semibold mt-0.5">Stock #{vehicle.stockNumber}</p>}
+                    <CopyVin vin={vehicle.vin} className="mt-1" />
                   </div>
                   <div className="flex items-center gap-2">
                     {(vehicle.hasDocument || vehicle.hasSourceDocument) && (
@@ -452,7 +507,7 @@ export default function Inventory() {
                   <div className="relative z-10 flex justify-between items-center mt-1">
                     <div>
                       <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Total Investment</p>
-                      <p className="text-xl font-bold text-primary tabular-nums">${(((vehicle.totalPurchaseCost || vehicle.purchase?.totalPurchaseCost || 0)) + ((vehicle.repairCost || vehicle.repairs?.reduce((s,r)=>s+(r.partsCost||0)+(r.laborCost||0),0) || 0))).toLocaleString()}</p>
+                      <p className="text-xl font-bold text-primary tabular-nums">${totalCost(vehicle).toLocaleString()}</p>
                     </div>
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                       <ChevronRight className="w-4 h-4 text-primary" />
@@ -477,31 +532,15 @@ export default function Inventory() {
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Stock #</th>
-                      <th
-                        className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider"
-                        aria-sort={sortBy === 'yearDesc' ? 'descending' : sortBy === 'yearAsc' ? 'ascending' : 'none'}
-                      >
-                        {/* Click cycles: newest model year -> oldest -> back to the default order. */}
-                        <button
-                          type="button"
-                          onClick={() => setSortBy(sortBy === 'yearDesc' ? 'yearAsc' : sortBy === 'yearAsc' ? 'newest' : 'yearDesc')}
-                          className={cn("inline-flex items-center gap-1 uppercase tracking-wider hover:text-foreground", (sortBy === 'yearDesc' || sortBy === 'yearAsc') && "text-foreground")}
-                          title="Sort by model year"
-                        >
-                          Year &amp; Vehicle
-                          {sortBy === 'yearDesc' ? <ArrowDown className="w-3 h-3" aria-hidden="true" />
-                            : sortBy === 'yearAsc' ? <ArrowUp className="w-3 h-3" aria-hidden="true" />
-                            : <ArrowUpDown className="w-3 h-3 opacity-50" aria-hidden="true" />}
-                        </button>
-                      </th>
+                      <SortableHeader label="Year & Vehicle" field="year" sortBy={sortBy} onSort={setSortBy} title="Sort by model year" />
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">VIN</th>
                       {!isStaff && (
                         <>
-                          <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Purchase</th>
-                          <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Cost</th>
+                          <SortableHeader label="Purchase" field="purchase" sortBy={sortBy} onSort={setSortBy} title="Sort by purchase price" />
+                          <SortableHeader label="Total Cost" field="cost" sortBy={sortBy} onSort={setSortBy} title="Sort by total cost (purchase, fees and repairs)" />
                         </>
                       )}
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">On lot</th>
+                      <SortableHeader label="On lot" field="days" sortBy={sortBy} onSort={setSortBy} title="Sort by days on the lot" />
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-20"></th>
                     </tr>
@@ -523,11 +562,11 @@ export default function Inventory() {
                           <p className="font-medium text-foreground text-sm">{vehicleName(vehicle)}</p>
                           <p className="text-[11px] text-muted-foreground">{vehicle.color} · {vehicle.mileage.toLocaleString()} mi</p>
                         </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{vehicle.vin.slice(-8)}</td>
+                        <td className="px-4 py-3 whitespace-nowrap"><CopyVin vin={vehicle.vin} /></td>
                         {!isStaff && (
                           <>
                             <td className="px-4 py-3 text-sm font-medium text-foreground tabular-nums">${vehicle.purchasePrice.toLocaleString()}</td>
-                            <td className="px-4 py-3 text-sm font-semibold text-primary tabular-nums">${(((vehicle.totalPurchaseCost || vehicle.purchase?.totalPurchaseCost || 0)) + ((vehicle.repairCost || vehicle.repairs?.reduce((s,r)=>s+(r.partsCost||0)+(r.laborCost||0),0) || 0))).toLocaleString()}</td>
+                            <td className="px-4 py-3 text-sm font-semibold text-primary tabular-nums">${totalCost(vehicle).toLocaleString()}</td>
                           </>
                         )}
                         <td className="px-4 py-3">
@@ -635,6 +674,7 @@ export default function Inventory() {
                           {vehicleName(vehicle)}
                         </h3>
                         {vehicle.stockNumber && <p className="text-muted-foreground text-xs font-mono font-semibold">Stock #{vehicle.stockNumber}</p>}
+                        <CopyVin vin={vehicle.vin} className="mt-1 text-xs" />
                       </div>
                       <div className="p-2 bg-muted/50 rounded-xl group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                         <ChevronRight className="w-4 h-4" />
@@ -656,7 +696,7 @@ export default function Inventory() {
                       <div className="mt-auto">
                         <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mb-1">Total Investment</p>
                         <p className="text-2xl font-black text-primary tabular-nums tracking-tighter">
-                          ${(((vehicle.totalPurchaseCost || vehicle.purchase?.totalPurchaseCost || 0)) + ((vehicle.repairCost || vehicle.repairs?.reduce((s,r)=>s+(r.partsCost||0)+(r.laborCost||0),0) || 0))).toLocaleString()}
+                          ${totalCost(vehicle).toLocaleString()}
                         </p>
                       </div>
                     )}
