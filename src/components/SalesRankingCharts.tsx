@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Gauge, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,8 +15,11 @@ type VehicleLike = {
 type Row = { name: string; value: number; sold: number };
 
 const MAX_ROWS = 8;
-// One series per chart, so one colour: the theme primary (validated against both card surfaces).
-const BAR_FILL = 'hsl(var(--primary))';
+// Bars are shaded by units sold on a one-hue, five-step ramp (--rank-1 fewest .. --rank-5
+// most), defined per theme in index.css. Steps are relative to the most-sold row in view.
+const RAMP = ['var(--rank-1)', 'var(--rank-2)', 'var(--rank-3)', 'var(--rank-4)', 'var(--rank-5)'];
+const rampColor = (sold: number, maxSold: number) =>
+  RAMP[Math.min(RAMP.length - 1, Math.max(0, Math.ceil((sold / Math.max(1, maxSold)) * RAMP.length) - 1))];
 
 const modelKey = (v?: { make?: string | null; model?: string | null } | null) =>
   [v?.make, v?.model].filter(Boolean).join(' ').trim();
@@ -53,6 +56,7 @@ function RankingChart({ title, icon: Icon, rows, unit, empty }: {
   empty: string;
 }) {
   const height = Math.max(140, rows.length * 34 + 24);
+  const maxSold = Math.max(1, ...rows.map((r) => r.sold));
   return (
     <div className="stat-card" role="figure" aria-label={title}>
       <div className="mb-3 flex items-center gap-2">
@@ -78,7 +82,10 @@ function RankingChart({ title, icon: Icon, rows, unit, empty }: {
                 tickFormatter={truncate}
               />
               <Tooltip cursor={{ fill: 'hsl(var(--muted) / 0.4)' }} content={<RankingTooltip unit={unit} />} />
-              <Bar dataKey="value" fill={BAR_FILL} radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={false}>
+              <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16} isAnimationActive={false}>
+                {rows.map((r) => (
+                  <Cell key={r.name} fill={rampColor(r.sold, maxSold)} />
+                ))}
                 <LabelList
                   dataKey="value"
                   position="right"
@@ -89,6 +96,14 @@ function RankingChart({ title, icon: Icon, rows, unit, empty }: {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          {/* Colour key: shade = units sold, so colour never carries meaning alone. */}
+          <div className="mt-2 flex items-center justify-end gap-2 text-[11px] text-muted-foreground" aria-hidden="true">
+            <span>Fewer sold</span>
+            <span className="flex overflow-hidden rounded-sm">
+              {RAMP.map((c) => <span key={c} className="h-2.5 w-5" style={{ backgroundColor: c }} />)}
+            </span>
+            <span>More sold</span>
+          </div>
           {/* Same data as a table for screen readers. */}
           <table className="sr-only">
             <caption>{title}</caption>

@@ -4,6 +4,13 @@
 
 @layer base {
   :root {
+    /* Sales-chart ramp: one blue, fewer -> more units sold. Validated as an ordinal ramp
+       against the light card (light end 2.11:1). */
+    --rank-1: #86b6ef;
+    --rank-2: #5598e7;
+    --rank-3: #2a78d6;
+    --rank-4: #1c5cab;
+    --rank-5: #104281;
     --background: 228 33% 98%;
     --foreground: 222 47% 11%;
 
@@ -60,6 +67,13 @@
   }
 
   .dark {
+    /* Dark mode flips the anchor: more = lighter, so "more" stays the strongest contrast
+       against the dark card (dim end 2.34:1). */
+    --rank-1: #184f95;
+    --rank-2: #256abf;
+    --rank-3: #3987e5;
+    --rank-4: #6da7ec;
+    --rank-5: #9ec5f4;
     --background: 223 47% 6%;
     --foreground: 210 40% 98%;
 
