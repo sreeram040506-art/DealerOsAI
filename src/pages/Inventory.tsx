@@ -4,7 +4,7 @@ import { useAuth } from '@/context/auth-hooks';
 import { Vehicle } from '@/types/inventory';
 import { cn } from '@/lib/utils';
 // Consolidated icon imports — avoids duplicate module references
-import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, LayoutGrid, List, Receipt, Download, ArrowUpDown, ArrowDown, ArrowUp, Kanban } from 'lucide-react';
+import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, LayoutGrid, List, Receipt, Download, ArrowUpDown, Kanban } from 'lucide-react';
 import { useState, useMemo, useDeferredValue } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import ReconKanbanBoard from '@/components/ReconKanbanBoard';
 import { apiUrl, downloadFile } from '@/lib/api';
 import AgingBadge from '@/components/AgingBadge';
 import CopyVin from '@/components/CopyVin';
+import SortableHeader from '@/components/SortableHeader';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { agingBand, vehicleName } from '@/lib/vehicleAging';
 import { toast } from '@/components/ui/toast-utils';
@@ -67,37 +68,6 @@ const SORT_VALUE: Record<SortField, (v: Vehicle) => number> = {
   cost: totalCost,
   days: (v) => Number(v.daysInInventory) || 0,
 };
-
-/** Header that cycles high-to-low, low-to-high, then back to the default order. */
-function SortableHeader({ label, field, sortBy, onSort, title }: {
-  label: string;
-  field: SortField;
-  sortBy: SortKey;
-  onSort: (next: SortKey) => void;
-  title: string;
-}) {
-  const desc = `${field}Desc` as SortKey;
-  const asc = `${field}Asc` as SortKey;
-  const active = sortBy === desc || sortBy === asc;
-  return (
-    <th
-      className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider"
-      aria-sort={sortBy === desc ? 'descending' : sortBy === asc ? 'ascending' : 'none'}
-    >
-      <button
-        type="button"
-        onClick={() => onSort(sortBy === desc ? asc : sortBy === asc ? 'newest' : desc)}
-        className={cn("inline-flex items-center gap-1 uppercase tracking-wider hover:text-foreground", active && "text-foreground")}
-        title={title}
-      >
-        {label}
-        {sortBy === desc ? <ArrowDown className="w-3 h-3" aria-hidden="true" />
-          : sortBy === asc ? <ArrowUp className="w-3 h-3" aria-hidden="true" />
-          : <ArrowUpDown className="w-3 h-3 opacity-50" aria-hidden="true" />}
-      </button>
-    </th>
-  );
-}
 
 const formatDay = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });

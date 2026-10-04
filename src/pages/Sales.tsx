@@ -3,7 +3,7 @@ import { useSales } from '@/hooks/useSales';
 import { useInventory } from '@/hooks/useInventory';
 import { cn } from '@/lib/utils';
 import QueryErrorState from '@/components/QueryErrorState';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { formatSafeDate } from '@/lib/dateUtils';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/auth-hooks';
@@ -11,8 +11,11 @@ import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import EditSaleDialog from '@/components/EditSaleDialog';
 import { Vehicle } from '@/types/inventory';
-import { FileText, Trash2, Loader2, Receipt, ShoppingCart, Download, Upload, Pencil } from 'lucide-react';
+import { FileText, Trash2, Loader2, Receipt, ShoppingCart, Download, Upload, Pencil, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import SortableHeader from '@/components/SortableHeader';
 import { apiUrl, downloadFile } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 import { 
@@ -22,6 +25,22 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
+
+const SORT_LABELS = {
+  newest: 'Newest sale',
+  oldest: 'Oldest sale',
+  vehicleAsc: 'Vehicle (A–Z)',
+  vehicleDesc: 'Vehicle (Z–A)',
+  priceDesc: 'Price (high to low)',
+  priceAsc: 'Price (low to high)',
+  profitDesc: 'Profit (high to low)',
+  profitAsc: 'Profit (low to high)',
+} as const;
+type SortKey = keyof typeof SORT_LABELS;
+const PROFIT_SORTS: SortKey[] = ['profitDesc', 'profitAsc'];
+
+const formatDay = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
 export default function Sales() {
   const { sales, isLoading: salesLoading, isError: salesError, deleteSale } = useSales();
@@ -36,6 +55,53 @@ export default function Sales() {
   const [saleToEdit, setSaleToEdit] = useState<any | null>(null);
   const isStaff = user?.role === 'STAFF';
   const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+
+  // Sorting and a sale-date range. Totals and counts below follow the dates picked.
+  const [sortBy, setSortBy] = useState<SortKey>('newest');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  const visibleSales = useMemo(() => {
+    const names = new Map(vehicles.map(v => [v.id, `${v.make} ${v.model}`.trim()]));
+    const nameOf = (saleVehicleId: string) => names.get(saleVehicleId) ?? '';
+    const time = (d: string) => new Date(d).getTime();
+
+    const from = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : null;
+    const to = toDate ? new Date(`${toDate}T23:59:59.999`).getTime() : null;
+    const inRange = sales.filter(sale => {
+      if (from === null && to === null) return true;
+      const t = time(sale.saleDate);
+      if (Number.isNaN(t)) return false;
+      return (from === null || t >= from) && (to === null || t <= to);
+    });
+
+    return [...inRange].sort((a, b) => {
+      let diff = 0;
+      if (sortBy === 'vehicleAsc' || sortBy === 'vehicleDesc') {
+        const nameA = nameOf(a.vehicleId);
+        const nameB = nameOf(b.vehicleId);
+        // Sales whose vehicle can't be found sort last in either direction.
+        if (!nameA !== !nameB) return nameA ? -1 : 1;
+        diff = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+        if (sortBy === 'vehicleDesc') diff = -diff;
+      } else if (sortBy === 'priceAsc' || sortBy === 'priceDesc') {
+        diff = (Number(a.salePrice) || 0) - (Number(b.salePrice) || 0);
+        if (sortBy === 'priceDesc') diff = -diff;
+      } else if (sortBy === 'profitAsc' || sortBy === 'profitDesc') {
+        diff = (Number(a.profit) || 0) - (Number(b.profit) || 0);
+        if (sortBy === 'profitDesc') diff = -diff;
+      } else if (sortBy === 'oldest') {
+        diff = time(a.saleDate) - time(b.saleDate);
+      }
+      // Equal values (and the default order): newest sale first.
+      return diff !== 0 ? diff : time(b.saleDate) - time(a.saleDate);
+    });
+  }, [sales, vehicles, sortBy, fromDate, toDate]);
+
+  const dateFiltered = Boolean(fromDate || toDate);
+  const rangeLabel = fromDate && toDate ? `${formatDay(fromDate)} – ${formatDay(toDate)}`
+    : fromDate ? `from ${formatDay(fromDate)}`
+    : toDate ? `until ${formatDay(toDate)}` : '';
 
 
 
@@ -53,9 +119,10 @@ export default function Sales() {
     );
   }
 
-  const totalRevenue = sales.reduce((s, sale) => s + sale.salePrice, 0);
-  const totalProfit = sales.reduce((s, sale) => s + sale.profit, 0);
-  const avgProfit = sales.length > 0 ? Math.round(totalProfit / sales.length) : 0;
+  const totalRevenue = visibleSales.reduce((s, sale) => s + sale.salePrice, 0);
+  const totalProfit = visibleSales.reduce((s, sale) => s + sale.profit, 0);
+  const avgProfit = visibleSales.length > 0 ? Math.round(totalProfit / visibleSales.length) : 0;
+  const emptyMessage = sales.length > 0 ? 'No sales match these dates.' : 'No sales recorded yet.';
 
   const handleVehicleClick = (vehicleId: string) => {
     const vehicle = vehicles.find(v => v.id === vehicleId);
@@ -134,9 +201,52 @@ export default function Sales() {
   return (
     <AppLayout>
       <div className="space-y-5 page-enter">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Sold Vehicles</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{sales.length} units finalized</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">Sold Vehicles</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">
+              {visibleSales.length} units finalized{dateFiltered ? ` of ${sales.length}` : ''}
+            </p>
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="flex gap-2 h-9 px-3 rounded-xl border-border/50 font-medium text-sm text-foreground bg-card shadow-sm hover:bg-muted/50"
+              >
+                <ArrowUpDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                Sort: {SORT_LABELS[sortBy]}
+                {dateFiltered && <span className="text-primary">· {rangeLabel}</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 space-y-4">
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sort by</p>
+                {(Object.keys(SORT_LABELS) as SortKey[]).filter((key) => !isStaff || !PROFIT_SORTS.includes(key)).map((key) => (
+                  <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="radio" name="sold-sort" checked={sortBy === key} onChange={() => setSortBy(key)} />
+                    {SORT_LABELS[key]}
+                  </label>
+                ))}
+              </div>
+              <div className="space-y-1.5 border-t border-border pt-3" role="group" aria-label="Sale date range">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sold</p>
+                <div className="grid grid-cols-[2.5rem_1fr] items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">From</span>
+                  <Input type="date" aria-label="Sold from" value={fromDate} max={toDate || undefined}
+                    onChange={(e) => setFromDate(e.target.value)} className="h-9" />
+                  <span className="text-muted-foreground">To</span>
+                  <Input type="date" aria-label="Sold to" value={toDate} min={fromDate || undefined}
+                    onChange={(e) => setToDate(e.target.value)} className="h-9" />
+                </div>
+                {dateFiltered && (
+                  <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => { setFromDate(''); setToDate(''); }}>
+                    Clear dates
+                  </Button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Stats */}
@@ -161,8 +271,8 @@ export default function Sales() {
 
         {/* Mobile View: Cards - Premium Design */}
         <div className="grid grid-cols-1 gap-4 md:hidden pb-6">
-          {sales.length > 0 ? (
-            sales.map((sale) => {
+          {visibleSales.length > 0 ? (
+            visibleSales.map((sale) => {
               const vehicle = vehicles.find(v => v.id === sale.vehicleId);
               return (
                 <div 
@@ -286,7 +396,7 @@ export default function Sales() {
             })
           ) : (
             <div className="py-16 text-center bg-card/40 rounded-2xl border border-dashed border-border">
-              <p className="text-muted-foreground text-sm font-medium">No sales recorded yet.</p>
+              <p className="text-muted-foreground text-sm font-medium">{emptyMessage}</p>
             </div>
           )}
         </div>
@@ -297,16 +407,21 @@ export default function Sales() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Vehicle</th>
+                  <SortableHeader label="Vehicle" field="vehicle" sortBy={sortBy} onSort={setSortBy} firstClick="asc" title="Sort by vehicle name (A–Z)" />
                   <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Customer</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Price</th>
+                  <SortableHeader label="Date" field="date" sortBy={sortBy} onSort={setSortBy} descKey="newest" ascKey="oldest" title="Sort by sale date" />
+                  <SortableHeader label="Price" field="price" sortBy={sortBy} onSort={setSortBy} title="Sort by sale price" />
                   <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
-                  {!isStaff && <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Profit</th>}
+                  {!isStaff && <SortableHeader label="Profit" field="profit" sortBy={sortBy} onSort={setSortBy} title="Sort by profit" />}
                 </tr>
               </thead>
               <tbody>
-                {sales.map((sale) => {
+                {visibleSales.length === 0 && (
+                  <tr>
+                    <td colSpan={isStaff ? 5 : 6} className="px-4 py-10 text-center text-sm text-muted-foreground">{emptyMessage}</td>
+                  </tr>
+                )}
+                {visibleSales.map((sale) => {
                   const vehicle = vehicles.find(v => v.id === sale.vehicleId);
                   return (
                     <tr 
