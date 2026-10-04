@@ -16,6 +16,7 @@ import VinDecoderDialog from '@/components/VinDecoderDialog';
 import ReconKanbanBoard from '@/components/ReconKanbanBoard';
 import { apiUrl, downloadFile } from '@/lib/api';
 import AgingBadge from '@/components/AgingBadge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { agingBand, vehicleName } from '@/lib/vehicleAging';
 import { toast } from '@/components/ui/toast-utils';
 import { 
@@ -35,6 +36,15 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 
+const SORT_LABELS = {
+  newest: 'Newest purchase',
+  oldest: 'Oldest purchase',
+  status: 'Status',
+} as const;
+
+const formatDay = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
 const statusStyles: Record<string, string> = {
   Available: 'bg-primary/10 text-primary border-primary/20',
   Reserved: 'bg-warning/10 text-warning border-warning/20',
@@ -53,9 +63,8 @@ export default function Inventory() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'board'>('list');
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'status'>('newest');
-  // Purchase-date range. Preset ranges fill the dates; "custom" lets the user type them.
-  const [range, setRange] = useState<'all' | 'year' | '30' | '90' | 'custom'>('all');
+  const [sortBy, setSortBy] = useState<keyof typeof SORT_LABELS>('newest');
+  // Purchase-date range (either end optional).
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const isStaff = user?.role === 'STAFF';
@@ -97,18 +106,9 @@ export default function Inventory() {
     });
   }, [vehicles, deferredSearch, sortBy, fromDate, toDate]);
 
-  const applyRange = (value: typeof range) => {
-    setRange(value);
-    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const today = new Date();
-    if (value === 'all') { setFromDate(''); setToDate(''); }
-    else if (value === 'year') { setFromDate(`${today.getFullYear()}-01-01`); setToDate(iso(today)); }
-    else if (value === '30' || value === '90') {
-      const start = new Date(today);
-      start.setDate(start.getDate() - Number(value));
-      setFromDate(iso(start)); setToDate(iso(today));
-    }
-  };
+  const rangeLabel = fromDate && toDate ? `${formatDay(fromDate)} – ${formatDay(toDate)}`
+    : fromDate ? `from ${formatDay(fromDate)}`
+    : toDate ? `until ${formatDay(toDate)}` : '';
 
   // Aging counts only cover cars still for sale.
   const unsold = vehicles.filter(v => v.status !== 'Sold');
@@ -202,19 +202,45 @@ export default function Inventory() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 h-9 px-3 rounded-xl border border-border/50 text-sm text-foreground bg-card shadow-sm">
-                <ArrowUpDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-                <span className="sr-only">Sort by</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                  className="bg-transparent font-medium outline-none cursor-pointer"
-                >
-                  <option value="newest">Newest purchase</option>
-                  <option value="oldest">Oldest purchase</option>
-                  <option value="status">Status</option>
-                </select>
-              </label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="flex gap-2 h-9 px-3 rounded-xl border-border/50 font-medium text-sm text-foreground bg-card shadow-sm hover:bg-muted/50"
+                  >
+                    <ArrowUpDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                    Sort: {SORT_LABELS[sortBy]}
+                    {(fromDate || toDate) && <span className="text-primary">· {rangeLabel}</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 space-y-4">
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sort by</p>
+                    {(Object.keys(SORT_LABELS) as (keyof typeof SORT_LABELS)[]).map((key) => (
+                      <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="radio" name="inventory-sort" checked={sortBy === key} onChange={() => setSortBy(key)} />
+                        {SORT_LABELS[key]}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="space-y-1.5 border-t border-border pt-3" role="group" aria-label="Purchase date range">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Purchased</p>
+                    <div className="grid grid-cols-[2.5rem_1fr] items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">From</span>
+                      <Input type="date" aria-label="Purchased from" value={fromDate} max={toDate || undefined}
+                        onChange={(e) => setFromDate(e.target.value)} className="h-9" />
+                      <span className="text-muted-foreground">To</span>
+                      <Input type="date" aria-label="Purchased to" value={toDate} min={fromDate || undefined}
+                        onChange={(e) => setToDate(e.target.value)} className="h-9" />
+                    </div>
+                    {(fromDate || toDate) && (
+                      <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => { setFromDate(''); setToDate(''); }}>
+                        Clear dates
+                      </Button>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
               <div className="flex bg-muted p-1 rounded-xl border border-border/50 mr-2">
                 <button 
                   onClick={() => setViewMode('list')}
@@ -264,32 +290,9 @@ export default function Inventory() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="Purchase date range">
-              <select
-                value={range}
-                onChange={(e) => applyRange(e.target.value as typeof range)}
-                className="h-10 rounded-xl border border-border bg-card px-3 font-medium shadow-sm"
-                aria-label="Purchased"
-              >
-                <option value="all">Purchased: any time</option>
-                <option value="year">This year</option>
-                <option value="30">Last 30 days</option>
-                <option value="90">Last 90 days</option>
-                <option value="custom">Custom range</option>
-              </select>
-              {range !== 'all' && (
-                <>
-                  <Input type="date" aria-label="From" value={fromDate} max={toDate || undefined}
-                    onChange={(e) => { setRange('custom'); setFromDate(e.target.value); }} className="h-10 w-[150px] rounded-xl bg-card" />
-                  <span className="text-muted-foreground">to</span>
-                  <Input type="date" aria-label="To" value={toDate} min={fromDate || undefined}
-                    onChange={(e) => { setRange('custom'); setToDate(e.target.value); }} className="h-10 w-[150px] rounded-xl bg-card" />
-                </>
-              )}
-              {(fromDate || toDate || search) && (
-                <span className="text-xs text-muted-foreground">{filtered.length} of {vehicles.length}</span>
-              )}
-            </div>
+            {(fromDate || toDate || search) && (
+              <span className="text-xs text-muted-foreground">{filtered.length} of {vehicles.length} vehicles</span>
+            )}
           </div>
         </div>
 
