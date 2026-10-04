@@ -545,6 +545,8 @@ router.post(
   ]),
   async (req, res, next) => {
     let info = null;
+    // Declared out here, with `info`, because the catch block below reports it too.
+    let registryId = null;
     try {
       const sourceFile = req.files?.sourceFile?.[0];
       const templateFile = req.files?.templateFile?.[0];
@@ -582,7 +584,6 @@ router.post(
 
       const isPushToInventory = req.body.pushToInventory === 'true';
       let vehicleId = null;
-      let registryId = null;
 
       if (!info.vin) {
         return res.status(400).json({
