@@ -138,7 +138,7 @@
 
 @layer components {
   .stat-card {
-    @apply bg-card/95 rounded-2xl border border-border/70 p-6 shadow-sm backdrop-blur-sm transition-all duration-200;
+    @apply bg-card rounded-2xl border border-border/70 p-4 shadow-sm transition-all duration-200;
   }
 
   .stat-card:hover {

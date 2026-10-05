@@ -104,10 +104,10 @@ const StatCard = memo(function StatCard({ label, value, icon: Icon, trend, class
       
       <div className="flex items-center justify-between mb-2.5 relative z-10">
         <div className={cn(
-          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-sm transition-transform duration-300 group-hover:scale-110", 
+          "w-7 h-7 rounded-md flex items-center justify-center shrink-0 shadow-sm transition-transform duration-300 group-hover:scale-110", 
           iconClassName || "bg-primary/10 text-primary"
         )} aria-hidden="true">
-          <Icon className="w-4 h-4" />
+          <Icon className="w-3.5 h-3.5" />
         </div>
         {actionLabel && onClick && (
           <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider text-primary">
@@ -126,10 +126,10 @@ const StatCard = memo(function StatCard({ label, value, icon: Icon, trend, class
       
       <div className="min-w-0 relative z-10">
         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-1">{label}</p>
-        <p className="text-xl sm:text-2xl font-black text-foreground tabular-nums tracking-tight truncate drop-shadow-sm font-display" title={value}>
+        <p className="font-black text-foreground tabular-nums tracking-tight whitespace-nowrap font-display leading-tight" style={{ fontSize: 'clamp(1rem, 0.6rem + 1.1vw, 1.5rem)' }} title={value}>
           {animatedValue}
         </p>
-        {hint && <p className="text-[11px] text-muted-foreground mt-0.5 truncate" title={hint}>{hint}</p>}
+        {hint && <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug" title={hint}>{hint}</p>}
       </div>
     </div>
   );
