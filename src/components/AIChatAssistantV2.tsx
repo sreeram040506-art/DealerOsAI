@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageSquare, X, Send, Bot, User, Loader2, Volume2, VolumeX, Mic } from 'lucide-react';
+import { MessageSquare, X, Send, ChevronLeft, Bot, User, Loader2, Volume2, VolumeX, Mic } from 'lucide-react';
 import { useVoice } from '@/hooks/useVoice';
 import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
@@ -13,6 +13,41 @@ interface Message {
 export default function AIChatAssistant() {
   const { token, user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  // The launcher can be dragged anywhere, or tucked into a small tab on the right edge, so it never sits on top of page buttons.
+  const [launcher, setLauncher] = useState<{ right: number; bottom: number; hidden: boolean }>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('synaxLauncher') || 'null');
+      if (saved && Number.isFinite(saved.right) && Number.isFinite(saved.bottom)) return { right: saved.right, bottom: saved.bottom, hidden: !!saved.hidden };
+    } catch { /* storage unavailable */ }
+    return { right: 24, bottom: 24, hidden: false };
+  });
+  const dragRef = useRef<{ startX: number; startY: number; right: number; bottom: number; moved: boolean } | null>(null);
+  const updateLauncher = (next: { right: number; bottom: number; hidden: boolean }) => {
+    setLauncher(next);
+    try { localStorage.setItem('synaxLauncher', JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  const onLauncherDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragRef.current = { startX: e.clientX, startY: e.clientY, right: launcher.right, bottom: launcher.bottom, moved: false };
+  };
+  const onLauncherMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    if (!d.moved && Math.hypot(dx, dy) < 5) return;
+    d.moved = true;
+    const right = Math.min(Math.max(4, d.right - dx), window.innerWidth - 120);
+    const bottom = Math.min(Math.max(4, d.bottom - dy), window.innerHeight - 60);
+    setLauncher((l) => ({ ...l, right, bottom }));
+  };
+  const onLauncherUp = () => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d) return;
+    if (d.moved) updateLauncher(launcher);
+    else setIsOpen(true);
+  };
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
     content: "Hi! I'm Synax, your AI business assistant. Ask me anything about your dealership — inventory, sales, profits, workflows, and more."
@@ -120,6 +155,7 @@ export default function AIChatAssistant() {
   };
 
   return (
+    <>
     <div className="fixed bottom-6 right-6 z-40 flex flex-col-reverse items-end pointer-events-none">
       {/* Chat Window */}
       {isOpen && (
@@ -256,24 +292,52 @@ export default function AIChatAssistant() {
           </form>
         </div>
       )}
+    </div>
 
-      {/* Floating Toggle Button */}
-      {!isOpen && (
+      {/* Floating launcher: drag to move, or tuck away into the edge tab */}
+      {!isOpen && !launcher.hidden && (
+        <div className="fixed z-40 group" style={{ right: launcher.right, bottom: launcher.bottom }}>
+          <button
+            type="button"
+            onPointerDown={onLauncherDown}
+            onPointerMove={onLauncherMove}
+            onPointerUp={onLauncherUp}
+            aria-label="Open Synax chat (drag to move)"
+            title="Click to chat, drag to move"
+            style={{ touchAction: 'none' }}
+            className="relative px-4 h-12 cursor-grab active:cursor-grabbing bg-gradient-to-br from-primary to-emerald-600 text-white rounded-lg shadow-xl shadow-primary/30 flex items-center justify-center gap-2 select-none"
+          >
+            <div className="absolute inset-0 rounded-lg border border-white/20"></div>
+            <MessageSquare className="w-5 h-5" />
+            <span className="font-bold tracking-wide text-sm">Synax</span>
+            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-primary"></span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => updateLauncher({ ...launcher, hidden: true })}
+            aria-label="Hide Synax chat button"
+            title="Hide"
+            className="absolute -top-2 -left-2 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-card border border-border text-muted-foreground shadow"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+      {!isOpen && launcher.hidden && (
         <button
-          onClick={() => setIsOpen(true)}
-          className="group relative px-4 h-12 bg-gradient-to-br from-primary to-emerald-600 text-white rounded-lg shadow-xl shadow-primary/30 flex items-center justify-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 animate-in zoom-in pointer-events-auto"
+          type="button"
+          onClick={() => updateLauncher({ ...launcher, hidden: false })}
+          aria-label="Show Synax chat button"
+          title="Show chat"
+          className="fixed right-0 z-40 h-12 w-5 rounded-l-md bg-primary text-white shadow-lg flex items-center justify-center opacity-70 hover:opacity-100"
+          style={{ bottom: launcher.bottom }}
         >
-          <div className="absolute inset-0 rounded-lg border border-white/20"></div>
-          <MessageSquare className="w-5 h-5 transition-transform group-hover:rotate-12" />
-          <span className="font-bold tracking-wide text-sm">Synax</span>
-          
-          {/* Unread badge indicator */}
-          <span className="absolute -top-1 -right-1 flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-primary"></span>
-          </span>
+          <ChevronLeft className="h-4 w-4" />
         </button>
       )}
-    </div>
+    </>
   );
 }
