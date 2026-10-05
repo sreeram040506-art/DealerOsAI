@@ -9,11 +9,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LEAD_SOURCE_OPTIONS, OTHER_SOURCE } from '@/lib/leadSources';
-import { Car, Download, FileUp, Loader2, Mail, MapPin, Pencil, Phone, Plus, Search, Users } from 'lucide-react';
+import { CUSTOMER_SORT_LABELS, isRepeatBuyer, sortCustomers, type CustomerSortKey } from '@/lib/customerInsights';
+import { ArrowUpDown, CalendarCheck, Car, Download, FileUp, Loader2, Mail, MapPin, Pencil, Phone, Plus, Search, Users } from 'lucide-react';
 import { toast } from '@/components/ui/toast-utils';
 import { useAuth } from '@/context/auth-hooks';
 import { apiFetch, apiUrl, handleApiResponse, downloadFile } from '@/lib/api';
 import CustomerDetailDialog from '@/components/CustomerDetailDialog';
+import { CarsBought, LastVisit } from '@/components/customers/CustomerFacts';
 
 const CUSTOMER_CATEGORIES = ['Bought Vehicle', 'Came for Visit', 'Lead', 'Follow Up', 'Other'] as const;
 const META_PREFIX = 'APH_CUSTOMER_META:';
@@ -39,6 +41,7 @@ function sourceToForm(saved?: string | null): { leadSource: string; leadSourceOt
 }
 
 type CustomerForm = {
+  lastVisit: string; // YYYY-MM-DD, or '' for none
   leadSource: string;
   leadSourceOther: string;
   firstName: string;
@@ -54,6 +57,7 @@ type CustomerForm = {
 };
 
 const emptyForm: CustomerForm = {
+  lastVisit: '',
   leadSource: NO_SOURCE,
   leadSourceOther: '',
   firstName: '',
@@ -94,9 +98,12 @@ function getVehicleLabel(vehicle: { year?: number; make?: string; model?: string
 
 export default function Customers() {
   const { token, logout } = useAuth();
-  const { customers, isLoading, isError, importFromSales, isImporting, addCustomer, updateCustomer, uploadCustomerDocument, isUploadingCustomerDocument } = useCustomers();
+  const { customers, isLoading, isError, importFromSales, isImporting, addCustomer, updateCustomer, recordVisit, uploadCustomerDocument, isUploadingCustomerDocument } = useCustomers();
   const { vehicles, isLoading: vehiclesLoading, isError: vehiclesError } = useInventory();
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<CustomerSortKey>('newest');
+  const [repeatOnly, setRepeatOnly] = useState(false);
+  const [visitingId, setVisitingId] = useState<string | null>(null);
   const [vehicleSearch, setVehicleSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -135,11 +142,11 @@ export default function Customers() {
 
   const filteredCustomers = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return enrichedCustomers;
-
-    return enrichedCustomers.filter(({ customer, meta }) => {
+    const base = repeatOnly ? enrichedCustomers.filter(({ customer }) => isRepeatBuyer(customer)) : enrichedCustomers;
+    const matching = !query ? base : base.filter(({ customer, meta }) => {
       const fullName = `${customer.firstName} ${customer.lastName || ''}`.toLowerCase();
       return (
+        (customer.leadSource || '').toLowerCase().includes(query) ||
         fullName.includes(query) ||
         (customer.email || '').toLowerCase().includes(query) ||
         (customer.phone || '').toLowerCase().includes(query) ||
@@ -149,7 +156,22 @@ export default function Customers() {
         (meta.vehicleLabel || '').toLowerCase().includes(query)
       );
     });
-  }, [enrichedCustomers, searchTerm]);
+    return sortCustomers(matching, sortBy);
+  }, [enrichedCustomers, searchTerm, sortBy, repeatOnly]);
+
+  const repeatBuyerCount = useMemo(() => customers.filter(isRepeatBuyer).length, [customers]);
+
+  const handleRecordVisit = async (customer: Customer) => {
+    setVisitingId(customer.id);
+    try {
+      await recordVisit({ id: customer.id });
+      toast.success(`Visit recorded for ${customer.firstName}.`);
+    } catch (err: any) {
+      toast.error(err.message || 'Could not record the visit.');
+    } finally {
+      setVisitingId(null);
+    }
+  };
 
   const customersWithEmail = useMemo(
     () => customers.filter((customer) => customer.email).length,
@@ -197,6 +219,7 @@ export default function Customers() {
       category: meta.category,
       vehicleId: meta.vehicleId || NO_VEHICLE,
       ...sourceToForm(customer.leadSource),
+      lastVisit: customer.lastVisitAt ? customer.lastVisitAt.slice(0, 10) : '',
     });
     setVehicleSearch('');
     setFormOpen(true);
@@ -267,6 +290,7 @@ export default function Customers() {
       state: customerForm.state.trim() || null,
       zip: customerForm.zip.trim() || null,
       notes,
+      lastVisitAt: customerForm.lastVisit || null,
       // null clears a previously saved source
       leadSource: customerForm.leadSource === NO_SOURCE ? null
         : customerForm.leadSource === OTHER_SOURCE ? (customerForm.leadSourceOther.trim() || null)
@@ -340,7 +364,7 @@ export default function Customers() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="stat-card bg-secondary/30 border-border/50 shadow-sm">
             <p className="stat-label uppercase text-[10px] tracking-widest font-black text-muted-foreground/80">Total Customers</p>
             <p className="stat-value text-3xl mt-1 text-foreground font-display font-black leading-none">{customers.length}</p>
@@ -353,10 +377,40 @@ export default function Customers() {
             <p className="stat-label uppercase text-[10px] tracking-widest font-black text-muted-foreground/80">Came for Visit</p>
             <p className="stat-value text-3xl mt-1 text-foreground font-display font-black leading-none">{visitCount}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setRepeatOnly((on) => !on)}
+            aria-pressed={repeatOnly}
+            title={repeatOnly ? 'Showing repeat buyers only. Tap to show everyone.' : 'Tap to show only customers who bought 2 or more cars.'}
+            className={`stat-card text-left border-border/50 shadow-sm cursor-pointer transition-colors ${repeatOnly ? 'bg-primary/10 ring-2 ring-primary' : 'bg-secondary/30 hover:bg-muted/40'}`}
+          >
+            <p className="stat-label uppercase text-[10px] tracking-widest font-black text-muted-foreground/80">{repeatOnly ? 'Showing repeat buyers' : 'Repeat Buyers'}</p>
+            <p className="stat-value text-3xl mt-1 text-foreground font-display font-black leading-none">{repeatBuyerCount}</p>
+          </button>
           <div className="stat-card bg-secondary/30 border-border/50 shadow-sm">
             <p className="stat-label uppercase text-[10px] tracking-widest font-black text-muted-foreground/80">Emails Saved</p>
             <p className="stat-value text-3xl mt-1 text-foreground font-display font-black leading-none">{customersWithEmail}</p>
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 h-10 rounded-xl border border-border bg-card px-3 text-sm shadow-sm">
+            <ArrowUpDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            <span className="text-muted-foreground">Sort by</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as CustomerSortKey)}
+              aria-label="Sort customers"
+              className="bg-transparent font-medium outline-none cursor-pointer"
+            >
+              {(Object.keys(CUSTOMER_SORT_LABELS) as CustomerSortKey[]).map((key) => (
+                <option key={key} value={key}>{CUSTOMER_SORT_LABELS[key]}</option>
+              ))}
+            </select>
+          </label>
+          {(searchTerm || repeatOnly) && (
+            <span className="text-xs text-muted-foreground">{filteredCustomers.length} of {customers.length} customers</span>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:hidden pb-6">
@@ -384,6 +438,18 @@ export default function Customers() {
                       type="button"
                       variant="ghost"
                       size="icon"
+                      onClick={() => handleRecordVisit(customer)}
+                      disabled={visitingId === customer.id}
+                      className="h-8 w-8 text-primary hover:bg-primary/10 shrink-0"
+                      aria-label={`Record a visit for ${fullName}`}
+                      title="Record that they visited today"
+                    >
+                      {visitingId === customer.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarCheck className="w-4 h-4" />}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => openDocumentDialog(customer)}
                       className="h-8 w-8 text-primary hover:bg-primary/10 shrink-0"
                       aria-label={`Upload document for ${fullName}`}
@@ -402,6 +468,9 @@ export default function Customers() {
                     </Button>
                   </div>
                   <div className="space-y-2 text-xs text-muted-foreground">
+                    <p className="flex items-center gap-2"><Users className="w-3.5 h-3.5" /> Cars bought: <CarsBought customer={customer} /></p>
+                    <p className="flex items-center gap-2"><CalendarCheck className="w-3.5 h-3.5" /> Last visit: <LastVisit customer={customer} /></p>
+                    {customer.leadSource && <p className="flex items-center gap-2"><Search className="w-3.5 h-3.5" /> Source: {customer.leadSource}</p>}
                     <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5" /> {customer.phone || 'No contact number'}</p>
                     <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5" /> {customer.email || 'No email saved'}</p>
                     {meta.vehicleLabel && <p className="flex items-center gap-2"><Car className="w-3.5 h-3.5" /> {meta.vehicleLabel}</p>}
@@ -422,16 +491,17 @@ export default function Customers() {
 
         <div className="hidden md:block bg-card rounded-xl border border-border overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[1100px] align-middle">
               <thead>
                 <tr className="border-b border-border bg-secondary/50">
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Customer</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Category</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Vehicle</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Contact Number</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Email</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Address</th>
-                  <th className="text-right px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Actions</th>
+                  <th className="text-left px-4 py-3.5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none whitespace-nowrap">Customer</th>
+                  <th className="text-left px-4 py-3.5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none whitespace-nowrap">Category</th>
+                  <th className="text-left px-4 py-3.5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none whitespace-nowrap">Source</th>
+                  <th className="text-left px-4 py-3.5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none whitespace-nowrap">Vehicle</th>
+                  <th className="text-left px-4 py-3.5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none whitespace-nowrap">Cars bought</th>
+                  <th className="text-left px-4 py-3.5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none whitespace-nowrap">Last visit</th>
+                  <th className="text-left px-4 py-3.5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none whitespace-nowrap">Contact</th>
+                  <th className="text-right px-4 py-3.5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -440,17 +510,24 @@ export default function Customers() {
                   const address = [customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ');
                   return (
                     <tr key={customer.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-6 py-4 font-bold text-foreground text-sm tracking-tight">{fullName}</td>
-                      <td className="px-6 py-4">
-                        <span className="px-3 py-1 rounded-md text-[10px] font-black uppercase bg-primary/10 text-primary border border-primary/20 shadow-sm">
+                      <td className="px-4 py-3.5 text-sm tracking-tight min-w-[180px]">
+                        <p className="font-bold text-foreground">{fullName}</p>
+                        {address && <p className="text-[11px] text-muted-foreground max-w-[220px] truncate" title={address}>{address}</p>}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="inline-block whitespace-nowrap px-3 py-1 rounded-md text-[10px] font-black uppercase bg-primary/10 text-primary border border-primary/20 shadow-sm">
                           {meta.category}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-xs font-semibold text-foreground">{meta.vehicleLabel || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-foreground">{customer.phone || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-foreground">{customer.email || '-'}</td>
-                      <td className="px-6 py-4 text-xs text-muted-foreground max-w-[320px] truncate">{address || '-'}</td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-4 py-3.5 text-xs font-semibold text-foreground">{customer.leadSource || <span className="text-muted-foreground font-normal">-</span>}</td>
+                      <td className="px-4 py-3.5 text-xs font-semibold text-foreground min-w-[150px]">{meta.vehicleLabel || '-'}</td>
+                      <td className="px-4 py-3.5 text-sm whitespace-nowrap"><CarsBought customer={customer} /></td>
+                      <td className="px-4 py-3.5 text-sm"><LastVisit customer={customer} /></td>
+                      <td className="px-4 py-3.5 text-sm text-foreground whitespace-nowrap">
+                        <p>{customer.phone || '-'}</p>
+                        {customer.email && <p className="text-[11px] text-muted-foreground max-w-[180px] truncate" title={customer.email}>{customer.email}</p>}
+                      </td>
+                      <td className="px-4 py-3.5"><div className="flex items-center justify-end gap-1">
                         <Button
                           type="button"
                           variant="ghost"
@@ -460,6 +537,18 @@ export default function Customers() {
                           aria-label={`Edit ${fullName}`}
                         >
                           <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRecordVisit(customer)}
+                          disabled={visitingId === customer.id}
+                          className="h-8 w-8 text-primary hover:bg-primary/10"
+                          aria-label={`Record a visit for ${fullName}`}
+                          title="Record that they visited today"
+                        >
+                          {visitingId === customer.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarCheck className="w-3.5 h-3.5" />}
                         </Button>
                         <Button
                           type="button"
@@ -481,7 +570,7 @@ export default function Customers() {
                         >
                           <Users className="w-3.5 h-3.5" />
                         </Button>
-                      </td>
+                      </div></td>
                     </tr>
                   );
                 })}
@@ -563,6 +652,18 @@ export default function Customers() {
                   />
                 </div>
               )}
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Last visit</Label>
+                <Input
+                  type="date"
+                  value={customerForm.lastVisit}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(event) => setCustomerForm({ ...customerForm, lastVisit: event.target.value })}
+                  aria-label="Last visit date"
+                  className="bg-muted/30 border-border h-11"
+                />
+                <p className="text-[11px] text-muted-foreground">Optional. Purchases and car viewings also count as visits.</p>
+              </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Search Inventory Vehicle</Label>
                 <Input value={vehicleSearch} onChange={(event) => setVehicleSearch(event.target.value)} placeholder="Search VIN, make, model..." className="bg-muted/30 border-border h-11" />

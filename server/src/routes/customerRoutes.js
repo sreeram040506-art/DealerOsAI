@@ -1,6 +1,7 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
 import { upload } from '../config/upload.js';
+import { matchRecords, summarizeCustomer } from '../utils/customerMatch.js';
 
 // Where a customer came from (CarGurus, Google, Referral, or typed in). Trimmed free text.
 const cleanLeadSource = (value) => {
@@ -9,6 +10,23 @@ const cleanLeadSource = (value) => {
 };
 
 const router = express.Router();
+
+// A malformed id used to reach Prisma and come back as a 500 with a database error message.
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
+router.param('id', (req, res, next, id) => (OBJECT_ID.test(id) ? next() : res.status(404).json({ message: 'Customer not found' })));
+router.param('docId', (req, res, next, id) => (OBJECT_ID.test(id) ? next() : res.status(404).json({ message: 'Document not found' })));
+
+// "YYYY-MM-DD" or null. Stored at noon UTC so the calendar day reads the same in any timezone.
+// Dates up to a day ahead are allowed to cover a client in a timezone ahead of the server.
+function parseVisitDate(value) {
+  if (value === null || value === '') return { value: null };
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return { error: 'Visit date must be YYYY-MM-DD.' };
+  const date = new Date(`${value}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return { error: 'Visit date is not a real date.' };
+  if (date.getTime() > Date.now() + 36 * 60 * 60 * 1000) return { error: 'A visit cannot be in the future.' };
+  return { value: date };
+}
+
 const META_PREFIX = 'APH_CUSTOMER_META:';
 
 function buildCustomerNotes(meta) {
@@ -22,6 +40,19 @@ router.get('/', async (req, res, next) => {
       where: { dealershipId: req.dealershipId },
       orderBy: { createdAt: 'desc' }
     });
+
+    // Cars bought and last visit per customer. If this extra lookup fails the list still loads.
+    try {
+      const [sales, notes] = await Promise.all([
+        prisma.sale.findMany({ where: { dealershipId: req.dealershipId }, select: { id: true, customerName: true, phone: true, saleDate: true } }),
+        prisma.customerNote.findMany({ where: { dealershipId: req.dealershipId }, select: { id: true, customerName: true, phone: true, email: true, createdAt: true } }),
+      ]);
+      const salesBy = matchRecords(customers, sales, { name: (r) => r.customerName, phone: (r) => r.phone });
+      const notesBy = matchRecords(customers, notes, { name: (r) => r.customerName, phone: (r) => r.phone, email: (r) => r.email });
+      return res.json(customers.map((c) => ({ ...c, ...summarizeCustomer(c, salesBy.get(c.id) ?? [], notesBy.get(c.id) ?? []) })));
+    } catch (statsErr) {
+      console.error('[Customers Stats Error]', statsErr?.message);
+    }
     res.json(customers);
   } catch (err) {
     console.error('[Customers List Error]', {
@@ -37,10 +68,12 @@ router.get('/', async (req, res, next) => {
 // POST create customer
 router.post('/', async (req, res, next) => {
   try {
-    const { firstName, lastName, email, phone, address, city, state, zip, driverLicense, notes, leadSource } = req.body;
+    const { firstName, lastName, email, phone, address, city, state, zip, driverLicense, notes, leadSource, lastVisitAt } = req.body;
     if (!firstName) {
       return res.status(400).json({ message: 'First name is required' });
     }
+    const visit = parseVisitDate(lastVisitAt ?? null);
+    if (visit.error) return res.status(400).json({ message: visit.error });
     const customer = await prisma.customer.create({
       data: {
         firstName,
@@ -54,6 +87,7 @@ router.post('/', async (req, res, next) => {
         driverLicense: driverLicense || null,
         notes: notes || null,
         leadSource: cleanLeadSource(leadSource),
+        lastVisitAt: visit.value,
         dealershipId: req.dealershipId
       }
     });
@@ -168,28 +202,16 @@ router.get('/:id', async (req, res, next) => {
     });
     if (!customer) return res.status(404).json({ message: 'Customer not found' });
 
-    // Find sales matching this customer
-    const sales = await prisma.sale.findMany({
-      where: {
-        dealershipId: req.dealershipId,
-        OR: [
-          { customerName: { contains: customer.firstName, mode: 'insensitive' } },
-          ...(customer.phone ? [{ phone: customer.phone }] : [])
-        ]
-      },
-      include: {
-        vehicle: true
-      }
+    // Same matching as the customer list, so "cars bought" and this list always agree. The
+    // matching pass skips the bill-of-sale files; only the matched sales are loaded in full.
+    const candidates = await prisma.sale.findMany({
+      where: { dealershipId: req.dealershipId },
+      select: { id: true, customerName: true, phone: true },
     });
-
-    // Refine matching for sales (prevent false positives if just first name matches broadly)
-    const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim().toLowerCase();
-    const matchedSales = sales.filter(s => {
-      if (s.phone && customer.phone && s.phone === customer.phone) return true;
-      const saleName = s.customerName.toLowerCase();
-      return saleName.includes(customer.firstName.toLowerCase()) && 
-             (customer.lastName ? saleName.includes(customer.lastName.toLowerCase()) : true);
-    });
+    const matchedIds = (matchRecords([customer], candidates, { name: (r) => r.customerName, phone: (r) => r.phone }).get(customer.id) ?? []).map((r) => r.id);
+    const matchedSales = matchedIds.length
+      ? await prisma.sale.findMany({ where: { id: { in: matchedIds }, dealershipId: req.dealershipId }, include: { vehicle: true } })
+      : [];
 
     // For each matched sale, get the vehicle's documents
     const salesWithDocs = await Promise.all(matchedSales.map(async (sale) => {
@@ -213,8 +235,10 @@ router.get('/:id', async (req, res, next) => {
         warranties.forEach(w => docs.push({ type: 'Warranty', base64: w.documentBase64, name: w.warrantyCompany }));
         
         // Registry Docs
+        // documentBase64 is a required column on the registry, so it can't be filtered with
+        // `not: null` (Prisma rejects that, which made this whole request fail with a 500).
         const registries = await prisma.documentRegistry.findMany({
-          where: { vin: sale.vehicle.vin, dealershipId: req.dealershipId, documentBase64: { not: null } }
+          where: { vin: sale.vehicle.vin, dealershipId: req.dealershipId }
         });
         registries.forEach(r => docs.push({ type: r.documentType || 'Document', base64: r.documentBase64, name: r.sourceFileName || r.documentType }));
       }
@@ -225,8 +249,15 @@ router.get('/:id', async (req, res, next) => {
       };
     }));
 
+    const notes = await prisma.customerNote.findMany({
+      where: { dealershipId: req.dealershipId },
+      select: { id: true, customerName: true, phone: true, email: true, createdAt: true },
+    });
+    const customerNotes = matchRecords([customer], notes, { name: (r) => r.customerName, phone: (r) => r.phone, email: (r) => r.email }).get(customer.id) ?? [];
+
     res.json({
       ...customer,
+      ...summarizeCustomer(customer, salesWithDocs, customerNotes),
       sales: salesWithDocs
     });
   } catch (err) {
@@ -237,10 +268,13 @@ router.get('/:id', async (req, res, next) => {
 // PUT update customer
 router.put('/:id', async (req, res, next) => {
   try {
-    const { firstName, lastName, email, phone, address, city, state, zip, driverLicense, notes, leadSource } = req.body;
+    const { firstName, lastName, email, phone, address, city, state, zip, driverLicense, notes, leadSource, lastVisitAt } = req.body;
     if (!firstName) {
       return res.status(400).json({ message: 'First name is required' });
     }
+    // Only changed when the form sends it (null clears it), so other clients don't wipe it.
+    const visit = lastVisitAt === undefined ? null : parseVisitDate(lastVisitAt);
+    if (visit?.error) return res.status(400).json({ message: visit.error });
 
     const existing = await prisma.customer.findFirst({
       where: { id: req.params.id, dealershipId: req.dealershipId }
@@ -262,9 +296,26 @@ router.put('/:id', async (req, res, next) => {
         notes: notes || null,
         // Only touched when the form sends it, so older clients don't wipe a saved source.
         ...(leadSource !== undefined && { leadSource: cleanLeadSource(leadSource) }),
+        ...(visit && { lastVisitAt: visit.value }),
       }
     });
     res.json(customer);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST record a visit: today by default, or { date: 'YYYY-MM-DD' } for an earlier one.
+router.post('/:id/visit', async (req, res, next) => {
+  try {
+    const parsed = req.body?.date ? parseVisitDate(req.body.date) : { value: new Date() };
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    const { count } = await prisma.customer.updateMany({
+      where: { id: req.params.id, dealershipId: req.dealershipId },
+      data: { lastVisitAt: parsed.value },
+    });
+    if (!count) return res.status(404).json({ message: 'Customer not found' });
+    res.json({ id: req.params.id, lastVisitAt: parsed.value });
   } catch (err) {
     next(err);
   }

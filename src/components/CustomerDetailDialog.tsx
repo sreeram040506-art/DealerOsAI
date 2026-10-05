@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, Car, Download, FileText } from 'lucide-react';
@@ -7,6 +7,7 @@ import { apiFetch, apiUrl, handleApiResponse } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 import { formatSafeDate } from '@/lib/dateUtils';
 import DocumentViewerDialog from './DocumentViewerDialog';
+import { CarsBought, LastVisit } from './customers/CustomerFacts';
 
 interface CustomerDetailDialogProps {
   customerId: string | null;
@@ -22,6 +23,11 @@ export default function CustomerDetailDialog({ customerId, open, onOpenChange }:
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
 
+  // The parent passes a new onOpenChange function on every render; reading it through a ref
+  // keeps the details from reloading each time the page behind the dialog re-renders.
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+
   const loadCustomerDetails = useCallback(async () => {
     setLoading(true);
     try {
@@ -30,11 +36,11 @@ export default function CustomerDetailDialog({ customerId, open, onOpenChange }:
       setCustomer(data);
     } catch (err: any) {
       toast.error(err.message || 'Failed to load customer details');
-      onOpenChange(false);
+      onOpenChangeRef.current(false);
     } finally {
       setLoading(false);
     }
-  }, [customerId, token, logout, onOpenChange]);
+  }, [customerId, token, logout]);
 
   useEffect(() => {
     if (open && customerId) {
@@ -85,6 +91,9 @@ export default function CustomerDetailDialog({ customerId, open, onOpenChange }:
                   <div><span className="font-semibold text-foreground">Phone:</span> {customer.phone || 'N/A'}</div>
                   <div><span className="font-semibold text-foreground">Email:</span> {customer.email || 'N/A'}</div>
                   <div className="col-span-2"><span className="font-semibold text-foreground">Address:</span> {[customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ') || 'N/A'}</div>
+                  <div><span className="font-semibold text-foreground">Lead source:</span> {customer.leadSource || 'Not recorded'}</div>
+                  <div><span className="font-semibold text-foreground">Cars bought:</span> <CarsBought customer={customer} /></div>
+                  <div className="col-span-2"><span className="font-semibold text-foreground">Last visit:</span> <LastVisit customer={{ ...customer, lastVisitDate: customer.lastVisitDate }} /></div>
                 </div>
               </div>
 

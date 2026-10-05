@@ -17,6 +17,14 @@ export interface Customer {
   source?: string | null;
   /** Where the customer came from (CarGurus, Google, Referral, ...). */
   leadSource?: string | null;
+  /** Last visit recorded by hand (the list also derives lastVisitDate from purchases and viewings). */
+  lastVisitAt?: string | null;
+  /** Cars this customer has bought, matched from sales by phone, email or name. */
+  carsBought?: number;
+  lastPurchaseDate?: string | null;
+  /** Most recent of a recorded visit, a purchase, or a viewing note. */
+  lastVisitDate?: string | null;
+  lastVisitSource?: 'visit' | 'purchase' | 'viewing' | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,6 +107,21 @@ export function useCustomers() {
     },
   });
 
+  // Records that the customer visited: today, or an earlier 'YYYY-MM-DD' date.
+  const recordVisitMutation = useMutation({
+    mutationFn: async ({ id, date }: { id: string; date?: string }) => {
+      const response = await apiFetch(`/customers/${id}/visit`, token, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(date ? { date } : {}),
+      });
+      return handleApiResponse<{ id: string; lastVisitAt: string }>(response, logout);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+    },
+  });
+
   const uploadCustomerDocumentMutation = useMutation({
     mutationFn: async ({
       customerId,
@@ -129,6 +152,7 @@ export function useCustomers() {
     updateCustomer: updateCustomerMutation.mutateAsync,
     deleteCustomer: deleteCustomerMutation.mutateAsync,
     importFromSales: importFromSalesMutation.mutateAsync,
+    recordVisit: recordVisitMutation.mutateAsync,
     isImporting: importFromSalesMutation.isPending,
     uploadCustomerDocument: uploadCustomerDocumentMutation.mutateAsync,
     isUploadingCustomerDocument: uploadCustomerDocumentMutation.isPending,

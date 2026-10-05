@@ -310,6 +310,7 @@ model Customer {
   notes         String?
   source        String?  @default("manual") // manual, sale, note (how the record was created)
   leadSource    String?  // where the customer came from: CarGurus, Google, Referral, ... (free text)
+  lastVisitAt   DateTime? // last visit recorded by hand; reports also use purchases and viewing notes
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
