@@ -28,7 +28,7 @@ const navItems: readonly NavItem[] = [
   { to: '/inventory', icon: Car, label: 'Inventory', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/sales', icon: ShoppingCart, label: 'Sold Vehicles', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/customers', icon: Users, label: 'Customers', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  { to: '/documents-forms', icon: FileText, label: 'Uploads', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { to: '/documents-forms', icon: FileText, label: 'Document Upload', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/registry', icon: FileArchive, label: 'Vehicle Database', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/marketing', icon: Megaphone, label: 'Marketing', roles: ['ADMIN', 'MANAGER'] },
   { to: '/photo-studio', icon: ImageIcon, label: 'Photo Studio', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
