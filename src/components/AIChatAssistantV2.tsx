@@ -305,11 +305,11 @@ export default function AIChatAssistant() {
             aria-label="Open Synax chat (drag to move)"
             title="Click to chat, drag to move"
             style={{ touchAction: 'none' }}
-            className="relative px-4 h-12 cursor-grab active:cursor-grabbing bg-gradient-to-br from-primary to-emerald-600 text-white rounded-lg shadow-xl shadow-primary/30 flex items-center justify-center gap-2 select-none"
+            className="relative px-3.5 h-12 cursor-grab active:cursor-grabbing bg-gradient-to-br from-primary to-emerald-600 text-white rounded-lg shadow-xl shadow-primary/30 flex items-center justify-center group-hover:gap-2 group-focus-within:gap-2 transition-all duration-300 select-none"
           >
             <div className="absolute inset-0 rounded-lg border border-white/20"></div>
             <MessageSquare className="w-5 h-5" />
-            <span className="font-bold tracking-wide text-sm">Synax</span>
+            <span className="font-bold tracking-wide text-sm max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-300 group-hover:max-w-[4rem] group-hover:opacity-100 group-focus-within:max-w-[4rem] group-focus-within:opacity-100">Synax</span>
             <span className="absolute -top-1 -right-1 flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-primary"></span>
