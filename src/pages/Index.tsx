@@ -120,13 +120,9 @@ export default function Dashboard() {
     profit: s.profit,
   })), [sales]);
 
-  const { totalRevenue, totalProfit, totalAdSpend, totalExpenses, inventoryValue } = useMemo(() => ({
-    totalRevenue: sales.reduce((sum, s) => sum + s.salePrice, 0),
-    totalProfit: sales.reduce((sum, s) => sum + s.profit, 0),
-    totalAdSpend: ads.reduce((sum, a) => sum + a.amountSpent, 0),
-    totalExpenses: expenses.reduce((sum, e) => sum + e.amount, 0),
+  const { inventoryValue } = useMemo(() => ({
     inventoryValue: vehicles.filter(v => v.status !== 'Sold').reduce((sum, v) => sum + ((v.totalPurchaseCost || v.purchase?.totalPurchaseCost || 0)) + ((v.repairCost || v.repairs?.reduce((s,r)=>s+(r.partsCost||0)+(r.laborCost||0),0) || 0)), 0),
-  }), [sales, ads, expenses, vehicles]);
+  }), [vehicles]);
   
   const salesHistory = useMemo(() => sales.slice(0, 7).reverse().map(s => ({
     date: new Date(s.saleDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
@@ -134,14 +130,22 @@ export default function Dashboard() {
     profit: s.profit
   })), [sales]);
 
-  // Inventory and Units Sold cover the current calendar year only; earlier years are
-  // searched from the Inventory and Sold Vehicles pages.
+  // The headline figures cover the current calendar year only; earlier years are searched
+  // from Inventory, Sold Vehicles and Reports. Sales count by sale date and advertising by
+  // campaign start date, the same rules the reports use.
   const currentYear = new Date().getFullYear();
-  const { inventoryThisYear, onLotNow, soldThisYear } = useMemo(() => ({
-    inventoryThisYear: vehicles.filter(v => new Date(v.purchaseDate).getFullYear() === currentYear).length,
-    onLotNow: vehicles.filter(v => v.status !== 'Sold' && v.status !== 'Returned').length,
-    soldThisYear: sales.filter(s => new Date(s.saleDate).getFullYear() === currentYear).length,
-  }), [vehicles, sales, currentYear]);
+  const { inventoryThisYear, onLotNow, soldThisYear, revenueThisYear, profitThisYear, adSpendThisYear } = useMemo(() => {
+    const inYear = (date: string) => new Date(date).getFullYear() === currentYear;
+    const salesThisYear = sales.filter(s => inYear(s.saleDate));
+    return {
+      inventoryThisYear: vehicles.filter(v => inYear(v.purchaseDate)).length,
+      onLotNow: vehicles.filter(v => v.status !== 'Sold' && v.status !== 'Returned').length,
+      soldThisYear: salesThisYear.length,
+      revenueThisYear: salesThisYear.reduce((sum, s) => sum + (s.salePrice || 0), 0),
+      profitThisYear: salesThisYear.reduce((sum, s) => sum + (s.profit || 0), 0),
+      adSpendThisYear: ads.filter(a => inYear(a.startDate)).reduce((sum, a) => sum + (a.amountSpent || 0), 0),
+    };
+  }, [vehicles, sales, ads, currentYear]);
 
   const agingVehicles = useMemo(() => {
     return vehicles
@@ -215,8 +219,8 @@ export default function Dashboard() {
             <>
               <StatCard label="Inventory Value" value={isLoading ? "..." : `$${inventoryValue.toLocaleString()}`} icon={Package} />
               <StatCard 
-                label="Total Revenue" 
-                value={isLoading ? "..." : `$${totalRevenue.toLocaleString()}`} 
+                label={`Revenue ${currentYear}`} 
+                value={isLoading ? "..." : `$${revenueThisYear.toLocaleString()}`} 
                 icon={DollarSign} 
                 iconClassName="bg-foreground/15 text-foreground" 
                 onClick={() => setReportModalOpen(true)}
@@ -225,8 +229,8 @@ export default function Dashboard() {
           )}
           {isAdmin && (
             <>
-              <StatCard label="Ad Spend" value={isLoading ? "..." : `$${totalAdSpend.toLocaleString()}`} icon={Megaphone} iconClassName="bg-warning/15 text-warning" />
-              <StatCard label="Net Profit" value={isLoading ? "..." : `$${totalProfit.toLocaleString()}`} icon={TrendingUp} iconClassName="bg-primary/15 text-primary" />
+              <StatCard label={`Ad Spend ${currentYear}`} value={isLoading ? "..." : `$${adSpendThisYear.toLocaleString()}`} icon={Megaphone} iconClassName="bg-warning/15 text-warning" />
+              <StatCard label={`Net Profit ${currentYear}`} value={isLoading ? "..." : `$${profitThisYear.toLocaleString()}`} icon={TrendingUp} iconClassName="bg-primary/15 text-primary" />
             </>
           )}
           <StatCard 
