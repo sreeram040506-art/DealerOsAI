@@ -164,7 +164,7 @@ export default function RMVCompliance() {
             <Button asChild variant="secondary" className="border-border">
               <Link to="/registry">
                 <FileArchive className="mr-2 h-4 w-4" />
-                Open Document Registry
+                Open Vehicle Database
               </Link>
             </Button>
           </div>

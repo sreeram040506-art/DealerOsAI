@@ -83,7 +83,7 @@ export default function UsedVehicleForms() {
   const handleDeleteLog = async (id: string) => {
     try {
       await deleteLog(id);
-      toast.success('Record removed from registry.');
+      toast.success('Record removed from the Vehicle Database.');
     } catch (err) {
       toast.error('Failed to remove record.');
     }
@@ -164,7 +164,7 @@ export default function UsedVehicleForms() {
                     </Button>
                   )}
                   <Button variant="outline" className="border-border hover:bg-muted text-[10px] uppercase font-black tracking-widest h-8 px-3 rounded-lg" onClick={() => window.location.href='/registry'}>
-                    Full Registry →
+                    Full Vehicle Database →
                   </Button>
                 </div>
               </div>

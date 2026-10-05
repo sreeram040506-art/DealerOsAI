@@ -70,7 +70,7 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
         const errorData = await response.json().catch(() => ({}));
         if (response.status === 409 && errorData.registryAdded) {
           // It's in inventory already, but we successfully logged it to registry
-          toast.info(`${file.name}: Logged to registry (Already in inventory)`);
+          toast.info(`${file.name}: Saved to the Vehicle Database (Already in inventory)`);
           onScanComplete(
             errorData.info, 
             errorData.pdfBase64 ? { base64: errorData.pdfBase64, fileName: errorData.fileName } : undefined,
@@ -89,7 +89,7 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
       
       const data = await response.json();
       if (data.duplicateVehicle) {
-        toast.info(`${file.name}: Logged to registry (Already in inventory)`);
+        toast.info(`${file.name}: Saved to the Vehicle Database (Already in inventory)`);
       }
       
       if (data.info) {

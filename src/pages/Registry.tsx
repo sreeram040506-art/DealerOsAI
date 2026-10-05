@@ -44,7 +44,7 @@ export default function Registry() {
       <AppLayout>
         <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
            <FileArchive className="h-12 w-12 text-foreground/50" />
-           <h2 className="text-xl font-bold text-foreground">Could not load registry</h2>
+           <h2 className="text-xl font-bold text-foreground">Could not load the Vehicle Database</h2>
            <p className="text-muted-foreground max-w-xs">There was an error fetching the document logs.</p>
            <Button onClick={() => window.location.reload()} variant="outline" className="border-border text-muted-foreground">Retry</Button>
         </div>
@@ -158,7 +158,7 @@ export default function Registry() {
           <div>
             <h1 className="flex items-center gap-3 font-display text-3xl font-bold tracking-tight text-foreground">
               <FileArchive className="h-8 w-8 text-primary" />
-              Document Registry
+              Vehicle Database
             </h1>
             <p className="mt-2 text-muted-foreground">
               A permanent historical log of all generated and scanned documents.
@@ -224,7 +224,7 @@ export default function Registry() {
                 ) : filteredLogs.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                      {searchTerm || typeFilter !== 'All' ? 'No matching documents found.' : 'Your registry is empty. Generate a document to start logging.'}
+                      {searchTerm || typeFilter !== 'All' ? 'No matching documents found.' : 'The Vehicle Database is empty. Generate a document to start logging.'}
                     </td>
                   </tr>
                 ) : (

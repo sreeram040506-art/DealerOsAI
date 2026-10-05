@@ -78,14 +78,14 @@ export default function UsedVehicleFormGenerator({
           // Keep backward compatibility with older servers that still used 409 for partial success.
           if (response.status === 409 && errorData.registryAdded) {
             data = errorData;
-            toast.info(`${file.name}: Logged to registry (Vehicle already in inventory)`);
+            toast.info(`${file.name}: Saved to the Vehicle Database (Vehicle already in inventory)`);
           } else {
             throw new Error(errorData.message || 'Failed to generate form');
           }
         } else {
           data = (await response.json()) as GenerateUsedVehicleResponse;
           if (data.duplicateVehicle) {
-            toast.info(`${file.name}: Logged to registry (Vehicle already in inventory)`);
+            toast.info(`${file.name}: Saved to the Vehicle Database (Vehicle already in inventory)`);
           }
         }
         

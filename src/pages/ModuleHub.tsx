@@ -18,7 +18,7 @@ const modules: Record<string, ModuleDefinition> = {
     aiFeatures: ["VIN intelligence", "Photo ordering recommendations", "Margin risk detection"],
   },
   "/documents-forms": {
-    title: "Documents & Forms",
+    title: "Uploads",
     purpose: "AI-first document ingestion, extraction, matching, and auto-fill workflows.",
     sections: ["Buyer Agreement", "RMV Forms", "Insurance", "Warranty", "Registration", "Signatures"],
     aiFeatures: ["Document type detection", "Field extraction with confidence", "VIN/customer match checks"],
