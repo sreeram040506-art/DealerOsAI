@@ -199,7 +199,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 gap-3" role="region" aria-label="Key metrics">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3" role="region" aria-label="Key metrics">
           <StatCard
             label={`Inventory ${currentYear}`}
             value={isLoading ? "..." : String(inventoryThisYear)}

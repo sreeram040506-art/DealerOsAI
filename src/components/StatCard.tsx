@@ -126,9 +126,16 @@ const StatCard = memo(function StatCard({ label, value, icon: Icon, trend, class
       
       <div className="min-w-0 relative z-10">
         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-1">{label}</p>
-        <p className="font-black text-foreground tabular-nums tracking-tight whitespace-nowrap font-display leading-tight" style={{ fontSize: 'clamp(1rem, 0.6rem + 1.1vw, 1.5rem)' }} title={value}>
-          {animatedValue}
-        </p>
+        <div style={{ containerType: 'inline-size' }}>
+          <p
+            className="font-black text-foreground tabular-nums tracking-tight whitespace-nowrap font-display leading-tight"
+            // Sized from the card's own width and the number's length, so the whole value always fits on one line.
+            style={{ fontSize: `min(1.5rem, calc(100cqw / ${Math.max(4, value.length) * 0.66}))` }}
+            title={value}
+          >
+            {animatedValue}
+          </p>
+        </div>
         {hint && <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug" title={hint}>{hint}</p>}
       </div>
     </div>
