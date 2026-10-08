@@ -9,7 +9,8 @@ import { dispatchNotification } from './notificationDispatcher.js';
 
 const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_PER_DEALERSHIP_PER_RUN = 10;
-const MIN_COMPARABLES = 3;
+const MIN_COMPARABLES = 2; // 2 listings give a rough suggestion; 3 or more are called confident
+const CONFIDENT_COMPARABLES = 3;
 const CHANGE_THRESHOLD = 0.03; // within 3% of the market price counts as in line
 const MODEL = process.env.OPENAI_PRICING_MODEL || 'gpt-4.1-mini';
 
@@ -48,26 +49,36 @@ function readResponse(payload) {
   return { text, cited };
 }
 
+const hostOf = (value) => {
+  try { return new URL(value).hostname.replace(/^www\./, ''); } catch { return null; }
+};
+
 /**
- * Keeps only listings that are plausible and that point at a page the search really found:
- * the model cannot invent a link or a price and have it counted.
+ * Keeps only listings that are plausible and that come from a site the search really visited:
+ * the exact page was cited, or the site itself was (search tools often cite a dealer's
+ * inventory page and then read the individual cars from it). A site the search never opened
+ * is dropped, so the model cannot invent a dealer and have it counted.
  */
 export function cleanComparables(raw, cited) {
+  const citedHosts = new Set([...cited.values()].map(hostOf).filter(Boolean));
   const seen = new Set();
   const out = [];
   for (const c of Array.isArray(raw) ? raw : []) {
     const price = Number(c?.price);
     const key = urlKey(String(c?.url || ''));
+    const host = hostOf(String(c?.url || ''));
     if (!Number.isFinite(price) || price < 1000 || price > 500000) continue;
-    if (!key || !cited.has(key) || seen.has(key)) continue;
+    if (!key || !host || seen.has(key)) continue;
+    if (!cited.has(key) && !citedHosts.has(host)) continue;
     seen.add(key);
     const mileage = Number(c?.mileage);
+    const href = cited.get(key) || String(c.url);
     out.push({
       title: String(c?.title || '').slice(0, 160),
       price: Math.round(price),
       mileage: Number.isFinite(mileage) && mileage >= 0 && mileage < 1e6 ? Math.round(mileage) : null,
-      url: cited.get(key),
-      source: String(c?.source || new URL(cited.get(key)).hostname.replace(/^www\./, '')).slice(0, 80),
+      url: href,
+      source: String(c?.source || host).slice(0, 80),
     });
   }
   return out.slice(0, 10);
@@ -83,28 +94,36 @@ export function marketFrom(comparables) {
   return { low: Math.min(...prices), high: Math.max(...prices), median: median(prices), used: kept };
 }
 
-/** "Boston, MA" out of "1 Main St, Boston, MA 02110", so the search can look nearby first. */
-function areaOf(address) {
+const STATE_NAMES = { MA: 'Massachusetts', NH: 'New Hampshire', RI: 'Rhode Island', CT: 'Connecticut', VT: 'Vermont', ME: 'Maine', NY: 'New York', NJ: 'New Jersey', PA: 'Pennsylvania' };
+
+/** City and state out of "1 Main St, Boston, MA 02110". Without a state in the address it falls back to Massachusetts. */
+function locationOf(address) {
   const m = String(address || '').match(/,\s*([^,]+),\s*([A-Z]{2})\b/);
-  return m ? `${m[1].trim()}, ${m[2]}` : '';
+  const code = m ? m[2] : 'MA';
+  const state = STATE_NAMES[code] || code;
+  return { city: m ? m[1].trim() : '', code, state, area: m ? `${m[1].trim()}, ${code}` : state };
 }
 
 const PASSES = [
   {
     label: null,
-    ask: (v, area) => `Go to the websites of used-car dealerships${area ? ` in and around ${area} (within about 100 miles)` : ''}, franchise and independent, and look through their used inventory pages for vehicles comparable to this one: ${v.year} ${v.make} ${v.model}, about ${Number(v.mileage).toLocaleString('en-US')} miles. Open the dealerships' own sites (for example their "used inventory" or "pre-owned" pages), not only aggregator sites. Same make and model, model year ${v.year - 1} to ${v.year + 1}, mileage within about 40% of this vehicle.`,
+    ask: (v, loc) => `Search the used inventory for ${loc.state}, on CarMax (carmax.com stores in ${loc.state} and nearby) and on Cars.com, CarGurus and Autotrader (filter to ${loc.state}), for vehicles comparable to this one: ${v.year} ${v.make} ${v.model}, about ${Number(v.mileage).toLocaleString('en-US')} miles. Same make and model, model year ${v.year - 1} to ${v.year + 1}, mileage within about 40% of this vehicle. Also include dealerships' own websites in ${loc.state} if you find them.`,
+  },
+  {
+    label: null,
+    ask: (v, loc) => `Go to the websites of used-car dealerships in and around ${loc.area} (within about 100 miles), franchise and independent, and look through their used or pre-owned inventory pages for vehicles comparable to this one: ${v.year} ${v.make} ${v.model}, about ${Number(v.mileage).toLocaleString('en-US')} miles. Same make and model, model year ${v.year - 1} to ${v.year + 1}, mileage within about 40% of this vehicle.`,
   },
   {
     label: 'search widened',
-    ask: (v) => `Search the websites of used-car dealerships anywhere in the US, and large listing sites such as Cars.com, CarGurus, Autotrader and CarMax, for this vehicle or close to it: ${v.make} ${v.model}, model year ${v.year - 2} to ${v.year + 2}, about ${Number(v.mileage).toLocaleString('en-US')} miles (anywhere from 60% to 140% of that is fine).`,
+    ask: (v) => `Find any used ${v.make} ${v.model} listings currently for sale in the US, model year ${v.year - 3} to ${v.year + 3}, any reasonable mileage, on CarMax, Carvana, Cars.com, CarGurus, Autotrader or any dealership website. Prefer ones close to ${v.year} and ${Number(v.mileage).toLocaleString('en-US')} miles, but include close matches rather than returning nothing.`,
   },
 ];
 
-async function searchOnce(prompt, apiKey) {
+async function searchOnce(prompt, apiKey, loc) {
   const response = await fetch(`${process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'}/responses`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: MODEL, tools: [{ type: 'web_search', search_context_size: 'high', user_location: { type: 'approximate', country: 'US' } }], tool_choice: 'required', input: prompt }),
+    body: JSON.stringify({ model: MODEL, tools: [{ type: 'web_search', search_context_size: 'high', user_location: { type: 'approximate', country: 'US', region: loc.state, ...(loc.city ? { city: loc.city } : {}) } }], tool_choice: 'required', input: prompt }),
     signal: AbortSignal.timeout(120_000),
   });
   if (!response.ok) {
@@ -116,16 +135,19 @@ async function searchOnce(prompt, apiKey) {
   if (!json) return [];
   let parsed;
   try { parsed = JSON.parse(json); } catch { return []; }
-  return cleanComparables(parsed.comparables, cited);
+  const cleaned = cleanComparables(parsed.comparables, cited);
+  const asked = Array.isArray(parsed.comparables) ? parsed.comparables.length : 0;
+  if (asked !== cleaned.length) console.log(`[Pricing] ${asked} listings returned, ${cleaned.length} kept after checks`);
+  return cleaned;
 }
 
 /**
- * Looks at nearby dealership websites first. Only if that finds fewer than 3 usable listings is
+ * Looks at CarMax, Cars.com, CarGurus, Autotrader and dealership sites in the dealership's own state first, then nearby dealer sites. Only if that finds fewer than 3 usable listings is
  * the search widened (more years, any region, big listing sites). Returns what it found and
  * whether it had to widen.
  */
 async function searchComparables(vehicle, dealership, apiKey) {
-  const area = areaOf(dealership?.address);
+  const loc = locationOf(dealership?.address);
   const rules = `
 Rules: only real vehicles currently for sale that you actually saw on a page. No auctions, no salvage or rebuilt titles, no listings without a shown price, and not this dealership's own listings. Give up to 8 listings.
 Reply with JSON only, no other text: {"comparables":[{"title":"2014 Honda Accord EX","price":12345,"mileage":67890,"url":"https://...","source":"dealership or site name"}]}
@@ -133,10 +155,10 @@ Reply with JSON only, no other text: {"comparables":[{"title":"2014 Honda Accord
   const found = new Map();
   let widened = false;
   for (const pass of PASSES) {
-    const comps = await searchOnce(pass.ask(vehicle, area) + rules, apiKey);
+    const comps = await searchOnce(pass.ask(vehicle, loc) + rules, apiKey, loc);
     for (const c of comps) if (!found.has(c.url)) found.set(c.url, c);
     if (pass.label && comps.length) widened = true;
-    if (found.size >= MIN_COMPARABLES) break;
+    if (found.size >= CONFIDENT_COMPARABLES) break;
   }
   return { comparables: [...found.values()].slice(0, 10), widened };
 }
@@ -169,7 +191,7 @@ export async function checkVehicle(vehicleId, dealershipId, { now = new Date() }
   const base = { vehicleId, dealershipId, daysOnLot: daysInStock(vehicle, now), currentPrice: vehicle.askingPrice ?? null };
   const market = marketFrom(comparables);
   if (!market) {
-    const record = await prisma.priceSuggestion.create({ data: { ...base, status: 'NO_DATA', reason: `Only ${comparables.length} comparable listing${comparables.length === 1 ? ' was' : 's were'} found on dealership websites and listing sites; at least ${MIN_COMPARABLES} are needed to suggest a price.`, comparables } });
+    const record = await prisma.priceSuggestion.create({ data: { ...base, status: 'NO_DATA', reason: `Only ${comparables.length} comparable listing${comparables.length === 1 ? ' was' : 's were'} found on CarMax, listing sites and dealership websites; at least ${MIN_COMPARABLES} are needed to suggest a price. Try again later, or check similar vehicles by hand.`, comparables } });
     return { record };
   }
 
@@ -182,11 +204,12 @@ export async function checkVehicle(vehicleId, dealershipId, { now = new Date() }
     comparables: market.used,
   };
   const current = vehicle.askingPrice;
+  const rough = market.used.length < CONFIDENT_COMPARABLES ? ` Only ${market.used.length} listings were found, so treat this as a rough guide.` : '';
   if (current && Math.abs(current - suggested) / suggested < CHANGE_THRESHOLD) {
-    return { record: await prisma.priceSuggestion.create({ data: { ...data, status: 'IN_LINE', reason: `Your price of ${money(current)} is in line with the market (${money(market.median)} from ${market.used.length} listings${widened ? ', search widened to more years and areas' : ''}).` } }) };
+    return { record: await prisma.priceSuggestion.create({ data: { ...data, status: 'IN_LINE', reason: `Your price of ${money(current)} is in line with the market (${money(market.median)} from ${market.used.length} listings${widened ? ', search widened to more years and areas' : ''}).${rough}` } }) };
   }
   const reason = current
-    ? `Your price of ${money(current)} is ${Math.round((Math.abs(current - suggested) / suggested) * 100)}% ${current > suggested ? 'above' : 'below'} the market median of ${money(market.median)} (range ${money(market.low)}–${money(market.high)}, ${market.used.length} similar listings${widened ? '; search widened to more years and areas' : ''}).`
+    ? `Your price of ${money(current)} is ${Math.round((Math.abs(current - suggested) / suggested) * 100)}% ${current > suggested ? 'above' : 'below'} the market median of ${money(market.median)} (range ${money(market.low)}–${money(market.high)}, ${market.used.length} similar listings${widened ? '; search widened to more years and areas' : ''}).${rough}`
     : `No asking price is set. Similar vehicles list around ${money(market.median)} (range ${money(market.low)}–${money(market.high)}, ${market.used.length} listings).`;
   return { record: await prisma.priceSuggestion.create({ data: { ...data, status: 'PENDING', reason } }) };
 }
