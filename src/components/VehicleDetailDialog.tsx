@@ -28,6 +28,8 @@ import { useAuth } from '@/context/auth-hooks';
 import { apiUrl, downloadFile } from '@/lib/api';
 import { useNotes } from '@/hooks/useNotes';
 import DocumentViewerDialog from './DocumentViewerDialog';
+import VehicleLeadsTab from './VehicleLeadsTab';
+import { useVehicleLeads } from '@/hooks/useVehicleLeads';
 
 interface VehicleDetailDialogProps {
   vehicle: Vehicle | null;
@@ -43,6 +45,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   const { deleteVehicle } = useInventory();
   const { user } = useAuth();
   const { notes, addNote, deleteNote } = useNotes(vehicle?.id);
+  const { leads: vehicleLeads } = useVehicleLeads(vehicle?.id);
   const queryClient = useQueryClient();
   const isAdmin = user?.role === 'ADMIN';
   
@@ -506,6 +509,9 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
             )}
             <TabsTrigger value="notes" className="data-[state=active]:bg-amber-500 data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
               <MessageSquare className="w-3.5 h-3.5" /> Viewing Notes
+            </TabsTrigger>
+            <TabsTrigger value="leads" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
+              <Users className="w-3.5 h-3.5" /> Leads{vehicleLeads.length > 0 && <span className="rounded-full bg-foreground/10 px-1.5 text-[9px]">{vehicleLeads.length}</span>}
             </TabsTrigger>
             <TabsTrigger value="documents" className="data-[state=active]:bg-blue-600 data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
               <FileText className="w-3.5 h-3.5" /> Documents
@@ -981,6 +987,10 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               </div>
             </TabsContent>
           )}
+
+          <TabsContent value="leads" className="animate-in fade-in slide-in-from-top-2 duration-300">
+            {vehicle && <VehicleLeadsTab vehicleId={vehicle.id} />}
+          </TabsContent>
 
           <TabsContent value="notes" className="animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-4">

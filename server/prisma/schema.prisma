@@ -22,6 +22,7 @@ model Dealership {
   users               User[]
   vehicles            Vehicle[]
   formRequests        FormRequest[]
+  vehicleLeads        VehicleLead[]
   sales               Sale[]
   purchases           Purchase[]
   repairs             Repair[]
@@ -698,4 +699,23 @@ model FormRequest {
   createdAt     DateTime  @default(now())
 
   @@index([dealershipId, createdAt])
+}
+
+// A customer who asked about a specific vehicle, and what they offered or asked to pay.
+model VehicleLead {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicleId    String   @db.ObjectId
+  customerName String
+  phone        String?
+  email        String?
+  offerAmount  Float?
+  status       String   @default("Interested") // Interested, Negotiating, Won, Lost
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId, vehicleId])
 }
