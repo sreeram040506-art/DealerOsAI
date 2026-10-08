@@ -34,7 +34,7 @@ export default function PriceSuggestionCard({ vehicleId }: { vehicleId: string }
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-          {isLoading ? 'Loading price check…' : latest ? `Last market check ${formatSafeDate(latest.createdAt)}: ${latest.status === 'IN_LINE' ? 'price is in line with the market.' : latest.status === 'NO_DATA' ? 'not enough listings found.' : latest.status === 'APPLIED' ? 'new price applied.' : 'suggestion dismissed.'}` : 'No market price check yet.'}
+          {isLoading ? 'Loading price check…' : latest ? `Last market check ${formatSafeDate(latest.createdAt)}: ${latest.status === 'IN_LINE' ? 'price is in line with the market.' : latest.status === 'NO_DATA' ? (latest.reason || 'not enough listings found.') : latest.status === 'APPLIED' ? 'new price applied.' : 'suggestion dismissed.'}` : 'No market price check yet.'}
         </p>
         {checkButton}
       </div>
