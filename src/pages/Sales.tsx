@@ -58,8 +58,12 @@ export default function Sales() {
 
   // Sorting and a sale-date range. Totals and counts below follow the dates picked.
   const [sortBy, setSortBy] = useState<SortKey>('newest');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  // Starts on the current calendar year; older sales are one click away under "All time".
+  const thisYear = new Date().getFullYear();
+  const yearStart = `${thisYear}-01-01`;
+  const yearEnd = `${thisYear}-12-31`;
+  const [fromDate, setFromDate] = useState(yearStart);
+  const [toDate, setToDate] = useState(yearEnd);
 
   const visibleSales = useMemo(() => {
     const names = new Map(vehicles.map(v => [v.id, `${v.make} ${v.model}`.trim()]));
@@ -239,11 +243,18 @@ export default function Sales() {
                   <Input type="date" aria-label="Sold to" value={toDate} min={fromDate || undefined}
                     onChange={(e) => setToDate(e.target.value)} className="h-9" />
                 </div>
-                {dateFiltered && (
-                  <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => { setFromDate(''); setToDate(''); }}>
-                    Clear dates
-                  </Button>
-                )}
+                <div className="flex gap-2">
+                  {(fromDate !== yearStart || toDate !== yearEnd) && (
+                    <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => { setFromDate(yearStart); setToDate(yearEnd); }}>
+                      This year
+                    </Button>
+                  )}
+                  {dateFiltered && (
+                    <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => { setFromDate(''); setToDate(''); }}>
+                      All time
+                    </Button>
+                  )}
+                </div>
               </div>
             </PopoverContent>
           </Popover>
