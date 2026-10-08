@@ -23,6 +23,7 @@ model Dealership {
   vehicles            Vehicle[]
   formRequests        FormRequest[]
   vehicleLeads        VehicleLead[]
+  priceSuggestions    PriceSuggestion[]
   sales               Sale[]
   purchases           Purchase[]
   repairs             Repair[]
@@ -718,4 +719,30 @@ model VehicleLead {
   dealership   Dealership @relation(fields: [dealershipId], references: [id])
 
   @@index([dealershipId, vehicleId])
+}
+
+// A market-price check on a vehicle that has sat unsold. Owners and managers apply or dismiss it;
+// the vehicle's price never changes on its own.
+model PriceSuggestion {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  vehicleId      String    @db.ObjectId
+  status         String    @default("PENDING") // PENDING, APPLIED, DISMISSED, IN_LINE, NO_DATA
+  daysOnLot      Int
+  currentPrice   Float?
+  suggestedPrice Float?
+  marketLow      Float?
+  marketMedian   Float?
+  marketHigh     Float?
+  belowCost      Boolean   @default(false)
+  reason         String?
+  comparables    Json?     // [{ title, price, mileage, url, source }]
+  decidedAt      DateTime?
+  decidedById    String?   @db.ObjectId
+  createdAt      DateTime  @default(now())
+
+  dealershipId   String     @db.ObjectId
+  dealership     Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId, status])
+  @@index([vehicleId, createdAt])
 }

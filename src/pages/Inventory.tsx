@@ -17,6 +17,7 @@ import VinDecoderDialog from '@/components/VinDecoderDialog';
 import ReconKanbanBoard from '@/components/ReconKanbanBoard';
 import { apiUrl, downloadFile } from '@/lib/api';
 import AgingBadge from '@/components/AgingBadge';
+import { usePendingPriceSuggestions } from '@/hooks/usePriceSuggestions';
 import CopyVin from '@/components/CopyVin';
 import SortableHeader from '@/components/SortableHeader';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -104,6 +105,7 @@ export default function Inventory() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const isStaff = user?.role === 'STAFF';
+  const { pendingVehicleIds } = usePendingPriceSuggestions();
 
   // useDeferredValue keeps the search input responsive while filtering is deferred
   const deferredSearch = useDeferredValue(search);
@@ -470,6 +472,7 @@ export default function Inventory() {
                   <div>
                     <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">On lot</p>
                     <AgingBadge days={vehicle.daysInInventory ?? 0} sold={vehicle.status === 'Sold'} />
+                    {pendingVehicleIds.has(vehicle.id) && <span className="ml-1.5 inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 whitespace-nowrap" title="A market price suggestion is waiting for you">Price check</span>}
                   </div>
                 </div>
 
@@ -541,6 +544,7 @@ export default function Inventory() {
                         )}
                         <td className="px-4 py-3">
                           <AgingBadge days={vehicle.daysInInventory ?? 0} sold={vehicle.status === 'Sold'} />
+                    {pendingVehicleIds.has(vehicle.id) && <span className="ml-1.5 inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 whitespace-nowrap" title="A market price suggestion is waiting for you">Price check</span>}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
@@ -659,6 +663,7 @@ export default function Inventory() {
                       <div>
                         <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mb-1">On lot</p>
                         <AgingBadge days={vehicle.daysInInventory ?? 0} sold={vehicle.status === 'Sold'} />
+                    {pendingVehicleIds.has(vehicle.id) && <span className="ml-1.5 inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 whitespace-nowrap" title="A market price suggestion is waiting for you">Price check</span>}
                       </div>
                     </div>
 

@@ -15,6 +15,7 @@ import { train } from './scripts/trainDemandModel.mjs';
 import { runSwapCampaign } from './src/services/interDealershipCampaign.js';
 import { ensureSuperAdmin } from './src/seeds/ensureSuperAdmin.js';
 import { publishDueListings } from './src/services/marketing.js';
+import { runDailyPriceChecks } from './src/services/marketPricing.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -49,6 +50,15 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await publishDueListings();
       } catch (e) {
         console.error('[Marketing] Scheduled publishing failed', e);
+      }
+    });
+
+    // Market price check on vehicles that have sat unsold (daily, ~9am US Eastern).
+    cron.schedule(process.env.PRICE_CHECK_CRON || '0 13 * * *', async () => {
+      try {
+        await runDailyPriceChecks();
+      } catch (e) {
+        console.error('[Pricing] Daily price check failed', e);
       }
     });
 

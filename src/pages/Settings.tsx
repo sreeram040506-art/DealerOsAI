@@ -12,7 +12,7 @@ import AppLayout from '@/components/AppLayout';
 import QueryErrorState from '@/components/QueryErrorState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDealershipSettings } from '@/hooks/useDealershipSettings';
-import { AiSettings, MarketingSettings, NotificationSettings, SwapNetworkSettings } from '@/components/settings/SettingsSections';
+import { AiSettings, MarketingSettings, NotificationSettings, PricingSettings, SwapNetworkSettings } from '@/components/settings/SettingsSections';
 
 const Settings = () => {
   const { token } = useAuth();
@@ -136,6 +136,7 @@ const Settings = () => {
               <TabsTrigger value="notifications">Notifications</TabsTrigger>
               <TabsTrigger value="marketing">Marketing</TabsTrigger>
               <TabsTrigger value="ai">AI</TabsTrigger>
+              <TabsTrigger value="pricing">Pricing</TabsTrigger>
               <TabsTrigger value="network">Dealer network</TabsTrigger>
             </TabsList>
           </div>
@@ -143,6 +144,7 @@ const Settings = () => {
           <TabsContent value="notifications">{sectionBody((p) => <NotificationSettings {...p} />)}</TabsContent>
           <TabsContent value="marketing">{sectionBody((p) => <MarketingSettings {...p} />)}</TabsContent>
           <TabsContent value="ai">{sectionBody((p) => <AiSettings {...p} />)}</TabsContent>
+          <TabsContent value="pricing">{sectionBody((p) => <PricingSettings {...p} />)}</TabsContent>
           <TabsContent value="network">{sectionBody((p) => <SwapNetworkSettings {...p} />)}</TabsContent>
 
           <TabsContent value="profile">

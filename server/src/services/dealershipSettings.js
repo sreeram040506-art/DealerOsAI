@@ -32,6 +32,11 @@ export const DEFAULT_SETTINGS = {
   ai: {
     enabled: true,
   },
+  pricing: {
+    // Daily market check on vehicles that have not sold; suggestions only, never changes a price.
+    enabled: true,
+    staleDays: 10,
+  },
   swapNetwork: {
     // Opt-in: a dealership's inventory is never shown to other dealerships unless it agrees.
     participate: false,
@@ -59,6 +64,7 @@ const SECTION_SCHEMAS = {
     lowMileagePerYear: z.number().int().min(1000).max(50000),
   }).partial().strict(),
   ai: z.object({ enabled: z.boolean() }).partial().strict(),
+  pricing: z.object({ enabled: z.boolean(), staleDays: z.number().int().min(3).max(120) }).partial().strict(),
   swapNetwork: z.object({
     participate: z.boolean(),
     minDaysInStock: z.number().int().min(0).max(365),
@@ -73,7 +79,6 @@ const SECRET_SCHEMAS = {
   twilioAuthToken: z.string().trim().regex(/^[a-f0-9]{32}$/i, 'Twilio auth tokens are 32 hex characters'),
   // Only Slack's own webhook host, so this can't be pointed at internal services.
   slackWebhookUrl: z.string().trim().regex(/^https:\/\/hooks\.slack\.com\/services\/[\w/]+$/, 'Use a Slack incoming-webhook URL (https://hooks.slack.com/services/...)'),
-  openaiApiKey: z.string().trim().regex(/^sk-[\w-]{20,}$/, 'OpenAI keys start with sk-'),
 };
 export const SECRET_NAMES = Object.keys(SECRET_SCHEMAS);
 
@@ -251,9 +256,10 @@ function platformOpenAiKey() {
  */
 export async function resolveOpenAiKey(dealershipId) {
   if (!dealershipId) return platformOpenAiKey();
-  const { settings, secrets } = await load(dealershipId);
+  const { settings } = await load(dealershipId);
   if (!settings.ai.enabled) return null;
-  return secrets.openaiApiKey || platformOpenAiKey();
+  // Every dealership uses the platform's key; none has to supply its own.
+  return platformOpenAiKey();
 }
 
 /** Dealership ids that have opted into the inter-dealership swap network. */

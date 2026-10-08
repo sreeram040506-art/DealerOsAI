@@ -29,6 +29,7 @@ import { apiUrl, downloadFile } from '@/lib/api';
 import { useNotes } from '@/hooks/useNotes';
 import DocumentViewerDialog from './DocumentViewerDialog';
 import VehicleLeadsTab from './VehicleLeadsTab';
+import PriceSuggestionCard from './PriceSuggestionCard';
 import { useVehicleLeads } from '@/hooks/useVehicleLeads';
 
 interface VehicleDetailDialogProps {
@@ -490,6 +491,8 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
             </div>
           </div>
         </DialogHeader>
+
+        {vehicle && vehicle.status !== 'Sold' && !isEditing && <PriceSuggestionCard vehicleId={vehicle.id} />}
 
         <Tabs defaultValue={isEditing ? "edit" : "financials"} value={isEditing ? "edit" : undefined} className="mt-4 px-6 md:px-0">
           <TabsList className={`bg-muted/50 border border-border/50 p-1 rounded-xl h-auto grid grid-cols-2 sm:flex sm:flex-wrap gap-1 ${isEditing ? 'hidden' : ''}`}>

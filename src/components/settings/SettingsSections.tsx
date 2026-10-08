@@ -228,37 +228,24 @@ export function MarketingSettings({ data, save, saving, test, testing }: Section
 
 export function AiSettings({ data, save, saving, test, testing }: SectionProps) {
   const [enabled, setEnabled] = useState(data.settings.ai.enabled);
-  const creds = useCredentialDrafts();
   useEffect(() => setEnabled(data.settings.ai.enabled), [data.settings.ai.enabled]);
 
-  const usingOwnKey = data.credentials.openaiApiKey?.configured;
   const source = !enabled ? 'AI features are off for this dealership.'
-    : usingOwnKey ? "Using this dealership's own OpenAI key."
-    : data.platformAiAvailable ? "Using the platform's shared OpenAI key."
-    : 'No OpenAI key is available, so AI features fall back to templates.';
+    : data.platformAiAvailable ? 'AI features use the platform\'s OpenAI key. You do not need to enter one.'
+    : 'The platform has no OpenAI key set up yet, so AI features fall back to templates.';
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-lg">AI</CardTitle>
-        <CardDescription>The assistant, AI Insights answers and listing text.</CardDescription>
+        <CardDescription>The assistant, AI Insights answers, listing text and market price checks.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <CredentialsUnavailable data={data} />
-        <ToggleRow label="Use AI features" description="When off, listing text uses the factual template and the assistant is disabled." checked={enabled} onChange={setEnabled} />
+        <ToggleRow label="Use AI features" description="When off, listing text uses the factual template, the assistant is disabled and market price checks do not run." checked={enabled} onChange={setEnabled} />
         <p className="text-sm text-muted-foreground">{source}</p>
-        <CredentialField
-          label="Your own OpenAI API key (optional)"
-          state={data.credentials.openaiApiKey}
-          value={creds.drafts.openaiApiKey}
-          onChange={creds.set('openaiApiKey')}
-          placeholder="sk-…"
-          help="Usage is then billed to your OpenAI account instead of the platform's."
-          disabled={!data.canStoreCredentials}
-        />
         <TestButton integration="openai" onTest={test} testing={testing} disabled={!enabled} />
       </CardContent>
-      <SaveFooter saving={saving} onSave={() => runSave(save, { settings: { ai: { enabled } }, credentials: creds.changes }, creds.reset)} />
+      <SaveFooter saving={saving} onSave={() => runSave(save, { settings: { ai: { enabled } } })} />
     </Card>
   );
 }
@@ -288,6 +275,36 @@ export function SwapNetworkSettings({ data, save, saving }: SectionProps) {
         </div>
       </CardContent>
       <SaveFooter saving={saving} onSave={() => runSave(save, { settings: { swapNetwork: s } })} />
+    </Card>
+  );
+}
+
+// ── Market pricing ───────────────────────────────────────────────────────────────────────
+
+export function PricingSettings({ data, save, saving }: SectionProps) {
+  const [s, setS] = useState<DealershipSettings['pricing']>(data.settings.pricing);
+  useEffect(() => setS(data.settings.pricing), [data.settings.pricing]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Market price checks</CardTitle>
+        <CardDescription>Every day, vehicles that have not sold are compared with similar listings on the web, and owners and managers are told if the price looks off.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <ToggleRow
+          label="Check unsold vehicles against the market"
+          description="Uses the platform's AI key to search the web. A price is only ever changed when an owner or manager clicks Apply. Needs AI features to be on."
+          checked={s.enabled}
+          onChange={(v) => setS({ ...s, enabled: v })}
+        />
+        <div className="max-w-xs space-y-1.5">
+          <Label>Check a vehicle after this many days unsold</Label>
+          <Input type="number" min={3} max={120} value={s.staleDays} onChange={(e) => setS({ ...s, staleDays: Number(e.target.value) })} disabled={!s.enabled} />
+          <p className="text-xs text-muted-foreground">Each vehicle is checked at most once a week.</p>
+        </div>
+      </CardContent>
+      <SaveFooter saving={saving} onSave={() => runSave(save, { settings: { pricing: s } })} />
     </Card>
   );
 }

@@ -19,6 +19,7 @@ export type DealershipSettings = {
     lowMileagePerYear: number;
   };
   ai: { enabled: boolean };
+  pricing: { enabled: boolean; staleDays: number };
   swapNetwork: { participate: boolean; minDaysInStock: number };
 };
 
@@ -27,8 +28,7 @@ export type CredentialName =
   | 'sendgridApiKey'
   | 'twilioAccountSid'
   | 'twilioAuthToken'
-  | 'slackWebhookUrl'
-  | 'openaiApiKey';
+  | 'slackWebhookUrl';
 
 export type CredentialState = { configured: boolean; hint?: string };
 
