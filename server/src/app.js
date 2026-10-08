@@ -34,6 +34,7 @@ import attendanceRoutes from './routes/attendanceRoutes.js';
 import communicationRoutes from './routes/communicationRoutes.js';
 import predictorRoutes from './routes/predictorRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
+import { staffRouter as formStaffRoutes, publicRouter as formPublicRoutes } from './routes/formRoutes.js';
 
 
 const app = express();
@@ -127,6 +128,7 @@ import { injectTenant } from './middlewares/tenantMiddleware.js';
 // Mount routers
 app.use('/api/auth', authRoutes);
 // Unauthenticated: public listing pages and the buyer inquiry form behind marketing links.
+app.use('/api/public/forms', formPublicRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/dealerships', dealershipRoutes);
 
@@ -137,6 +139,7 @@ app.use('/api/repairs', authenticateToken, injectTenant, repairRoutes);
 app.use('/api/expenses', authenticateToken, injectTenant, expenseRoutes);
 app.use('/api/advertising', authenticateToken, injectTenant, advertisingRoutes);
 app.use('/api/registry', authenticateToken, injectTenant, registryRoutes);
+app.use('/api/forms', authenticateToken, injectTenant, formStaffRoutes);
 app.use('/api/chat', authenticateToken, injectTenant, chatRoutes);
 app.use('/api/team', authenticateToken, injectTenant, teamRoutes);
 app.use('/api/dashboard', authenticateToken, injectTenant, dashboardRoutes);

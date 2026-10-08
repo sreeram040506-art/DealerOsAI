@@ -15,7 +15,7 @@ import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
-const DOCUMENT_TYPES = ['All', 'Used Vehicle Record', 'Title', 'Sales Agreement', 'Bill of Sale', 'Repair Invoice', 'Inspection', 'Other'];
+const DOCUMENT_TYPES = ['All', 'Used Vehicle Record', 'Title', 'Sales Agreement', 'Bill of Sale', 'Repair Invoice', 'Inspection', 'Purchase Contract', 'Loan Application', 'Inspection Report', 'Window Sticker', 'Hangtag', 'Other'];
 
 export default function Registry() {
   const { token } = useAuth();

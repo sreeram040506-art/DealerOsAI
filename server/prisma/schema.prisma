@@ -21,6 +21,7 @@ model Dealership {
   // Relations
   users               User[]
   vehicles            Vehicle[]
+  formRequests        FormRequest[]
   sales               Sale[]
   purchases           Purchase[]
   repairs             Repair[]
@@ -674,4 +675,27 @@ model StockCounter {
   seq          Int    @default(0)
 
   @@unique([dealershipId, period])
+}
+
+// A one-time link a customer or mechanic opens to fill in a form (purchase contract, loan
+// application, inspection report). Submitting generates the PDF and files it in the Vehicle Database.
+model FormRequest {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  token         String    @unique
+  formType      String    // PURCHASE_CONTRACT | LOAN_APPLICATION | INSPECTION_REPORT
+  status        String    @default("PENDING") // PENDING | SUBMITTED | REVOKED
+  recipientName String?
+  recipientEmail String?
+  vehicleId     String?   @db.ObjectId
+  terms         Json?     // dealer-set price terms shown read-only to the buyer
+  data          Json?     // submitted answers; cleared for loan applications once the PDF exists
+  registryId    String?   @db.ObjectId
+  expiresAt     DateTime
+  submittedAt   DateTime?
+  createdById   String?   @db.ObjectId
+  dealershipId  String    @db.ObjectId
+  dealership    Dealership @relation(fields: [dealershipId], references: [id])
+  createdAt     DateTime  @default(now())
+
+  @@index([dealershipId, createdAt])
 }

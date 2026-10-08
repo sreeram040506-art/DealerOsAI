@@ -1,6 +1,7 @@
 import { FileBadge2, FileCheck, FileText, MapPin, CalendarDays, Gauge, UserCheck, DollarSign, Eye, Download, FileArchive, Trash2 } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import UsedVehicleFormGenerator from '@/components/UsedVehicleFormGenerator';
+import FormLinksPanel from '@/components/forms/FormLinksPanel';
 import BillOfSaleUploader from '@/components/BillOfSaleUploader';
 import { useAuth } from '@/context/auth-hooks';
 import { useState, useMemo } from 'react';
@@ -120,6 +121,8 @@ export default function UsedVehicleForms() {
             </p>
           </div>
         </section>
+
+        <FormLinksPanel />
 
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">

@@ -26,6 +26,7 @@ const TeamAnalytics = lazy(() => import("./pages/TeamAnalytics"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Accounting = lazy(() => import("./pages/Accounting"));
 const AIInsights = lazy(() => import("./pages/AIInsights"));
+const PublicForm = lazy(() => import("./pages/PublicForm"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -91,6 +92,8 @@ export default function App() {
                 <Route path="/register" element={<Register />} />
                 {/* Public: buyers open marketing listings from links, with no login. */}
                 <Route path="/l/:id" element={<PublicListing />} />
+                {/* Public: one-time links for a customer or mechanic to fill in a form. */}
+                <Route path="/f/:token" element={<PublicForm />} />
                 
                 <Route path="/" element={
                   <ProtectedRoute>
