@@ -34,6 +34,8 @@ const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Communication = lazy(() => import("./pages/Communication"));
 const Attendance = lazy(() => import("./pages/Attendance"));
+const Leases = lazy(() => import("./pages/Leases"));
+const LeaseDetail = lazy(() => import("./pages/LeaseDetail"));
 const PhotoStudio = lazy(() => import("./pages/PhotoStudio"));
 const PublicListing = lazy(() => import("./pages/PublicListing"));
 
@@ -178,6 +180,16 @@ export default function App() {
                 <Route path="/communication" element={
                   <ProtectedRoute roles={['ADMIN', 'MANAGER', 'STAFF']}>
                     <Communication />
+                  </ProtectedRoute>
+                } />
+                <Route path="/leases" element={
+                  <ProtectedRoute roles={['ADMIN', 'MANAGER', 'STAFF']}>
+                    <Leases />
+                  </ProtectedRoute>
+                } />
+                <Route path="/leases/:id" element={
+                  <ProtectedRoute roles={['ADMIN', 'MANAGER', 'STAFF']}>
+                    <LeaseDetail />
                   </ProtectedRoute>
                 } />
                 <Route path="/photo-studio" element={

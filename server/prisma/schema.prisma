@@ -99,6 +99,7 @@ model Vehicle {
   createdById       String?  @db.ObjectId
   createdBy         User?    @relation(fields: [createdById], references: [id])
   customerNotes     CustomerNote[]
+  leases            Lease[]
 
   // Indexes for common query patterns
   @@unique([vin, dealershipId])
@@ -745,4 +746,43 @@ model PriceSuggestion {
 
   @@index([dealershipId, status])
   @@index([vehicleId, createdAt])
+}
+
+
+// A vehicle out on lease. Condition photos (one per angle, at pickup and at return) live in
+// LeasePhoto, one document each, for the same 16MB-document reason as MarketingPhoto.
+model Lease {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicleId     String   @db.ObjectId
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id])
+  dealershipId  String   @db.ObjectId
+  customerName  String
+  customerPhone String?
+  startDate     DateTime @default(now())
+  endDate       DateTime?
+  returnedAt    DateTime?
+  // 'ACTIVE' | 'RETURNED'
+  status        String   @default("ACTIVE")
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([dealershipId, status])
+  @@index([vehicleId])
+}
+
+model LeasePhoto {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId      String   @db.ObjectId
+  dealershipId String   @db.ObjectId
+  // 'PICKUP' (handed to customer) | 'RETURN' (brought back)
+  phase        String
+  // front, back, left, right, front_left, front_right, rear_left, rear_right, wheel_*, interior, extra
+  angle        String
+  mimeType     String
+  dataBase64   String
+  createdAt    DateTime @default(now())
+
+  @@unique([leaseId, phase, angle])
+  @@index([leaseId])
 }

@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Car, ShoppingCart,
   Receipt, ChevronLeft, ChevronRight, CalendarDays,
-  LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users, Settings, ShieldCheck, Brain, FileText, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare, Image as ImageIcon,
+  LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users, Settings, ShieldCheck, Brain, FileText, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare, Image as ImageIcon, KeyRound,
   type LucideIcon
 } from 'lucide-react';
 import { useState, memo, useCallback, useMemo } from 'react';
@@ -26,6 +26,7 @@ interface NavItem {
 const navItems: readonly NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/inventory', icon: Car, label: 'Inventory', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { to: '/leases', icon: KeyRound, label: 'Leases', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/sales', icon: ShoppingCart, label: 'Sold Vehicles', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/customers', icon: Users, label: 'Customers', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/documents-forms', icon: FileText, label: 'Document Upload', roles: ['ADMIN', 'MANAGER', 'STAFF'] },

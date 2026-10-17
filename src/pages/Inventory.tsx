@@ -4,7 +4,7 @@ import { useAuth } from '@/context/auth-hooks';
 import { Vehicle } from '@/types/inventory';
 import { cn } from '@/lib/utils';
 // Consolidated icon imports — avoids duplicate module references
-import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, LayoutGrid, List, Receipt, Download, ArrowUpDown, Kanban } from 'lucide-react';
+import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, LayoutGrid, List, Receipt, Download, ArrowUpDown, Kanban, KeyRound } from 'lucide-react';
 import { useState, useMemo, useDeferredValue } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import AddVehicleDialog from '@/components/AddVehicleDialog';
 import QueryErrorState from '@/components/QueryErrorState';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
+import LeaseStartDialog from '@/components/LeaseStartDialog';
 import VinDecoderDialog from '@/components/VinDecoderDialog';
 import ReconKanbanBoard from '@/components/ReconKanbanBoard';
 import { apiUrl, downloadFile } from '@/lib/api';
@@ -83,6 +84,7 @@ const statusStyles: Record<string, string> = {
 export default function Inventory() {
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [leaseVehicle, setLeaseVehicle] = useState<Vehicle | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
   const { vehicles, isLoading, isError, deleteVehicle, updateVehicle } = useInventory();
@@ -411,6 +413,11 @@ export default function Inventory() {
                     <CopyVin vin={vehicle.vin} className="mt-1" />
                   </div>
                   <div className="flex items-center gap-2">
+                    {vehicle.status !== 'Sold' && (
+                      <Button variant="outline" size="sm" className="h-7 px-2 gap-1 text-[10px] font-bold uppercase" onClick={(e) => { e.stopPropagation(); setLeaseVehicle(vehicle); }}>
+                        <KeyRound className="w-3 h-3" /> Lease
+                      </Button>
+                    )}
                     {(vehicle.hasDocument || vehicle.hasSourceDocument) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -604,6 +611,11 @@ export default function Inventory() {
                         </td>
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {vehicle.status !== 'Sold' && (
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Lease this vehicle" aria-label="Lease this vehicle" onClick={() => setLeaseVehicle(vehicle)}>
+                                <KeyRound className="w-3.5 h-3.5 text-muted-foreground" />
+                              </Button>
+                            )}
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSelectedVehicle(vehicle)}>
                                <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                             </Button>
@@ -650,8 +662,15 @@ export default function Inventory() {
                         {vehicle.stockNumber && <p className="text-muted-foreground text-xs font-mono font-semibold">Stock #{vehicle.stockNumber}</p>}
                         <CopyVin vin={vehicle.vin} className="mt-1 text-xs" />
                       </div>
-                      <div className="p-2 bg-muted/50 rounded-xl group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                        <ChevronRight className="w-4 h-4" />
+                      <div className="flex items-center gap-2">
+                        {vehicle.status !== 'Sold' && (
+                          <Button variant="outline" size="sm" className="h-8 px-2 gap-1 text-[10px] font-bold uppercase" onClick={(e) => { e.stopPropagation(); setLeaseVehicle(vehicle); }}>
+                            <KeyRound className="w-3 h-3" /> Lease
+                          </Button>
+                        )}
+                        <div className="p-2 bg-muted/50 rounded-xl group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                          <ChevronRight className="w-4 h-4" />
+                        </div>
                       </div>
                     </div>
 
@@ -730,6 +749,7 @@ export default function Inventory() {
           }
         }}
       />
+      <LeaseStartDialog vehicle={leaseVehicle} onOpenChange={(open) => !open && setLeaseVehicle(null)} />
       <VehicleDetailDialog 
         vehicle={selectedVehicle} 
         open={!!selectedVehicle} 
