@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Printer, Save } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, Printer, Save } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import AppLayout from '@/components/AppLayout';
 import QueryErrorState from '@/components/QueryErrorState';
@@ -12,6 +12,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { useAuth } from '@/context/auth-hooks';
 import { apiFetch, handleApiResponse } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { downloadDealPdf } from '@/lib/dealPdf';
 import { toast } from 'sonner';
 
 interface FieldDef { name: string; label: string; group: string; type: 'text' | 'money' | 'date' | 'textarea' | 'select'; options?: string[] }
@@ -34,15 +35,6 @@ function printHtml(html: string) {
   }, 200);
 }
 
-function combine(docs: Doc[]) {
-  const bodies = docs.map((d) => {
-    const body = /<body([^>]*)>([\s\S]*)<\/body>/i.exec(d.html);
-    return `<div ${body?.[1] ?? ''} class="deal-page">${body?.[2] ?? d.html}</div>`;
-  });
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sale documents</title>
-<style>.deal-page{page-break-after:always;break-after:page}.deal-page:last-child{page-break-after:auto}@page{margin:12mm}</style></head><body>${bodies.join('')}</body></html>`;
-}
-
 export default function SaleDocuments() {
   const { saleId } = useParams();
   const { token, logout } = useAuth();
@@ -58,6 +50,7 @@ export default function SaleDocuments() {
   const [selected, setSelected] = useState('bill_of_sale');
   const [rendering, setRendering] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -108,6 +101,17 @@ export default function SaleDocuments() {
     } finally { setSaving(false); }
   };
 
+  const generate = async (list: Doc[], name: string) => {
+    setGenerating(true);
+    try {
+      // Keep what was typed, then build the PDF from the same filled forms shown in the preview.
+      await handleApiResponse(await apiFetch(`/deal-forms/${saleId}`, token, { method: 'PUT', headers: json, body: JSON.stringify({ values }) }), logout);
+      await downloadDealPdf(list, name);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not generate the PDF');
+    } finally { setGenerating(false); }
+  };
+
   const set = (name: string, v: string) => setValues((prev) => ({ ...prev, [name]: v }));
   const currentDoc = docs.find((d) => d.key === selected);
 
@@ -131,7 +135,12 @@ export default function SaleDocuments() {
               <div className="flex gap-2">
                 <Button variant="outline" onClick={save} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save details</Button>
                 <Button variant="outline" onClick={() => currentDoc && printHtml(currentDoc.html)} disabled={!currentDoc}><Printer className="w-4 h-4" /> Print this form</Button>
-                <Button onClick={() => printHtml(combine(docs))} disabled={!docs.length}><Printer className="w-4 h-4" /> Print all {docs.length || ''}</Button>
+                <Button variant="outline" onClick={() => currentDoc && generate([currentDoc], `${currentDoc.title.replace(/\W+/g, '_')}.pdf`)} disabled={!currentDoc || generating}>
+                  <Download className="w-4 h-4" /> This form PDF
+                </Button>
+                <Button onClick={() => generate(docs, 'Sale_Documents.pdf')} disabled={!docs.length || generating}>
+                  {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Generate all {docs.length || ''} as PDF
+                </Button>
               </div>
             </div>
 
