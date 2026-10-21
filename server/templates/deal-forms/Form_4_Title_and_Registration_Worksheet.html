@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Form 4 - Title and Registration Worksheet</title></head>
+<body style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; border: 2px solid #000; padding: 20px; font-size: 11px; line-height: 1.4;">
+    <div style="text-align: right; font-size: 10px;">Jurisdiction / State: <span style="border-bottom: 1px solid #000; display: inline-block; width: 100px; text-align: center;">{{state_jurisdiction}}</span></div>
+    <h2 style="text-align: center; margin-top: 5px; margin-bottom: 5px; text-transform: uppercase;">Application for Vehicle Title &amp; Registration</h2>
+    <div style="text-align: center; font-size: 10px; font-weight: bold; margin-bottom: 15px; text-transform: uppercase;">Dealership Agency Intake &amp; Processing Worksheet</div>
+    <div style="border: 1px solid #000; padding: 6px; margin-bottom: 10px; background-color: #f9f9f9;">
+        <strong>1. TRANSACTION TYPE REQUESTED (Check all that apply):</strong><br>
+        <table style="width: 100%; margin-top: 4px;">
+            <tr>
+                <td>[ &nbsp; ] New Title &amp; Registration</td>
+                <td>[ &nbsp; ] Title Only</td>
+                <td>[ &nbsp; ] Registration Transfer</td>
+            </tr>
+            <tr>
+                <td>[ &nbsp; ] Duplicate Title Request</td>
+                <td>[ &nbsp; ] Renewal of Registration</td>
+                <td>[ &nbsp; ] Lien Recording / Addition</td>
+            </tr>
+        </table>
+    </div>
+    <div style="border: 1px solid #000; margin-bottom: 10px;">
+        <div style="background-color: #eee; padding: 3px 5px; font-weight: bold; border-bottom: 1px solid #000;">2. APPLICANT / REGISTERED OWNER INFORMATION</div>
+        <table style="width: 100%; padding: 5px; border-collapse: collapse;">
+            <tr>
+                <td style="width: 50%; padding: 4px; vertical-align: top; border-right: 1px solid #000;">
+                    <strong>Primary Owner / Lessee Name:</strong><br>
+                    {{buyer_name}}<br><br>
+                    <strong>Residential Address:</strong><br>
+                    {{buyer_address}}<br><br>
+                    Driver License No. / ID: <span style="border-bottom: 1px solid #000; display: inline-block; width: 180px;">{{buyer_dl_number}}</span>
+                </td>
+                <td style="width: 50%; padding: 4px; vertical-align: top;">
+                    <strong>Co-Owner / Co-Lessee Name (if applicable):</strong><br>
+                    {{cobuyer_name}}<br><br>
+                    <strong>Co-Owner Residential Address:</strong><br>
+                    {{cobuyer_address}}<br><br>
+                    Driver License No. / ID: <span style="border-bottom: 1px solid #000; display: inline-block; width: 180px;">{{cobuyer_dl_number}}</span>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div style="border: 1px solid #000; margin-bottom: 10px;">
+        <div style="background-color: #eee; padding: 3px 5px; font-weight: bold; border-bottom: 1px solid #000;">3. VEHICLE IDENTIFICATION &amp; TRANSACTION DETAILS</div>
+        <table style="width: 100%; padding: 5px; border-collapse: collapse;">
+            <tr>
+                <td style="width: 15%; border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 4px;">Year: {{vehicle_year}}</td>
+                <td style="width: 25%; border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 4px;">Make: {{vehicle_make}}</td>
+                <td style="width: 25%; border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 4px;">Model: {{vehicle_model}}</td>
+                <td style="width: 35%; border-bottom: 1px solid #000; padding: 4px;">VIN: {{vin}}</td>
+            </tr>
+            <tr>
+                <td style="border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 4px;">Body Type: {{body_style}}</td>
+                <td style="border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 4px;">Color: {{vehicle_color}}</td>
+                <td style="border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 4px;">Odometer: {{odometer_reading}}</td>
+                <td style="border-bottom: 1px solid #000; padding: 4px;">Title No. (if existing): {{title_number}}</td>
+            </tr>
+            <tr>
+                <td colspan="2" style="border-right: 1px solid #000; padding: 4px;">Purchase Date: {{sale_date}}</td>
+                <td colspan="2" style="padding: 4px;">Purchase Price: $ {{sale_price}}</td>
+            </tr>
+        </table>
+    </div>
+    <div style="border: 1px solid #000; margin-bottom: 10px;">
+        <div style="background-color: #eee; padding: 3px 5px; font-weight: bold; border-bottom: 1px solid #000;">4. LIENHOLDER INFORMATION</div>
+        <table style="width: 100%; padding: 5px;">
+            <tr>
+                <td style="width: 60%;">Lienholder Name: <span style="border-bottom: 1px solid #000; display: inline-block; width: 280px;">{{lender_name}}</span></td>
+                <td style="width: 40%;">Lien Code / ID: <span style="border-bottom: 1px solid #000; display: inline-block; width: 120px;">{{lien_code}}</span></td>
+            </tr>
+            <tr>
+                <td colspan="2">Lienholder Address: <span style="border-bottom: 1px solid #000; display: inline-block; width: 540px;">{{lender_address}}</span></td>
+            </tr>
+        </table>
+    </div>
+    <div style="border: 1px solid #000; padding: 8px;">
+        <p style="font-size: 10px; margin-top: 0; margin-bottom: 10px;"><em>I/We state under penalty of perjury that the statements made on this application are true and correct to the best of my/our knowledge and belief.</em></p>
+        <table style="width: 100%;">
+            <tr>
+                <td style="width: 70%; padding-bottom: 10px;">Applicant Signature: _____________________________________</td>
+                <td style="width: 30%; padding-bottom: 10px;">Date: {{signature_date}}</td>
+            </tr>
+            <tr>
+                <td style="padding-bottom: 10px;">Co-Applicant Signature: __________________________________</td>
+                <td style="padding-bottom: 10px;">Date: {{signature_date}}</td>
+            </tr>
+            <tr>
+                <td>Authorized Dealer Representative: _______________________</td>
+                <td>Dealer ID/Lic #: {{dealer_license_number}}</td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

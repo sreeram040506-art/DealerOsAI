@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Form 9 - Used Vehicle Inspection Report</title></head>
+<body style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; border: 2px solid #000; padding: 20px; font-size: 10px; line-height: 1.35;">
+    <h2 style="text-align: center; margin-top: 0; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 4px;">Multi-Point Used Vehicle Inspection Report</h2>
+    
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 10px;">
+        <tr>
+            <td style="border: 1px solid #000; padding: 4px;"><strong>VIN:</strong> {{vin}}</td>
+            <td style="border: 1px solid #000; padding: 4px;"><strong>Year/Make/Model:</strong> {{vehicle_year}} {{vehicle_make}} {{vehicle_model}}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #000; padding: 4px;"><strong>Stock #:</strong> {{stock_number}}</td>
+            <td style="border: 1px solid #000; padding: 4px;"><strong>Odometer:</strong> {{odometer_reading}} miles | <strong>Date:</strong> {{inspection_date}}</td>
+        </tr>
+    </table>
+
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+        <tr style="background-color: #eee;">
+            <th style="border: 1px solid #000; padding: 4px; text-align: left;">Inspection Area</th>
+            <th style="border: 1px solid #000; padding: 4px; text-align: center; width: 60px;">PASS</th>
+            <th style="border: 1px solid #000; padding: 4px; text-align: center; width: 60px;">ATTN</th>
+            <th style="border: 1px solid #000; padding: 4px; text-align: center; width: 60px;">FAIL</th>
+        </tr>
+        <tr><td style="border: 1px solid #000; padding: 3px;">1. Engine Oil, Fluids &amp; Leaks</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td></tr>
+        <tr><td style="border: 1px solid #000; padding: 3px;">2. Transmission &amp; Drivetrain Operation</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td></tr>
+        <tr><td style="border: 1px solid #000; padding: 3px;">3. Brake Pads, Rotors &amp; Hydraulics</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td></tr>
+        <tr><td style="border: 1px solid #000; padding: 3px;">4. Steering &amp; Suspension Components</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td></tr>
+        <tr><td style="border: 1px solid #000; padding: 3px;">5. Tires Tread Depth &amp; Pressure</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td></tr>
+        <tr><td style="border: 1px solid #000; padding: 3px;">6. Battery Health &amp; Charging System</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td></tr>
+        <tr><td style="border: 1px solid #000; padding: 3px;">7. Exterior Lights, Signal &amp; Electrical</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td></tr>
+        <tr><td style="border: 1px solid #000; padding: 3px;">8. HVAC Heating &amp; Air Conditioning</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td><td style="border: 1px solid #000; text-align: center;">[ ]</td></tr>
+    </table>
+
+    <div style="border: 1px solid #000; padding: 6px; margin-bottom: 10px;">
+        <strong>INSPECTION FINDINGS &amp; RECOMMENDATIONS:</strong>
+        <p style="margin: 4px 0 0 0; min-height: 40px;">{{inspector_notes}}</p>
+    </div>
+
+    <table style="width: 100%;">
+        <tr>
+            <td>Inspector Signature: ________________________</td>
+            <td>Service Manager: ________________________</td>
+        </tr>
+    </table>
+</body>
+</html>

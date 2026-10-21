@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Form 8 - Credit Application</title></head>
+<body style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; border: 2px solid #000; padding: 20px; font-size: 10px; line-height: 1.35;">
+    <h2 style="text-align: center; margin-top: 0; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 4px;">Vehicle Credit Application</h2>
+    
+    <div style="border: 1px solid #000; margin-bottom: 8px;">
+        <div style="background-color: #eee; padding: 3px; font-weight: bold; border-bottom: 1px solid #000;">1. APPLICANT INFORMATION</div>
+        <table style="width: 100%; padding: 4px;">
+            <tr>
+                <td>Full Name: {{buyer_name}}</td>
+                <td>SSN/ITIN: XXX-XX-{{ssn_last4}}</td>
+                <td>DOB: {{buyer_dob}}</td>
+            </tr>
+            <tr>
+                <td colspan="2">Address: {{buyer_address}}</td>
+                <td>Time at Address: {{residence_length}}</td>
+            </tr>
+            <tr>
+                <td>Housing Payment: $ {{monthly_housing}}</td>
+                <td>Phone: {{buyer_phone}}</td>
+                <td>Email: {{buyer_email}}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div style="border: 1px solid #000; margin-bottom: 8px;">
+        <div style="background-color: #eee; padding: 3px; font-weight: bold; border-bottom: 1px solid #000;">2. EMPLOYMENT &amp; INCOME</div>
+        <table style="width: 100%; padding: 4px;">
+            <tr>
+                <td>Employer Name: {{employer_name}}</td>
+                <td>Occupation: {{job_title}}</td>
+                <td>Duration: {{employment_length}}</td>
+            </tr>
+            <tr>
+                <td>Gross Monthly Income: $ {{monthly_income}}</td>
+                <td colspan="2">Employer Phone: {{employer_phone}}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div style="border: 1px solid #000; margin-bottom: 8px;">
+        <div style="background-color: #eee; padding: 3px; font-weight: bold; border-bottom: 1px solid #000;">3. REQUESTED FINANCING DETAILS</div>
+        <table style="width: 100%; padding: 4px;">
+            <tr>
+                <td>Vehicle: {{vehicle_year}} {{vehicle_make}} {{vehicle_model}}</td>
+                <td>VIN: {{vin}}</td>
+            </tr>
+            <tr>
+                <td>Estimated Cash Price: $ {{sale_price}}</td>
+                <td>Down Payment: $ {{down_payment}}</td>
+                <td>Requested Amount: $ {{amount_financed}}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div style="border: 1px solid #000; padding: 6px; margin-bottom: 8px;">
+        <strong>CONSENT &amp; AUTHORIZATION:</strong> By signing below, I certify that all information submitted is accurate and authorize Dealer and financial partners to review my credit profile.
+    </div>
+
+    <table style="width: 100%; margin-top: 15px;">
+        <tr>
+            <td>Applicant Signature: ___________________________________</td>
+            <td>Date: {{signature_date}}</td>
+        </tr>
+    </table>
+</body>
+</html>

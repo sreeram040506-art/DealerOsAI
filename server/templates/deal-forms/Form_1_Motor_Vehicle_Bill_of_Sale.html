@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Form 1 - Motor Vehicle Bill of Sale</title></head>
+<body style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; border: 2px solid #000; padding: 20px; font-size: 12px; line-height: 1.4;">
+    <h2 style="text-align: center; margin-top: 0; text-transform: uppercase;">Motor Vehicle Bill of Sale</h2>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+        <tr>
+            <td style="border: 1px solid #000; padding: 5px; width: 50%;">
+                <strong>Dealership Information</strong><br>
+                Name: {{dealer_name}}<br>
+                Address: {{dealer_address}}<br>
+                License No: {{dealer_license_number}}<br>
+                Contact: {{dealer_contact_details}}
+            </td>
+            <td style="border: 1px solid #000; padding: 5px; width: 50%;">
+                <strong>Transaction Details</strong><br>
+                Sale Date: {{sale_date}}<br>
+                Delivery Date: {{delivery_date}}<br>
+                Stock No: {{stock_number}}
+            </td>
+        </tr>
+    </table>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+        <tr>
+            <td style="border: 1px solid #000; padding: 5px;">
+                <strong>Buyer Information</strong><br>
+                Name: {{buyer_name}}<br>
+                Address: {{buyer_address}}<br>
+                Phone: {{buyer_phone}}
+            </td>
+            <td style="border: 1px solid #000; padding: 5px;">
+                <strong>Co-Buyer Information</strong><br>
+                Name: {{cobuyer_name}}<br>
+                Address: {{cobuyer_address}}<br>
+                Phone: {{cobuyer_phone}}
+            </td>
+        </tr>
+    </table>
+    <div style="border: 1px solid #000; padding: 5px; margin-bottom: 10px;">
+        <strong>Vehicle Identification</strong><br>
+        <table style="width: 100%; margin-top: 5px;">
+            <tr>
+                <td>Year: {{vehicle_year}}</td>
+                <td>Make: {{vehicle_make}}</td>
+                <td>Model: {{vehicle_model}}</td>
+                <td>Trim: {{vehicle_trim}}</td>
+            </tr>
+            <tr>
+                <td>Color: {{vehicle_color}}</td>
+                <td colspan="2">VIN: {{vin}}</td>
+                <td>Odometer: {{odometer_reading}}</td>
+            </tr>
+        </table>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+        <tr>
+            <td style="border: 1px solid #000; padding: 5px; width: 60%; vertical-align: top;">
+                <strong>Payment & Financing Details</strong><br>
+                Payment Method: [ ] Cash &nbsp; [ ] Financed &nbsp; [ ] Outside Lien<br>
+                Lender: {{lender_name}}<br>
+                Trade-In Year/Make: {{trade_in_year_make}}<br>
+                Trade-In VIN: {{trade_in_vin}}
+            </td>
+            <td style="border: 1px solid #000; padding: 5px; width: 40%;">
+                <strong>Itemization of Amount Financed</strong><br>
+                Selling Price: $ <span style="border-bottom: 1px solid #000;">{{sale_price}}</span><br>
+                Taxes: $ <span style="border-bottom: 1px solid #000;">{{tax_amount}}</span><br>
+                Doc Fees: $ <span style="border-bottom: 1px solid #000;">{{doc_fee}}</span><br>
+                Other Fees: $ <span style="border-bottom: 1px solid #000;">{{other_fees}}</span><br>
+                Discounts: $ <span style="border-bottom: 1px solid #000;">{{discounts}}</span><br>
+                Trade-In Allowance: $ <span style="border-bottom: 1px solid #000;">{{trade_in_allowance}}</span><br>
+                Trade-In Payoff: $ <span style="border-bottom: 1px solid #000;">{{trade_in_payoff}}</span><br>
+                Deposit/Down Payment: $ <span style="border-bottom: 1px solid #000;">{{down_payment}}</span><br>
+                <strong>Final Balance: $ <span style="border-bottom: 1px solid #000;">{{final_balance}}</span></strong>
+            </td>
+        </tr>
+    </table>
+    <div style="border: 1px solid #000; padding: 10px; margin-bottom: 10px;">
+        <p style="font-size: 10px; margin-bottom: 20px;">By signing below, Buyer(s) and Dealer acknowledge agreement to the terms, conditions, and disclosures stated herein. Buyer accepts delivery of the vehicle described above.</p>
+        <table style="width: 100%;">
+            <tr>
+                <td>Buyer Signature: ______________________</td>
+                <td>Date: {{signature_date}}</td>
+            </tr>
+            <tr><td colspan="2" style="height:10px;"></td></tr>
+            <tr>
+                <td>Co-Buyer Signature: ______________________</td>
+                <td>Date: {{signature_date}}</td>
+            </tr>
+            <tr><td colspan="2" style="height:10px;"></td></tr>
+            <tr>
+                <td>Dealer Representative: ______________________</td>
+                <td>Date: {{signature_date}}</td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

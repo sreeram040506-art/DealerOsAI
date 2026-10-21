@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Form 5 - FTC Used Car Buyer's Guide</title></head>
+<body style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; border: 3px solid #000; padding: 20px; font-size: 11px; line-height: 1.35;">
+    <h1 style="text-align: center; font-size: 28px; font-weight: 900; margin-top: 0; margin-bottom: 5px; text-transform: uppercase;">BUYER'S GUIDE</h1>
+    <div style="text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 15px; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 5px;">
+        IMPORTANT: Spoken promises are difficult to enforce. Ask the dealer to put all promises in writing. Keep this form.
+    </div>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+        <tr>
+            <td style="border: 1px solid #000; padding: 4px; width: 25%;"><strong>VEHICLE MAKE</strong><br>{{vehicle_make}}</td>
+            <td style="border: 1px solid #000; padding: 4px; width: 25%;"><strong>MODEL</strong><br>{{vehicle_model}}</td>
+            <td style="border: 1px solid #000; padding: 4px; width: 20%;"><strong>YEAR</strong><br>{{vehicle_year}}</td>
+            <td style="border: 1px solid #000; padding: 4px; width: 30%;"><strong>VIN</strong><br>{{vin}}</td>
+        </tr>
+        <tr>
+            <td colspan="2" style="border: 1px solid #000; padding: 4px;"><strong>STOCK NUMBER</strong><br>{{stock_number}}</td>
+            <td colspan="2" style="border: 1px solid #000; padding: 4px;"><strong>ODOMETER READING</strong><br>{{odometer_reading}}</td>
+        </tr>
+    </table>
+    <div style="border: 2px solid #000; padding: 10px; margin-bottom: 15px;">
+        <h2 style="font-size: 14px; margin-top: 0; margin-bottom: 10px; text-transform: uppercase; text-decoration: underline;">WARRANTIES FOR THIS VEHICLE:</h2>
+        <div style="border: 1px solid #000; padding: 8px; margin-bottom: 10px;">
+            <p style="margin: 0; font-weight: bold; font-size: 12px;">[ &nbsp; ] AS IS - NO DEALER WARRANTY</p>
+            <p style="margin: 4px 0 0 20px; font-size: 10px;">THE DEALER DOES NOT PROVIDE A WARRANTY FOR ANY REPAIRS. YOU WILL PAY ALL COSTS FOR ANY REPAIRS.</p>
+        </div>
+        <div style="border: 1px solid #000; padding: 8px;">
+            <p style="margin: 0; font-weight: bold; font-size: 12px;">[ &nbsp; ] WARRANTY</p>
+            <p style="margin: 4px 0 8px 20px; font-size: 10px;">THE DEALER WILL PAY {{warranty_labor_pct}}% OF THE LABOR AND {{warranty_parts_pct}}% OF THE PARTS FOR THE COVERED SYSTEMS THAT FAIL DURING THE WARRANTY PERIOD.</p>
+        </div>
+    </div>
+    <div style="border: 1px solid #000; padding: 8px;">
+        <div style="font-weight: bold; font-size: 10px; margin-bottom: 5px;">BUYER ACKNOWLEDGMENT</div>
+        <table style="width: 100%;">
+            <tr>
+                <td style="width: 70%;">Buyer Signature: _____________________________________</td>
+                <td style="width: 30%;">Date: {{signature_date}}</td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

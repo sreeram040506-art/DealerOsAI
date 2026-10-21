@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Form 3 - Motor Vehicle Purchase Contract</title></head>
+<body style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; border: 2px solid #000; padding: 20px; font-size: 11px; line-height: 1.4;">
+    <div style="text-align: right; font-weight: bold; margin-bottom: 5px;">Contract No: {{contract_number}}</div>
+    <h2 style="text-align: center; margin-top: 0; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 5px;">Motor Vehicle Purchase Contract</h2>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+        <tr>
+            <td style="border: 1px solid #000; padding: 5px; width: 50%; vertical-align: top;">
+                <strong>SELLER (Dealer)</strong><br>
+                {{dealer_name}}<br>
+                {{dealer_address}}<br>
+                Phone: {{dealer_contact_details}}<br>
+                Dealer License: {{dealer_license_number}}
+            </td>
+            <td style="border: 1px solid #000; padding: 5px; width: 50%; vertical-align: top;">
+                <strong>PURCHASER (Buyer)</strong><br>
+                Name: {{buyer_name}}<br>
+                Co-Buyer: {{cobuyer_name}}<br>
+                Address: {{buyer_address}}<br>
+                Phone: {{buyer_phone}}
+            </td>
+        </tr>
+    </table>
+    <div style="border: 1px solid #000; margin-bottom: 10px;">
+        <div style="background-color: #eee; padding: 3px 5px; font-weight: bold; border-bottom: 1px solid #000;">1. VEHICLE INFORMATION</div>
+        <table style="width: 100%; padding: 5px; border-collapse: collapse;">
+            <tr>
+                <td style="width: 15%; border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 3px;">Year: {{vehicle_year}}</td>
+                <td style="width: 25%; border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 3px;">Make: {{vehicle_make}}</td>
+                <td style="width: 25%; border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 3px;">Model: {{vehicle_model}}</td>
+                <td style="width: 35%; border-bottom: 1px solid #000; padding: 3px;">VIN: {{vin}}</td>
+            </tr>
+            <tr>
+                <td style="border-right: 1px solid #000; padding: 3px;">Stock #: {{stock_number}}</td>
+                <td style="border-right: 1px solid #000; padding: 3px;">Color: {{vehicle_color}}</td>
+                <td style="border-right: 1px solid #000; padding: 3px;">Mileage: {{odometer_reading}}</td>
+                <td style="padding: 3px;">[ ] New &nbsp;&nbsp; [ ] Used &nbsp;&nbsp; [ ] Demo</td>
+            </tr>
+        </table>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+        <tr>
+            <td style="border: 1px solid #000; width: 50%; vertical-align: top;">
+                <div style="background-color: #eee; padding: 3px 5px; font-weight: bold; border-bottom: 1px solid #000;">2. TRADE-IN VEHICLE</div>
+                <div style="padding: 5px;">
+                    Year/Make: {{trade_in_year_make}}<br>
+                    Model: {{trade_in_model}}<br>
+                    VIN: {{trade_in_vin}}<br>
+                    Mileage: {{trade_in_odometer}}<br>
+                    Gross Allowance: $ <span style="border-bottom: 1px solid #000;">{{trade_in_allowance}}</span><br>
+                    Less Payoff To: {{trade_in_lienholder}}<br>
+                    Payoff Amount: $ <span style="border-bottom: 1px solid #000;">{{trade_in_payoff}}</span><br>
+                    <strong>Net Trade-In: $ <span style="border-bottom: 1px solid #000;">{{net_trade_in}}</span></strong>
+                </div>
+            </td>
+            <td style="border: 1px solid #000; width: 50%; vertical-align: top;">
+                <div style="background-color: #eee; padding: 3px 5px; font-weight: bold; border-bottom: 1px solid #000;">3. ITEMIZATION OF CHARGES</div>
+                <table style="width: 100%; padding: 5px;">
+                    <tr><td>1. Cash Price of Vehicle:</td><td style="text-align: right;">$ {{sale_price}}</td></tr>
+                    <tr><td>2. Dealer Documentation Fee:</td><td style="text-align: right;">$ {{doc_fee}}</td></tr>
+                    <tr><td>3. Accessories/Add-ons:</td><td style="text-align: right;">$ {{addons_price}}</td></tr>
+                    <tr><td><strong>4. Subtotal (1+2+3):</strong></td><td style="text-align: right;"><strong>$ {{subtotal_price}}</strong></td></tr>
+                    <tr><td>5. Sales Tax:</td><td style="text-align: right;">$ {{tax_amount}}</td></tr>
+                    <tr><td>6. Title/Registration/State Fees:</td><td style="text-align: right;">$ {{state_fees}}</td></tr>
+                    <tr><td><strong>7. Total Delivered Price:</strong></td><td style="text-align: right;"><strong>$ {{total_delivered_price}}</strong></td></tr>
+                    <tr><td>8. Less Net Trade-In:</td><td style="text-align: right;">$ ({{net_trade_in}})</td></tr>
+                    <tr><td>9. Less Cash Down Payment:</td><td style="text-align: right;">$ ({{down_payment}})</td></tr>
+                    <tr><td style="border-top: 1px solid #000;"><strong>10. UNPAID BALANCE:</strong></td><td style="text-align: right; border-top: 1px solid #000;"><strong>$ {{amount_financed}}</strong></td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+    <div style="border: 1px solid #000; padding: 5px; margin-bottom: 10px; font-size: 10px;">
+        <div style="font-weight: bold; margin-bottom: 3px;">4. WARRANTIES & DISCLOSURES</div>
+        [ ] <strong>AS IS - NO DEALER WARRANTY:</strong> The Dealer assumes no responsibility for any repairs regardless of any oral statements about the vehicle. <br>
+        [ ] <strong>DEALER WARRANTY:</strong> As described in the attached Buyer's Guide.<br>
+        [ ] <strong>MANUFACTURER'S WARRANTY:</strong> Unexpired manufacturer's warranty applies.<br>
+        <em>Purchaser acknowledges receipt of a fully completed copy of this contract and the FTC Buyer's Guide (if applicable). This contract is not binding until accepted by the Dealer.</em>
+    </div>
+    <div style="border: 1px solid #000; padding: 10px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="width: 60%; padding-bottom: 15px;">Purchaser Signature: _____________________________________</td>
+                <td style="width: 40%; padding-bottom: 15px;">Date: {{signature_date}}</td>
+            </tr>
+            <tr>
+                <td style="padding-bottom: 15px;">Co-Purchaser Signature: __________________________________</td>
+                <td style="padding-bottom: 15px;">Date: {{signature_date}}</td>
+            </tr>
+            <tr>
+                <td>Accepted By (Dealer): ____________________________________</td>
+                <td>Date: {{signature_date}}</td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

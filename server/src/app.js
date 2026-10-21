@@ -34,6 +34,7 @@ import healthRoutes from './routes/healthRoutes.js';
 import marketingRoutes from './routes/marketingRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
 import communicationRoutes from './routes/communicationRoutes.js';
+import dealFormRoutes from './routes/dealFormRoutes.js';
 import leaseRoutes from './routes/leaseRoutes.js';
 import predictorRoutes from './routes/predictorRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
@@ -162,6 +163,7 @@ app.use('/api/marketing', authenticateToken, injectTenant, marketingRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/attendance', authenticateToken, injectTenant, attendanceRoutes);
 app.use('/api/communication', authenticateToken, injectTenant, communicationRoutes);
+app.use('/api/deal-forms', authenticateToken, injectTenant, dealFormRoutes);
 app.use('/api/leases', authenticateToken, injectTenant, leaseRoutes);
 app.use('/api/predictor', authenticateToken, injectTenant, predictorRoutes);
 

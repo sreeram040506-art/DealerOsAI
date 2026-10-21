@@ -212,6 +212,9 @@ model Sale {
   billOfSaleBase64 String?
   hasBillOfSale    Boolean  @default(false)
 
+  // Sale paperwork fields typed in by staff (see services/dealForms.js)
+  dealFormData     Json?
+
   // Payment Tracking
   paymentStatus    String?  @default("PENDING") // PENDING, PAID, FAILED
   stripeSessionId  String?

@@ -356,6 +356,14 @@ export default function Sales() {
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/sales/${sale.id}/documents`); }}
+                        title="Sale documents"
+                        aria-label="Sale documents"
+                        className="p-1.5 rounded-lg bg-muted text-foreground border border-border shadow-sm active:scale-95 transition-transform"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
                       {isManagerOrAdmin && (
                         <>
                           <button 
@@ -505,6 +513,16 @@ export default function Sales() {
                                   )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Sale documents"
+                            aria-label="Sale documents"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/sales/${sale.id}/documents`); }}
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </Button>
                           {isManagerOrAdmin && (
                             <>
                               <Button
