@@ -36,8 +36,9 @@ export interface ComparisonResult {
   warning?: string;
 }
 
-export const COMPARE_WIDTH = 240;
-export const COMPARE_HEIGHT = 160;
+// Fine enough that a thin scratch or a wheel-rim scuff is still several pixels wide.
+export const COMPARE_WIDTH = 480;
+export const COMPARE_HEIGHT = 320;
 
 export function toGray(rgba: Uint8ClampedArray | Uint8Array, width: number, height: number): GrayImage {
   const data = new Float32Array(width * height);
@@ -138,8 +139,6 @@ function findAlignment(a: Float32Array, b: Float32Array, w: number, h: number, m
   return best;
 }
 
-const CELL = 8;
-
 export function compareImages(before: GrayImage, after: GrayImage): ComparisonResult {
   if (before.width !== after.width || before.height !== after.height) {
     throw new Error('Images must be the same size');
@@ -148,16 +147,27 @@ export function compareImages(before: GrayImage, after: GrayImage): ComparisonRe
 
   const blurA = boxBlur(normalise(before), w, h, 1);
   const blurB = boxBlur(normalise(after), w, h, 1);
-  const { dx, dy, cost } = findAlignment(blurA, blurB, w, h, 10);
+  const { dx, dy, cost } = findAlignment(blurA, blurB, w, h, Math.round(w / 24));
 
-  const lum = tolerantDiff(blurA, blurB, w, h, dx, dy, 1);
+  // Checked in both directions: a scratch only exists in the "after" photo, so every "before"
+  // pixel can find an unmarked match nearby — the new mark is only visible from the other side.
+  const symmetric = (a: Float32Array, b: Float32Array) => {
+    const forward = tolerantDiff(a, b, w, h, dx, dy, tol);
+    const backward = tolerantDiff(b, a, w, h, -dx, -dy, tol);
+    for (let i = 0; i < forward.length; i++) forward[i] = Math.max(forward[i], backward[i]);
+    return forward;
+  };
+  const tol = Math.max(1, Math.round(w / 240));
+  const lum = symmetric(blurA, blurB);
   const gradA = gradient(blurA, w, h);
   const gradB = gradient(blurB, w, h);
-  const edge = tolerantDiff(gradA, gradB, w, h, dx, dy, 1);
+  const edge = symmetric(gradA, gradB);
 
   // Combined per-pixel change signal.
   const diff = new Float32Array(w * h);
-  for (let i = 0; i < diff.length; i++) diff[i] = Math.max(lum[i] / 40, edge[i] / 22);
+  for (let i = 0; i < diff.length; i++) diff[i] = Math.max(lum[i] / 26, edge[i] / 14);
+
+  const CELL = Math.max(4, Math.round(w / 30));
 
   // Roll up into cells; a cell is "changed" when enough of its pixels exceed the threshold.
   const cols = Math.ceil(w / CELL);
@@ -178,7 +188,7 @@ export function compareImages(before: GrayImage, after: GrayImage): ComparisonRe
         }
       }
       const frac = over / total;
-      if (frac > 0.2) {
+      if (frac > 0.1) {
         cellScore[cy * cols + cx] = Math.min(1, frac * 0.7 + Math.min(peak, 3) / 10);
         changedCells++;
       }
@@ -211,8 +221,8 @@ export function compareImages(before: GrayImage, after: GrayImage): ComparisonRe
         }
       }
     }
-    // A lone flagged cell is usually noise (reflection, dust); real marks span a couple.
-    if (count < 2) continue;
+    // A lone weak cell is usually noise (reflection, dust); keep it only when it is strong.
+    if (count < 2 && scoreSum < 0.45) continue;
     const score = Math.min(1, (scoreSum / count) * 0.6 + Math.min(count, 20) / 40);
     regions.push({
       x: (minX * CELL) / w,

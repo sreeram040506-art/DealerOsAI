@@ -11,7 +11,8 @@ import "@testing-library/jest-dom";
 process.env.OPENAI_API_KEY = "";
 process.env.NVIDIA_API_KEY = "";
 
-Object.defineProperty(window, "matchMedia", {
+// Node-environment tests (server code) have no window.
+if (typeof window !== "undefined") Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({
     matches: false,
