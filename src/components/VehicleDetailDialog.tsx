@@ -12,7 +12,7 @@ import { useRepairs } from '@/hooks/useRepairs';
 import { useAdvertising } from '@/hooks/useAdvertising';
 import { useSales } from '@/hooks/useSales';
 import { toast } from '@/components/ui/toast-utils';
-import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, BadgeDollarSign, Trash2, AlertTriangle, FileUp, CheckCircle2, Copy, Users, MessageSquare, Loader2 } from 'lucide-react';
+import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, BadgeDollarSign, Trash2, AlertTriangle, FileUp, CheckCircle2, Copy, Users, MessageSquare, Loader2, KeyRound } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -30,6 +30,7 @@ import { useNotes } from '@/hooks/useNotes';
 import DocumentViewerDialog from './DocumentViewerDialog';
 import VehicleLeadsTab from './VehicleLeadsTab';
 import PriceSuggestionCard from './PriceSuggestionCard';
+import LeaseStartDialog from './LeaseStartDialog';
 import { useVehicleLeads } from '@/hooks/useVehicleLeads';
 
 interface VehicleDetailDialogProps {
@@ -58,6 +59,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   const [saleFile, setSaleFile] = useState<File | null>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [showLeaseDialog, setShowLeaseDialog] = useState(false);
 
   useEffect(() => {
     if (open && vehicle && token) {
@@ -427,10 +429,21 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 {isEditing ? 'Cancel' : <><Pencil className="w-3.5 h-3.5 mr-2" /> Edit Details</>}
               </Button>
               
+              {vehicle.status !== 'Sold' && !isEditing && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowLeaseDialog(true)}
+                  className="flex-1 sm:flex-none border-primary/30 text-[10px] font-black uppercase tracking-widest text-foreground/70 hover:bg-primary/10 h-9 gap-1.5"
+                >
+                  <KeyRound className="w-3.5 h-3.5" /> Lease
+                </Button>
+              )}
+
               {isAdmin && !isEditing && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setShowDeleteConfirm(true)}
                   className="text-destructive hover:bg-destructive/10 text-[10px] font-black uppercase tracking-widest h-9 px-3"
                   title="Delete from Inventory"
@@ -1082,6 +1095,8 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           vehicleName={viewerDoc?.name || ''}
           documentType={viewerDoc?.type || ''}
         />
+
+        <LeaseStartDialog vehicle={showLeaseDialog ? vehicle : null} onOpenChange={(open) => { if (!open) setShowLeaseDialog(false); }} />
 
         <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
           <AlertDialogContent className="bg-card border-border">
