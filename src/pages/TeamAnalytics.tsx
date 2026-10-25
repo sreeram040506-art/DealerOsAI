@@ -15,6 +15,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -45,6 +55,7 @@ export default function TeamAnalytics() {
   const isAdmin = user?.role === 'ADMIN';
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -83,9 +94,15 @@ export default function TeamAnalytics() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to remove this team member? This will not delete their historical activity but they will lose access.')) {
-      await deleteMember.mutateAsync(id);
+  const handleDelete = async () => {
+    if (!deletingMemberId) return;
+    try {
+      await deleteMember.mutateAsync(deletingMemberId);
+      toast.success('Team member removed');
+    } catch {
+      toast.error('Failed to remove team member');
+    } finally {
+      setDeletingMemberId(null);
     }
   };
 
@@ -331,10 +348,10 @@ export default function TeamAnalytics() {
                           >
                             <Edit2 className="w-4.5 h-4.5" />
                           </Button>
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            onClick={() => handleDelete(member.id)}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setDeletingMemberId(member.id)}
                             className="h-10 w-10 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/5"
                           >
                             <Trash2 className="w-4.5 h-4.5" />
@@ -539,7 +556,7 @@ export default function TeamAnalytics() {
                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Full Name</label>
                 <div className="relative">
                   <Users className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -553,7 +570,7 @@ export default function TeamAnalytics() {
                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     required
                     type="email"
                     value={formData.email}
@@ -570,7 +587,7 @@ export default function TeamAnalytics() {
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     required={!editingMember}
                     type="password"
                     value={formData.password}
@@ -583,8 +600,8 @@ export default function TeamAnalytics() {
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Permissions Level</label>
-                <Select 
-                  value={formData.role} 
+                <Select
+                  value={formData.role}
                   onValueChange={(val) => setFormData({...formData, role: val})}
                 >
                   <SelectTrigger className="bg-muted/30 border-border rounded-xl h-12 text-sm font-medium focus:ring-primary/20">
@@ -599,7 +616,7 @@ export default function TeamAnalytics() {
               </div>
 
               <DialogFooter className="mt-8 pt-4">
-                <Button 
+                <Button
                   type="submit"
                   disabled={addMember.isPending || updateMember.isPending}
                   className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl h-12 font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20"
@@ -610,6 +627,32 @@ export default function TeamAnalytics() {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!deletingMemberId} onOpenChange={(open) => { if (!open) setDeletingMemberId(null); }}>
+          <AlertDialogContent className="rounded-[28px]">
+            <AlertDialogHeader>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-destructive" />
+                </div>
+                <AlertDialogTitle className="text-xl font-black tracking-tight text-foreground">Remove Team Member</AlertDialogTitle>
+              </div>
+              <AlertDialogDescription className="text-muted-foreground font-medium">
+                Are you sure you want to remove <span className="text-foreground font-bold">{team.find(m => m.id === deletingMemberId)?.name}</span> from the team? They will lose access to the system. Historical activity (sales, vehicles added) will be preserved.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-4 gap-3">
+              <AlertDialogCancel className="rounded-xl h-11 font-bold uppercase tracking-widest text-[10px]">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl h-11 font-black uppercase tracking-widest text-[10px] px-6"
+              >
+                Remove Member
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );
