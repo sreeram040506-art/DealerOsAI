@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckCircle2, Clock, RefreshCw, Save, UserCheck, UserX, Users } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock, RefreshCw, Save, Search, UserCheck, UserX, Users } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import QueryErrorState from '@/components/QueryErrorState';
 import { Button } from '@/components/ui/button';
@@ -54,12 +54,16 @@ export default function Attendance() {
     return attendanceUsers.filter((u) => u.userId === user?.id);
   }, [attendanceUsers, isAdmin, user?.id]);
 
-  const loadAttendance = useCallback(async () => {
+  const [appliedRange, setAppliedRange] = useState({ from: rangeFrom, to: rangeTo });
+
+  const loadAttendance = useCallback(async (fromDate?: string, toDate?: string) => {
     if (!token) return;
+    const qFrom = fromDate ?? appliedRange.from;
+    const qTo = toDate ?? appliedRange.to;
     setIsLoading(true);
     setError(null);
     try {
-      const query = new URLSearchParams({ from: rangeFrom, to: rangeTo });
+      const query = new URLSearchParams({ from: qFrom, to: qTo });
       const response = await fetch(apiUrl(`/attendance?${query.toString()}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -74,11 +78,17 @@ export default function Attendance() {
     } finally {
       setIsLoading(false);
     }
-  }, [rangeFrom, rangeTo, token]);
+  }, [appliedRange, token]);
+
+  const applyRange = () => {
+    setAppliedRange({ from: rangeFrom, to: rangeTo });
+    loadAttendance(rangeFrom, rangeTo);
+  };
 
   useEffect(() => {
     loadAttendance();
-  }, [loadAttendance]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   useEffect(() => {
     const next: Record<string, AttendanceStatus> = {};
@@ -194,7 +204,7 @@ export default function Attendance() {
 
         {/* Date Controls — single row */}
         <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-end gap-4">
+          <form onSubmit={(e) => { e.preventDefault(); applyRange(); }} className="flex flex-col md:flex-row md:items-end gap-4">
             <div className="flex-1 space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                 <CalendarDays className="w-3 h-3" /> Mark Date
@@ -224,7 +234,10 @@ export default function Attendance() {
                 className="w-full h-11 rounded-xl border border-border bg-muted/30 px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
-          </div>
+            <Button type="submit" className="rounded-xl h-11 px-5 text-xs font-black uppercase tracking-widest gap-2 shrink-0">
+              <Search className="w-4 h-4" /> Search
+            </Button>
+          </form>
         </section>
 
         {error && <QueryErrorState title="Attendance unavailable" description={error} onRetry={loadAttendance} />}

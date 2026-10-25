@@ -54,6 +54,27 @@ export default function Accounting() {
   const [sourceFilter, setSourceFilter] = useState<TxSource>('all');
   const [search, setSearch] = useState('');
 
+  const [appliedFilters, setAppliedFilters] = useState({
+    from: '',
+    to: '',
+    typeFilter: 'all' as TxType,
+    sourceFilter: 'all' as TxSource,
+    search: '',
+  });
+
+  const applyFilters = () => {
+    setAppliedFilters({ from, to, typeFilter, sourceFilter, search });
+  };
+
+  const clearFilters = () => {
+    setFrom('');
+    setTo('');
+    setTypeFilter('all');
+    setSourceFilter('all');
+    setSearch('');
+    setAppliedFilters({ from: '', to: '', typeFilter: 'all', sourceFilter: 'all', search: '' });
+  };
+
   const transactions = useMemo(() => {
     const txs: any[] = [];
     sales?.forEach(s => {
@@ -67,8 +88,9 @@ export default function Accounting() {
     expenses?.forEach(e => txs.push({ type: 'expense', label: e.category, amount: e.amount, date: e.date, source: 'expense' }));
     ads?.forEach(a => txs.push({ type: 'expense', label: `Ad: ${a.campaignName}`, amount: a.amountSpent, date: a.startDate, source: 'ad' }));
 
-    const fromTs = from ? new Date(from).getTime() : null;
-    const toTs = to ? new Date(to).getTime() : null;
+    const { from: af, to: at, typeFilter: atf, sourceFilter: asf, search: as } = appliedFilters;
+    const fromTs = af ? new Date(af).getTime() : null;
+    const toTs = at ? new Date(at).getTime() : null;
     return txs.filter(tx => {
       if (!tx.date) return true;
       const d = new Date(tx.date).getTime();
@@ -76,12 +98,12 @@ export default function Accounting() {
       if (toTs && d > toTs) return false;
       return true;
     }).filter(tx => {
-      if (typeFilter !== 'all' && tx.type !== typeFilter) return false;
-      if (sourceFilter !== 'all' && tx.source !== sourceFilter) return false;
-      if (search && !tx.label.toLowerCase().includes(search.toLowerCase())) return false;
+      if (atf !== 'all' && tx.type !== atf) return false;
+      if (asf !== 'all' && tx.source !== asf) return false;
+      if (as && !tx.label.toLowerCase().includes(as.toLowerCase())) return false;
       return true;
     }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [sales, vehicles, expenses, ads, from, to, typeFilter, sourceFilter, search]);
+  }, [sales, vehicles, expenses, ads, appliedFilters]);
 
   const totalIncome = useMemo(() => sales.reduce((s, sale) => s + (sale.salePrice || 0), 0), [sales]);
   const totalOutgoing = useMemo(() => {
@@ -187,18 +209,13 @@ export default function Accounting() {
 
         {/* Filters */}
         <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
-          <div className="flex flex-col lg:flex-row gap-3">
+          <form onSubmit={(e) => { e.preventDefault(); applyFilters(); }} className="flex flex-col lg:flex-row gap-3">
             {/* Date range */}
             <div className="flex flex-wrap items-center gap-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground whitespace-nowrap">From</label>
               <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 rounded-xl text-sm w-[150px]" />
               <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground whitespace-nowrap">To</label>
               <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 rounded-xl text-sm w-[150px]" />
-              {(from || to) && (
-                <Button variant="ghost" size="sm" onClick={() => { setFrom(''); setTo(''); }} className="h-9 rounded-xl text-xs font-bold">
-                  Clear dates
-                </Button>
-              )}
             </div>
 
             <div className="lg:ml-auto flex flex-wrap items-center gap-2">
@@ -218,6 +235,7 @@ export default function Accounting() {
                 {(['all', 'income', 'expense'] as TxType[]).map(t => (
                   <button
                     key={t}
+                    type="button"
                     onClick={() => setTypeFilter(t)}
                     className={cn(
                       "px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-colors",
@@ -232,6 +250,7 @@ export default function Accounting() {
               {/* Source filter */}
               <div className="flex items-center rounded-xl border border-border overflow-hidden">
                 <button
+                  type="button"
                   onClick={() => setSourceFilter('all')}
                   className={cn(
                     "px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-colors",
@@ -243,6 +262,7 @@ export default function Accounting() {
                 {(['sale', 'purchase', 'expense', 'ad'] as TxSource[]).map(s => (
                   <button
                     key={s}
+                    type="button"
                     onClick={() => setSourceFilter(s)}
                     className={cn(
                       "px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-colors",
@@ -253,8 +273,17 @@ export default function Accounting() {
                   </button>
                 ))}
               </div>
+
+              <Button type="submit" size="sm" className="h-9 rounded-xl text-xs font-black uppercase tracking-widest gap-1.5 px-4">
+                <Search className="w-3.5 h-3.5" /> Search
+              </Button>
+              {(appliedFilters.from || appliedFilters.to || appliedFilters.search || appliedFilters.typeFilter !== 'all' || appliedFilters.sourceFilter !== 'all') && (
+                <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="h-9 rounded-xl text-xs font-bold">
+                  Clear all
+                </Button>
+              )}
             </div>
-          </div>
+          </form>
         </section>
 
         {/* Transaction List */}
