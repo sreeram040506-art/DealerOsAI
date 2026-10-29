@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Car, ShoppingCart,
-  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck, Brain, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare, CalendarDays, Image as ImageIcon,
+  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck, Brain, Shield, BadgeCheck, Megaphone, Calculator, Gavel, Plug, MessageSquare, CalendarDays, Image as ImageIcon, Camera,
   type LucideIcon
 } from 'lucide-react';
 import { useState, useCallback, memo, useMemo } from 'react';
@@ -33,6 +33,7 @@ const drawerItems: readonly NavItem[] = [
   { to: '/sales', icon: ShoppingCart, label: 'Sold Vehicles', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/customers', icon: Users, label: 'Customers', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/documents-forms', icon: FileText, label: 'Document Upload', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { to: '/mobile-scanner', icon: Camera, label: 'Mobile Scanner', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/registry', icon: FileArchive, label: 'Vehicle Database', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/marketing', icon: Megaphone, label: 'Marketing', roles: ['ADMIN', 'MANAGER'] },
   { to: '/photo-studio', icon: ImageIcon, label: 'Photo Studio', roles: ['ADMIN', 'MANAGER', 'STAFF'] },

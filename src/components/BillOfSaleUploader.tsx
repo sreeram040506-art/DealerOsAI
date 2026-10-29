@@ -17,7 +17,7 @@ import {
   AlertCircle, 
   Sparkles, 
   Receipt, 
-  Wrench, 
+  Camera, 
   Plus 
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -59,6 +59,7 @@ export default function BillOfSaleUploader({
   const [showOverrides, setShowOverrides] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
 
@@ -260,38 +261,38 @@ export default function BillOfSaleUploader({
   const totalBytes = files.reduce((acc, f) => acc + f.size, 0);
 
   return (
-    <div className="rounded-[24px] border border-border bg-white p-6 space-y-6 shadow-sm flex flex-col justify-between">
-      <div className="space-y-5">
+    <div className="rounded-[20px] sm:rounded-[24px] border border-border bg-white p-4 sm:p-6 space-y-5 sm:space-y-6 shadow-xs flex flex-col justify-between">
+      <div className="space-y-4 sm:space-y-5">
         {/* Card Header with Badges */}
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider">
               <Receipt className="w-3 h-3" />
               Sales & Service
             </span>
-            <span className="text-xs text-muted-foreground font-medium">Step 2 of 2</span>
+            <span className="text-[11px] sm:text-xs text-muted-foreground font-medium">Step 2 of 2</span>
           </div>
-          <h3 className="text-lg font-bold text-foreground tracking-tight">
+          <h3 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
             Bills of Sale & Repair Invoices
           </h3>
-          <p className="text-sm text-muted-foreground font-medium mt-1 leading-relaxed">
+          <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1 leading-relaxed">
             Upload customer bills of sale to mark cars as sold, or mechanic invoices to track repair costs.
           </p>
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Bills of Sale</span>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Buyer Orders</span>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Repair Invoices</span>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Parts Receipts</span>
+          <div className="flex flex-wrap gap-1 sm:gap-1.5 mt-2.5">
+            <span className="text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Bills of Sale</span>
+            <span className="text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Buyer Orders</span>
+            <span className="text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Repair Invoices</span>
+            <span className="text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Parts Receipts</span>
           </div>
         </div>
 
         {/* Vehicle Not Found Notice */}
         {blockedNotice && (
-          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 space-y-2 animate-in fade-in">
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3.5 sm:p-4 space-y-2 animate-in fade-in">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4 text-amber-600" />
-                Vehicle not found in inventory
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                Vehicle not in inventory
               </h4>
               <Button 
                 variant="ghost" 
@@ -303,51 +304,59 @@ export default function BillOfSaleUploader({
               </Button>
             </div>
             <p className="text-xs text-amber-900/90 font-medium leading-relaxed">{blockedNotice}</p>
-            <p className="text-[11px] text-amber-800/80">
+            <p className="text-[10px] sm:text-[11px] text-amber-800/80">
               Tip: Upload the title or purchase document first in Step 1 to add the vehicle to inventory before attaching a sale or repair.
             </p>
           </div>
         )}
 
-        {/* Dropzone Area */}
+        {/* Dropzone Area with Mobile Camera & Touch Optimizations */}
         <div
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
           onClick={() => !loading && fileInputRef.current?.click()}
           className={cn(
-            "relative border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-200",
+            "relative border-2 border-dashed rounded-2xl p-4 sm:p-6 text-center cursor-pointer transition-all duration-200",
             dragActive 
               ? "border-primary bg-primary/10 scale-[0.99] shadow-inner" 
               : "border-border/80 bg-muted/20 hover:border-primary/50 hover:bg-muted/40",
             loading && "opacity-60 pointer-events-none"
           )}
         >
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white border border-border shadow-sm flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">
-              <Upload className="w-6 h-6" />
+          <div className="flex flex-col items-center gap-2.5 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white border border-border shadow-xs flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+              <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-foreground">
-                Drop bill of sale or repair bills here, or <span className="text-primary underline underline-offset-2">browse files</span>
+            <div className="space-y-0.5">
+              <p className="text-xs sm:text-sm font-bold text-foreground">
+                Snap photo or drop sale & repair bills
               </p>
-              <p className="text-xs text-muted-foreground font-medium">
-                Supports PDF, JPG, PNG • AI auto-detects sale vs repair document
+              <p className="text-[11px] sm:text-xs text-muted-foreground font-medium">
+                PDF, JPG, PNG • Auto-detects sale vs repair document
               </p>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                fileInputRef.current?.click();
-              }}
-              className="mt-1 h-8 rounded-lg text-xs font-semibold px-4 border-border/80 hover:bg-white"
-            >
-              <Plus className="w-3.5 h-3.5 mr-1.5" />
-              Select Documents
-            </Button>
+
+            {/* Touch Action Buttons for Mobile */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+              <Button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="h-10 rounded-xl text-xs font-bold px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center justify-center gap-1.5 active:scale-95 transition-transform w-full"
+              >
+                <Camera className="w-4 h-4" />
+                Take Photo
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="h-10 rounded-xl text-xs font-semibold px-3 border-border hover:bg-white flex items-center justify-center gap-1.5 active:scale-95 transition-transform w-full bg-white"
+              >
+                <Upload className="w-4 h-4 text-muted-foreground" />
+                Browse Files
+              </Button>
+            </div>
           </div>
 
           <input
@@ -362,15 +371,29 @@ export default function BillOfSaleUploader({
               e.target.value = '';
             }}
           />
+
+          {/* Mobile Camera Input */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            className="hidden"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => {
+              const selectedFiles = Array.from(e.target.files || []);
+              handleFilesChosen(selectedFiles);
+              e.target.value = '';
+            }}
+          />
         </div>
 
         {/* Selected Files List */}
         {files.length > 0 && (
-          <div className="space-y-2.5 rounded-2xl border border-border/60 bg-muted/30 p-3.5">
-            <div className="flex items-center justify-between text-xs font-medium text-muted-foreground pb-2 border-b border-border/40">
+          <div className="space-y-2 rounded-2xl border border-border/60 bg-muted/30 p-3 sm:p-3.5">
+            <div className="flex items-center justify-between text-xs font-medium text-muted-foreground pb-1.5 border-b border-border/40">
               <span className="font-bold text-foreground flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                Ready to Process ({files.length} file{files.length === 1 ? '' : 's'})
+                Ready to Process ({files.length})
               </span>
               <div className="flex items-center gap-2">
                 <span>{formatFileSize(totalBytes)}</span>
@@ -378,25 +401,25 @@ export default function BillOfSaleUploader({
                   type="button"
                   onClick={clearAllFiles}
                   disabled={loading}
-                  className="text-muted-foreground hover:text-destructive text-xs transition-colors"
+                  className="text-muted-foreground hover:text-destructive text-xs transition-colors p-1"
                 >
                   Clear all
                 </button>
               </div>
             </div>
 
-            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-0.5">
               {files.map((file, idx) => (
                 <div 
                   key={`${file.name}-${idx}`}
                   className="flex items-center justify-between p-2 rounded-xl bg-white border border-border/60 text-xs shadow-2xs group"
                 >
-                  <div className="flex items-center gap-2.5 overflow-hidden">
+                  <div className="flex items-center gap-2 overflow-hidden mr-2">
                     <div className="h-7 w-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                       <FileText className="w-3.5 h-3.5" />
                     </div>
                     <div className="overflow-hidden">
-                      <p className="font-medium text-foreground truncate max-w-[200px] sm:max-w-[260px]" title={file.name}>
+                      <p className="font-medium text-foreground truncate max-w-[170px] sm:max-w-[240px]" title={file.name}>
                         {file.name}
                       </p>
                       <p className="text-[10px] text-muted-foreground">{formatFileSize(file.size)}</p>
@@ -406,7 +429,7 @@ export default function BillOfSaleUploader({
                     <button
                       type="button"
                       onClick={() => removeFile(idx)}
-                      className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      className="h-7 w-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors shrink-0"
                       title="Remove file"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -422,9 +445,9 @@ export default function BillOfSaleUploader({
         {loading && (
           <div className="space-y-2 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
             <div className="flex justify-between items-center text-xs text-foreground font-semibold">
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                Reading document & matching vehicle...
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                Processing sale & matching...
               </span>
               <span className="text-emerald-600 font-mono">{progress.current} / {progress.total}</span>
             </div>
@@ -434,44 +457,44 @@ export default function BillOfSaleUploader({
                 style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
               />
             </div>
-            <p className="text-[11px] text-muted-foreground">Extracting buyer name, price, or repair invoice details...</p>
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground">Reading buyer name, prices, or repair details...</p>
           </div>
         )}
 
-        {/* Optional Manual Overrides Accordion - Hidden by default for simplicity! */}
+        {/* Optional Manual Overrides Accordion */}
         <div className="rounded-2xl border border-border/70 bg-muted/20 overflow-hidden">
           <button
             type="button"
             onClick={() => setShowOverrides(!showOverrides)}
-            className="w-full flex items-center justify-between p-3.5 text-left text-xs font-bold text-foreground hover:bg-muted/40 transition-colors"
+            className="w-full flex items-center justify-between p-3 sm:p-3.5 text-left text-xs font-bold text-foreground hover:bg-muted/40 transition-colors"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">⚙️</span>
+            <div className="flex items-center gap-1.5">
+              <span>⚙️</span>
               <span>Manual Overrides / Fallbacks (Optional)</span>
               {hasOverrides && (
-                <span className="h-2 w-2 rounded-full bg-primary animate-pulse" title="Has manual override values" />
+                <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" title="Has manual override values" />
               )}
             </div>
-            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] font-normal">
+            <div className="flex items-center gap-1 text-muted-foreground text-[11px] font-normal">
               <span>{showOverrides ? 'Hide' : 'Show'}</span>
               {showOverrides ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </div>
           </button>
 
           {showOverrides && (
-            <div className="p-4 pt-1 border-t border-border/50 space-y-3 animate-in fade-in slide-in-from-top-1">
-              <p className="text-[11px] text-muted-foreground leading-normal">
-                AI automatically extracts buyer, price, and VIN from your document. You only need these fields if your document is blurry, handwritten, or missing a VIN.
+            <div className="p-3.5 sm:p-4 pt-1 border-t border-border/50 space-y-2.5 animate-in fade-in slide-in-from-top-1">
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground leading-normal">
+                AI extracts info automatically. Only fill these if your document is blurry or handwritten.
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                 <div className="relative">
                   <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     placeholder="VIN Override"
                     value={vin}
                     onChange={(e) => setVin(e.target.value.toUpperCase())}
-                    className="pl-9 bg-white border-border rounded-xl h-9 text-xs"
+                    className="pl-9 bg-white border-border rounded-xl h-10 sm:h-9 text-xs"
                   />
                 </div>
 
@@ -481,7 +504,7 @@ export default function BillOfSaleUploader({
                     placeholder="Customer / Mechanic Name"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="pl-9 bg-white border-border rounded-xl h-9 text-xs"
+                    className="pl-9 bg-white border-border rounded-xl h-10 sm:h-9 text-xs"
                   />
                 </div>
 
@@ -491,7 +514,7 @@ export default function BillOfSaleUploader({
                     placeholder="Phone Number"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="pl-9 bg-white border-border rounded-xl h-9 text-xs"
+                    className="pl-9 bg-white border-border rounded-xl h-10 sm:h-9 text-xs"
                   />
                 </div>
 
@@ -502,7 +525,7 @@ export default function BillOfSaleUploader({
                     type="email"
                     value={customerEmail}
                     onChange={(e) => setCustomerEmail(e.target.value)}
-                    className="pl-9 bg-white border-border rounded-xl h-9 text-xs"
+                    className="pl-9 bg-white border-border rounded-xl h-10 sm:h-9 text-xs"
                   />
                 </div>
 
@@ -513,7 +536,7 @@ export default function BillOfSaleUploader({
                     type="number"
                     value={salePrice}
                     onChange={(e) => setSalePrice(e.target.value)}
-                    className="pl-9 bg-white border-border rounded-xl h-9 text-xs"
+                    className="pl-9 bg-white border-border rounded-xl h-10 sm:h-9 text-xs"
                   />
                 </div>
 
@@ -524,7 +547,7 @@ export default function BillOfSaleUploader({
                     type="number"
                     value={repairTotal}
                     onChange={(e) => setRepairTotal(e.target.value)}
-                    className="pl-9 bg-white border-border rounded-xl h-9 text-xs"
+                    className="pl-9 bg-white border-border rounded-xl h-10 sm:h-9 text-xs"
                   />
                 </div>
               </div>
@@ -532,14 +555,12 @@ export default function BillOfSaleUploader({
           )}
         </div>
 
-        {/* Last Repair Document Preview/Download Actions */}
+        {/* Last Repair Document Actions */}
         {lastRepairDoc && (
           <div className="p-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 space-y-2">
-            <div className="flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300 font-semibold">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                Repair bill attached: {lastRepairDoc.fileName}
-              </span>
+            <div className="flex items-center gap-1.5 text-xs text-emerald-800 dark:text-emerald-300 font-semibold truncate">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="truncate">Attached: {lastRepairDoc.fileName}</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Button
@@ -547,7 +568,7 @@ export default function BillOfSaleUploader({
                 variant="outline"
                 size="sm"
                 onClick={() => window.open(lastRepairDoc.url, '_blank', 'noopener,noreferrer')}
-                className="h-8 text-xs font-semibold rounded-lg bg-white border-border"
+                className="h-9 sm:h-8 text-xs font-semibold rounded-lg bg-white border-border"
               >
                 Preview Doc
               </Button>
@@ -562,7 +583,7 @@ export default function BillOfSaleUploader({
                   link.click();
                   document.body.removeChild(link);
                 }}
-                className="h-8 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="h-9 sm:h-8 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 Download Doc
               </Button>
@@ -571,13 +592,13 @@ export default function BillOfSaleUploader({
         )}
       </div>
 
-      {/* Action Buttons */}
-      <div className="pt-4 border-t border-border/60">
+      {/* Action Buttons - Touch Target Optimized */}
+      <div className="pt-3 sm:pt-4 border-t border-border/60">
         <Button
           type="button"
           disabled={loading || files.length === 0}
           onClick={handleUpload}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-12 text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all active:scale-[0.99]"
+          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 sm:h-12 text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all active:scale-[0.98]"
         >
           {loading ? (
             <>

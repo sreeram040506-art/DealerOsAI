@@ -9,8 +9,8 @@ import {
   Sparkles, 
   X, 
   AlertCircle,
-  FileCheck,
-  RefreshCw
+  RefreshCw,
+  ImageIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -25,13 +25,6 @@ interface DocumentUploadProps {
   ) => void;
   onViewExisting?: (id: string, vin: string) => void;
   token: string | null;
-}
-
-function formatFileSize(bytes: number): string {
-  if (!bytes) return '0 B';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default function DocumentUpload({ onScanComplete, onViewExisting, token }: DocumentUploadProps) {
@@ -158,29 +151,29 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
   };
 
   return (
-    <div className="rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/5 via-card to-card p-5 space-y-4 shadow-sm">
+    <div className="rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/5 via-card to-card p-3.5 sm:p-5 space-y-3.5 sm:space-y-4 shadow-xs">
       {/* Header with clear description */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-border/50">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-            <Sparkles className="w-4 h-4" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-border/50">
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
           <div>
-            <h4 className="text-sm font-bold text-foreground">AI Auto-Fill From Document</h4>
-            <p className="text-xs text-muted-foreground">Upload any title, bill of sale, or auction slip to automatically populate the form</p>
+            <h4 className="text-xs sm:text-sm font-bold text-foreground">AI Auto-Fill From Document</h4>
+            <p className="text-[11px] sm:text-xs text-muted-foreground">Upload or snap a title, bill of sale, or auction slip</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground font-medium">
-          <span className="px-2 py-0.5 rounded-md bg-muted/80 border border-border/60">✓ VIN & Specs</span>
-          <span className="px-2 py-0.5 rounded-md bg-muted/80 border border-border/60">✓ Price & Date</span>
-          <span className="px-2 py-0.5 rounded-md bg-muted/80 border border-border/60">✓ Seller Info</span>
+        <div className="flex flex-wrap gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] text-muted-foreground font-medium">
+          <span className="px-1.5 py-0.5 rounded-md bg-muted/80 border border-border/60">✓ VIN & Specs</span>
+          <span className="px-1.5 py-0.5 rounded-md bg-muted/80 border border-border/60">✓ Price & Date</span>
+          <span className="px-1.5 py-0.5 rounded-md bg-muted/80 border border-border/60">✓ Seller Info</span>
         </div>
       </div>
 
-      {/* Upload Drop Zone */}
+      {/* Upload Drop Zone - Touch and Mobile Optimized */}
       <div 
         className={cn(
-          "relative border-2 border-dashed rounded-xl p-6 transition-all duration-300 text-center cursor-pointer",
+          "relative border-2 border-dashed rounded-xl p-4 sm:p-6 transition-all duration-300 text-center cursor-pointer",
           dragActive 
             ? "border-primary bg-primary/10 scale-[0.99] shadow-inner" 
             : "border-border/80 bg-background/60 hover:border-primary/50 hover:bg-muted/30",
@@ -192,58 +185,57 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
         onClick={() => !scanning && fileInputRef.current?.click()}
       >
         {scanning ? (
-          <div className="flex flex-col items-center gap-3 py-3 animate-in fade-in zoom-in duration-200">
+          <div className="flex flex-col items-center gap-3 py-4 animate-in fade-in zoom-in duration-200">
             <div className="relative">
-              <div className="w-14 h-14 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-              <FileText className="absolute inset-0 m-auto w-6 h-6 text-primary animate-pulse" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+              <FileText className="absolute inset-0 m-auto w-5 h-5 sm:w-6 sm:h-6 text-primary animate-pulse" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              <p className="text-xs sm:text-sm font-semibold text-foreground flex items-center justify-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
                 AI is reading {currentFileName ? `"${currentFileName}"` : 'document'}...
               </p>
-              <p className="text-xs text-muted-foreground">
-                Extracting VIN, Year, Make, Model, Mileage, and Purchase Details
+              <p className="text-[11px] sm:text-xs text-muted-foreground">
+                Extracting VIN, specifications, and purchase details
               </p>
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex justify-center items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
-                <Upload className="w-5 h-5" />
+          <div className="space-y-3.5">
+            <div className="flex justify-center items-center gap-2">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-xs">
+                <Camera className="w-5 h-5" />
               </div>
             </div>
             
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground">
-                Drag & drop your document here, or <span className="text-primary underline underline-offset-2">browse</span>
+            <div className="space-y-0.5">
+              <p className="text-xs sm:text-sm font-semibold text-foreground">
+                Snap a photo or drop document here
               </p>
-              <p className="text-xs text-muted-foreground">
-                Supports PDF, JPG, PNG, DOC • Up to 25MB
+              <p className="text-[11px] sm:text-xs text-muted-foreground">
+                PDF, JPG, PNG • Mobile camera supported
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+            {/* Mobile-Friendly Action Buttons with Minimum 44px Touch Targets */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 w-full max-w-sm mx-auto" onClick={(e) => e.stopPropagation()}>
               <Button 
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                variant="outline" 
-                size="sm"
-                className="rounded-lg h-9 text-xs font-semibold px-4 border-border/80 hover:bg-muted"
+                onClick={() => cameraInputRef.current?.click()}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl h-11 text-xs font-bold px-4 shadow-sm w-full flex items-center justify-center gap-2 active:scale-95 transition-transform"
               >
-                <Upload className="w-3.5 h-3.5 mr-1.5" />
-                Choose File
+                <Camera className="w-4 h-4" />
+                Take Photo (Camera)
               </Button>
               
               <Button 
                 type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                size="sm"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg h-9 text-xs font-semibold px-4 shadow-sm"
+                onClick={() => fileInputRef.current?.click()}
+                variant="outline" 
+                className="rounded-xl h-11 text-xs font-semibold px-4 border-border/80 hover:bg-muted w-full flex items-center justify-center gap-2 active:scale-95 transition-transform bg-white"
               >
-                <Camera className="w-3.5 h-3.5 mr-1.5" />
-                Take Photo
+                <Upload className="w-4 h-4 text-muted-foreground" />
+                Choose File / Photos
               </Button>
             </div>
           </div>
@@ -259,11 +251,11 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
             if (files.length > 0) handleFiles(files);
-            // Reset input so same file can be picked again if desired
             e.target.value = '';
           }}
         />
         
+        {/* Mobile Camera Input */}
         <input 
           type="file" 
           className="hidden" 
@@ -280,13 +272,16 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
 
       {/* Success banner if a document was successfully extracted */}
       {lastSuccessName && !scanning && (
-        <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300">
+          <div className="flex items-center gap-2 overflow-hidden">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <div>
-              <span className="font-semibold">Successfully auto-filled from: </span>
-              <span className="font-mono">{lastSuccessName}</span>
-              {lastSuccessInfo && <span className="ml-1 opacity-90">({lastSuccessInfo})</span>}
+            <div className="overflow-hidden">
+              <span className="font-semibold">Auto-filled: </span>
+              {lastSuccessInfo ? (
+                <span className="font-bold text-foreground">{lastSuccessInfo}</span>
+              ) : (
+                <span className="font-mono truncate">{lastSuccessName}</span>
+              )}
             </div>
           </div>
           <Button
@@ -294,7 +289,7 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
             variant="ghost"
             size="sm"
             onClick={() => fileInputRef.current?.click()}
-            className="h-7 text-[11px] px-2 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
+            className="h-8 text-[11px] px-3 self-end sm:self-auto text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 rounded-lg shrink-0"
           >
             <RefreshCw className="w-3 h-3 mr-1" />
             Scan another
@@ -305,16 +300,16 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
       {/* Error banner if scan encountered an issue */}
       {scanError && !scanning && (
         <div className="flex items-center justify-between p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-700 dark:text-red-300">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-hidden">
             <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
-            <span>{scanError}</span>
+            <span className="truncate">{scanError}</span>
           </div>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={() => setScanError(null)}
-            className="h-7 w-7 p-0 text-red-700 dark:text-red-300 hover:bg-red-500/20 rounded-md"
+            className="h-7 w-7 p-0 text-red-700 dark:text-red-300 hover:bg-red-500/20 rounded-md shrink-0"
           >
             <X className="w-3.5 h-3.5" />
           </Button>

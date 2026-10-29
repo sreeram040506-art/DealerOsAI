@@ -38,6 +38,7 @@ const SaleDocuments = lazy(() => import("./pages/SaleDocuments"));
 const Leases = lazy(() => import("./pages/Leases"));
 const LeaseDetail = lazy(() => import("./pages/LeaseDetail"));
 const PhotoStudio = lazy(() => import("./pages/PhotoStudio"));
+const MobileScanner = lazy(() => import("./pages/MobileScanner"));
 const PublicListing = lazy(() => import("./pages/PublicListing"));
 
 // Preload manager — memoized to prevent re-renders from parent
@@ -121,6 +122,11 @@ export default function App() {
                 <Route path="/documents-forms" element={
                   <ProtectedRoute>
                     <UsedVehicleForms />
+                  </ProtectedRoute>
+                } />
+                <Route path="/mobile-scanner" element={
+                  <ProtectedRoute>
+                    <MobileScanner />
                   </ProtectedRoute>
                 } />
                 <Route path="/marketing" element={

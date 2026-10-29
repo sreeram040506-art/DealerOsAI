@@ -3,16 +3,13 @@ import { Button } from '@/components/ui/button';
 import { 
   FileUp, 
   CheckCircle2, 
-  Download, 
-  FileArchive, 
-  Database, 
   Upload, 
   X, 
   FileText, 
   Loader2, 
   AlertCircle, 
   Sparkles,
-  Layers,
+  Camera,
   Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -65,12 +62,12 @@ export default function UsedVehicleFormGenerator({
   const [pushToInventory, setPushToInventory] = useState(true);
   const [dragActive, setDragActive] = useState(false);
   const sourceInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [batchFailures, setBatchFailures] = useState<{ fileName: string; reason: string; fileObj?: File }[]>([]);
 
   const handleFilesChosen = (newFiles: File[]) => {
     if (newFiles.length === 0) return;
     setSourceFiles(prev => {
-      // Prevent duplicates by filename and size
       const existing = new Set(prev.map(f => `${f.name}-${f.size}`));
       const filtered = newFiles.filter(f => !existing.has(`${f.name}-${f.size}`));
       return [...prev, ...filtered];
@@ -183,7 +180,6 @@ export default function UsedVehicleFormGenerator({
     for (const file of filesToProcess) {
       await processFile(file);
       if (filesToProcess.length > 1) {
-        // Safe 1s pause between requests to preserve API limits
         await new Promise(resolve => setTimeout(resolve, 800));
       }
     }
@@ -192,7 +188,6 @@ export default function UsedVehicleFormGenerator({
       toast.success(`Successfully processed ${successCount} vehicle document(s).`, {
         icon: <CheckCircle2 className="w-4 h-4 text-primary" />,
       });
-      // Remove successfully processed files from queue
       const failedNames = new Set(failures.map(f => f.fileName));
       setSourceFiles(prev => prev.filter(f => failedNames.has(f.name)));
     }
@@ -220,38 +215,38 @@ export default function UsedVehicleFormGenerator({
   const totalBytes = sourceFiles.reduce((acc, file) => acc + file.size, 0);
 
   return (
-    <div className="rounded-[24px] border border-border bg-white p-6 space-y-6 shadow-sm flex flex-col justify-between">
-      <div className="space-y-5">
+    <div className="rounded-[20px] sm:rounded-[24px] border border-border bg-white p-4 sm:p-6 space-y-5 sm:space-y-6 shadow-xs flex flex-col justify-between">
+      <div className="space-y-4 sm:space-y-5">
         {/* Card Header with Badges */}
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-wider">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-wider">
               <FileUp className="w-3 h-3" />
               Vehicle Intake
             </span>
-            <span className="text-xs text-muted-foreground font-medium">Step 1 of 2</span>
+            <span className="text-[11px] sm:text-xs text-muted-foreground font-medium">Step 1 of 2</span>
           </div>
-          <h3 className="text-lg font-bold text-foreground tracking-tight">
+          <h3 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
             Purchase Documents & Titles
           </h3>
-          <p className="text-sm text-muted-foreground font-medium mt-1 leading-relaxed">
+          <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-1 leading-relaxed">
             Upload purchase documents to extract vehicle specs and generate state Used Vehicle Records.
           </p>
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Titles</span>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Auction Slips</span>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Dealer Invoices</span>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">MSO / Certificates</span>
+          <div className="flex flex-wrap gap-1 sm:gap-1.5 mt-2.5">
+            <span className="text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Titles</span>
+            <span className="text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Auction Slips</span>
+            <span className="text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">Dealer Invoices</span>
+            <span className="text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">MSO / Certificates</span>
           </div>
         </div>
 
         {/* Batch Failures Alert */}
         {batchFailures.length > 0 && (
-          <div className="rounded-2xl border border-red-300 bg-red-50/80 p-4 space-y-3 animate-in fade-in">
+          <div className="rounded-2xl border border-red-300 bg-red-50/80 p-3.5 sm:p-4 space-y-2.5 animate-in fade-in">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-red-900 font-bold text-xs uppercase tracking-wider">
-                <AlertCircle className="w-4 h-4 text-red-600" />
-                <span>{batchFailures.length} file(s) encountered issues</span>
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{batchFailures.length} file(s) had issues</span>
               </div>
               <Button 
                 variant="ghost" 
@@ -262,11 +257,11 @@ export default function UsedVehicleFormGenerator({
                 Dismiss
               </Button>
             </div>
-            <ul className="space-y-1.5 max-h-36 overflow-y-auto text-xs text-red-900">
+            <ul className="space-y-1 max-h-36 overflow-y-auto text-xs text-red-900">
               {batchFailures.map((f, i) => (
                 <li key={i} className="flex items-start gap-1.5 font-medium">
                   <span className="font-mono text-[11px] shrink-0 font-semibold">{f.fileName}:</span>
-                  <span className="text-red-800/80">{f.reason}</span>
+                  <span className="text-red-800/80 truncate">{f.reason}</span>
                 </li>
               ))}
             </ul>
@@ -276,52 +271,60 @@ export default function UsedVehicleFormGenerator({
               size="sm"
               onClick={retryFailures}
               disabled={loading}
-              className="text-xs font-semibold h-8 bg-white border-red-200 text-red-900 hover:bg-red-100/60"
+              className="text-xs font-semibold h-8 bg-white border-red-200 text-red-900 hover:bg-red-100/60 w-full sm:w-auto"
             >
               Retry Failed Files
             </Button>
           </div>
         )}
 
-        {/* Dropzone Area */}
+        {/* Dropzone Area with Mobile Camera & Touch Optimizations */}
         <div
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
           onClick={() => !loading && sourceInputRef.current?.click()}
           className={cn(
-            "relative border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-200",
+            "relative border-2 border-dashed rounded-2xl p-4 sm:p-6 text-center cursor-pointer transition-all duration-200",
             dragActive 
               ? "border-primary bg-primary/10 scale-[0.99] shadow-inner" 
               : "border-border/80 bg-muted/20 hover:border-primary/50 hover:bg-muted/40",
             loading && "opacity-60 pointer-events-none"
           )}
         >
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white border border-border shadow-sm flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
-              <Upload className="w-6 h-6" />
+          <div className="flex flex-col items-center gap-2.5 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white border border-border shadow-xs flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+              <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-foreground">
-                Drop purchase documents here, or <span className="text-primary underline underline-offset-2">browse files</span>
+            <div className="space-y-0.5">
+              <p className="text-xs sm:text-sm font-bold text-foreground">
+                Snap photo with camera or drop files
               </p>
-              <p className="text-xs text-muted-foreground font-medium">
-                Supports PDF, JPG, PNG, DOC • Batch multiple files at once
+              <p className="text-[11px] sm:text-xs text-muted-foreground font-medium">
+                Supports PDF, JPG, PNG • Batch multiple files
               </p>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                sourceInputRef.current?.click();
-              }}
-              className="mt-1 h-8 rounded-lg text-xs font-semibold px-4 border-border/80 hover:bg-white"
-            >
-              <Plus className="w-3.5 h-3.5 mr-1.5" />
-              Select Documents
-            </Button>
+
+            {/* Touch Action Buttons for Mobile */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+              <Button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="h-10 rounded-xl text-xs font-bold px-3 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs flex items-center justify-center gap-1.5 active:scale-95 transition-transform w-full"
+              >
+                <Camera className="w-4 h-4" />
+                Take Photo
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => sourceInputRef.current?.click()}
+                className="h-10 rounded-xl text-xs font-semibold px-3 border-border hover:bg-white flex items-center justify-center gap-1.5 active:scale-95 transition-transform w-full bg-white"
+              >
+                <Upload className="w-4 h-4 text-muted-foreground" />
+                Browse Files
+              </Button>
+            </div>
           </div>
 
           <input
@@ -336,15 +339,29 @@ export default function UsedVehicleFormGenerator({
               e.target.value = '';
             }}
           />
+
+          {/* Mobile Camera Input */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            className="hidden"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => {
+              const files = Array.from(e.target.files || []);
+              handleFilesChosen(files);
+              e.target.value = '';
+            }}
+          />
         </div>
 
         {/* Selected Files List */}
         {sourceFiles.length > 0 && (
-          <div className="space-y-2.5 rounded-2xl border border-border/60 bg-muted/30 p-3.5">
-            <div className="flex items-center justify-between text-xs font-medium text-muted-foreground pb-2 border-b border-border/40">
+          <div className="space-y-2 rounded-2xl border border-border/60 bg-muted/30 p-3 sm:p-3.5">
+            <div className="flex items-center justify-between text-xs font-medium text-muted-foreground pb-1.5 border-b border-border/40">
               <span className="font-bold text-foreground flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-primary" />
-                Ready to Process ({sourceFiles.length} file{sourceFiles.length === 1 ? '' : 's'})
+                Ready to Process ({sourceFiles.length})
               </span>
               <div className="flex items-center gap-2">
                 <span>{formatFileSize(totalBytes)}</span>
@@ -352,25 +369,25 @@ export default function UsedVehicleFormGenerator({
                   type="button"
                   onClick={clearAllFiles}
                   disabled={loading}
-                  className="text-muted-foreground hover:text-destructive text-xs transition-colors"
+                  className="text-muted-foreground hover:text-destructive text-xs transition-colors p-1"
                 >
                   Clear all
                 </button>
               </div>
             </div>
 
-            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-0.5">
               {sourceFiles.map((file, idx) => (
                 <div 
                   key={`${file.name}-${idx}`}
                   className="flex items-center justify-between p-2 rounded-xl bg-white border border-border/60 text-xs shadow-2xs group"
                 >
-                  <div className="flex items-center gap-2.5 overflow-hidden">
+                  <div className="flex items-center gap-2 overflow-hidden mr-2">
                     <div className="h-7 w-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                       <FileText className="w-3.5 h-3.5" />
                     </div>
                     <div className="overflow-hidden">
-                      <p className="font-medium text-foreground truncate max-w-[200px] sm:max-w-[260px]" title={file.name}>
+                      <p className="font-medium text-foreground truncate max-w-[170px] sm:max-w-[240px]" title={file.name}>
                         {file.name}
                       </p>
                       <p className="text-[10px] text-muted-foreground">{formatFileSize(file.size)}</p>
@@ -380,10 +397,10 @@ export default function UsedVehicleFormGenerator({
                     <button
                       type="button"
                       onClick={() => removeFile(idx)}
-                      className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      className="h-7 w-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors shrink-0"
                       title="Remove file"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <X className="w-4 h-4" />
                     </button>
                   )}
                 </div>
@@ -396,11 +413,11 @@ export default function UsedVehicleFormGenerator({
         {loading && (
           <div className="space-y-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
             <div className="flex justify-between items-center text-xs text-foreground font-semibold">
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                {currentProcessingFile ? `Processing: ${currentProcessingFile}` : 'Processing documents...'}
+              <span className="flex items-center gap-1.5 truncate max-w-[200px] sm:max-w-none">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+                <span className="truncate">{currentProcessingFile ? `Processing: ${currentProcessingFile}` : 'Processing documents...'}</span>
               </span>
-              <span className="text-primary font-mono">{progress.current} / {progress.total}</span>
+              <span className="text-primary font-mono shrink-0 ml-2">{progress.current} / {progress.total}</span>
             </div>
             <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden">
               <div 
@@ -408,21 +425,21 @@ export default function UsedVehicleFormGenerator({
                 style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
               />
             </div>
-            <p className="text-[11px] text-muted-foreground">Extracting VIN, specifications, pricing, and generating records...</p>
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground">Extracting VIN, specs, pricing, and generating records...</p>
           </div>
         )}
 
         {/* Options & Configuration */}
-        <div className="p-3.5 rounded-2xl border border-border/70 bg-muted/20 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5 pr-2">
+        <div className="p-3 sm:p-3.5 rounded-2xl border border-border/70 bg-muted/20 space-y-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-0.5">
               <Label htmlFor="push-inv-toggle" className="text-xs font-bold text-foreground cursor-pointer">
                 Add directly to Active Inventory
               </Label>
-              <p className="text-[11px] text-muted-foreground leading-normal">
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground leading-normal">
                 {pushToInventory 
-                  ? "✓ Adds vehicle to for-sale inventory and logs to Vehicle Database" 
-                  : "✓ Logs to Vehicle Database and generates PDF only (not for sale)"}
+                  ? "✓ Adds vehicle to for-sale inventory and database" 
+                  : "✓ Saves to database & PDF only (not for sale)"}
               </p>
             </div>
             <Switch
@@ -430,23 +447,24 @@ export default function UsedVehicleFormGenerator({
               checked={pushToInventory}
               onCheckedChange={setPushToInventory}
               disabled={loading}
+              className="shrink-0"
             />
           </div>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="pt-4 border-t border-border/60">
+      {/* Action Buttons - Touch Target Optimized */}
+      <div className="pt-3 sm:pt-4 border-t border-border/60">
         <Button
           type="button"
           disabled={loading || sourceFiles.length === 0}
           onClick={() => handleGenerate(pushToInventory)}
-          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl h-12 text-xs font-black uppercase tracking-wider shadow-lg shadow-primary/20 transition-all active:scale-[0.99]"
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl h-11 sm:h-12 text-xs font-black uppercase tracking-wider shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
         >
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Scanning & Processing ({progress.current}/{progress.total})...
+              Scanning ({progress.current}/{progress.total})...
             </>
           ) : (
             <>
