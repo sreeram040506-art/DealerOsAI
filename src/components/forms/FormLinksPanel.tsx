@@ -90,19 +90,44 @@ export default function FormLinksPanel() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const generate = async (kind: 'sticker' | 'hangtag') => {
+  const generate = async (kind: 'sticker' | 'hangtag' | 'contract' | 'loan' | 'inspection') => {
     if (!vehicleId) return toast.error('Choose a vehicle first.');
     setPrinting(kind);
     try {
-      const res = await apiFetch(`/forms/generate/${kind}`, token, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vehicleId }) });
+      const body: Record<string, unknown> = { vehicleId };
+      if (kind === 'contract' && terms) {
+        body.terms = {
+          cashPrice: terms.cashPrice || (vehicle?.askingPrice ?? ''),
+          docFee: terms.docFee,
+          taxAndFees: terms.taxAndFees,
+          addOns: terms.addOns,
+          tradeAllowance: terms.tradeAllowance,
+        };
+      }
+      const res = await apiFetch(`/forms/generate/${kind}`, token, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `Could not create it (${res.status})`);
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a');
-      a.href = url; a.download = `${kind === 'sticker' ? 'Window_Sticker' : 'Hangtag'}_${(vehicle?.vin || 'vehicle').slice(-6)}.pdf`;
+      const kindNames: Record<string, string> = {
+        sticker: 'Window_Sticker',
+        hangtag: 'Hangtag',
+        contract: 'Purchase_Contract',
+        loan: 'Loan_Application',
+        inspection: 'Inspection_Report',
+      };
+      const label = kindNames[kind] || 'Form';
+      a.href = url; a.download = `${label}_${(vehicle?.vin || 'vehicle').slice(-6)}.pdf`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       queryClient.invalidateQueries({ queryKey: ['registry'] });
-      toast.success(kind === 'sticker' ? 'Window sticker created and saved to the Vehicle Database.' : 'Hangtag created and saved to the Vehicle Database.');
+      const titles: Record<string, string> = {
+        sticker: 'Window sticker',
+        hangtag: 'Hangtag',
+        contract: 'Purchase Contract',
+        loan: 'Loan application',
+        inspection: 'Inspection report',
+      };
+      toast.success(`${titles[kind] || 'Form'} created and saved to the Vehicle Database.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not create it.');
     } finally {
@@ -186,14 +211,27 @@ export default function FormLinksPanel() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-bold text-foreground">Made straight from the vehicle record</p>
-          <p className="text-xs text-muted-foreground">Window sticker and mirror hangtag: choose a vehicle above, then create. Saved to the Vehicle Database too.</p>
+          <p className="text-sm font-bold text-foreground">Generate Official Forms Directly</p>
+          <p className="text-xs text-muted-foreground">Select a vehicle above to generate official filled PDFs instantly and save to the Vehicle Database.</p>
         </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" disabled={!vehicleId || printing !== null} onClick={() => generate('sticker')}>{printing === 'sticker' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />} Window sticker</Button>
-          <Button type="button" variant="outline" disabled={!vehicleId || printing !== null} onClick={() => generate('hangtag')}>{printing === 'hangtag' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Tag className="mr-2 h-4 w-4" />} Hangtag</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" disabled={!vehicleId || printing !== null} onClick={() => generate('contract')}>
+            {printing === 'contract' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1.5 h-3.5 w-3.5" />} Purchase Contract
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={!vehicleId || printing !== null} onClick={() => generate('loan')}>
+            {printing === 'loan' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1.5 h-3.5 w-3.5" />} Credit App
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={!vehicleId || printing !== null} onClick={() => generate('inspection')}>
+            {printing === 'inspection' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1.5 h-3.5 w-3.5" />} Inspection
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={!vehicleId || printing !== null} onClick={() => generate('sticker')}>
+            {printing === 'sticker' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Printer className="mr-1.5 h-3.5 w-3.5" />} Window Sticker
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={!vehicleId || printing !== null} onClick={() => generate('hangtag')}>
+            {printing === 'hangtag' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Tag className="mr-1.5 h-3.5 w-3.5" />} Hangtag
+          </Button>
         </div>
       </div>
 

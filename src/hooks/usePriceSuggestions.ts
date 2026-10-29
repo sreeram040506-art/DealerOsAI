@@ -14,7 +14,7 @@ export interface PriceSuggestion {
   marketHigh?: number | null;
   belowCost: boolean;
   reason?: string | null;
-  comparables?: { title: string; price: number; mileage?: number | null; url: string; source: string }[] | null;
+  comparables?: { title: string; price: number | null; mileage?: number | null; url: string; source: string }[] | null;
   createdAt: string;
 }
 

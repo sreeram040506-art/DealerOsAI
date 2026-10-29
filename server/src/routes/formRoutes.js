@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import prisma from '../db/prisma.js';
 import { FORMS, FORM_TYPES, publicDefinition, validateSubmission } from '../services/formDefinitions.js';
-import { renderFormPdf, renderStickerPdf, renderHangtagPdf } from '../services/formPdf.js';
+import { renderFormPdf, renderStickerPdf, renderHangtagPdf, renderPurchaseContractPdf, renderLoanApplicationPdf, renderInspectionReportPdf } from '../services/formPdf.js';
 import { dispatchNotification } from '../services/notificationDispatcher.js';
 
 const isObjectId = (value) => /^[a-f0-9]{24}$/i.test(String(value || ''));
@@ -118,20 +118,46 @@ staffRouter.post('/:id/revoke', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Window sticker and hangtag come straight from the inventory record, no link needed.
+// Generate forms straight from the inventory record
 staffRouter.post('/generate/:kind', async (req, res, next) => {
   try {
     const kind = req.params.kind;
-    if (!['sticker', 'hangtag'].includes(kind)) return res.status(404).json({ message: 'Unknown form.' });
+    const validKinds = ['sticker', 'hangtag', 'contract', 'loan', 'inspection'];
+    if (!validKinds.includes(kind)) return res.status(404).json({ message: 'Unknown form.' });
     if (!isObjectId(req.body?.vehicleId)) return res.status(400).json({ message: 'Choose a vehicle.' });
     const [vehicle, dealership] = await Promise.all([
       prisma.vehicle.findFirst({ where: { id: req.body.vehicleId, dealershipId: req.dealershipId }, select: vehicleSelect }),
       prisma.dealership.findUnique({ where: { id: req.dealershipId }, select: dealerSelect }),
     ]);
     if (!vehicle) return res.status(404).json({ message: 'Vehicle not found.' });
-    const pdf = kind === 'sticker' ? await renderStickerPdf({ vehicle, dealership }) : await renderHangtagPdf({ vehicle, dealership });
-    const label = kind === 'sticker' ? 'Window_Sticker' : 'Hangtag';
-    await logToRegistry({ dealershipId: req.dealershipId, vehicle, registryType: kind === 'sticker' ? 'Window Sticker' : 'Hangtag', pdf, fileName: fileNameFor(label, vehicle) });
+
+    let pdf;
+    let label;
+    let registryType;
+
+    if (kind === 'sticker') {
+      pdf = await renderStickerPdf({ vehicle, dealership });
+      label = 'Window_Sticker';
+      registryType = 'Window Sticker';
+    } else if (kind === 'hangtag') {
+      pdf = await renderHangtagPdf({ vehicle, dealership });
+      label = 'Hangtag';
+      registryType = 'Hangtag';
+    } else if (kind === 'contract') {
+      pdf = await renderPurchaseContractPdf({ data: {}, vehicle, dealership, terms: req.body?.terms || {}, submittedAt: new Date() });
+      label = 'Purchase_Contract';
+      registryType = 'Purchase Contract';
+    } else if (kind === 'loan') {
+      pdf = await renderLoanApplicationPdf({ data: {}, vehicle, dealership, terms: req.body?.terms || {}, submittedAt: new Date() });
+      label = 'Loan_Application';
+      registryType = 'Loan Application';
+    } else if (kind === 'inspection') {
+      pdf = await renderInspectionReportPdf({ data: {}, vehicle, dealership, submittedAt: new Date() });
+      label = 'Inspection_Report';
+      registryType = 'Inspection Report';
+    }
+
+    await logToRegistry({ dealershipId: req.dealershipId, vehicle, registryType, pdf, fileName: fileNameFor(label, vehicle) });
     res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': pdf.length, 'Content-Disposition': `attachment; filename="${fileNameFor(label, vehicle)}"` });
     res.end(pdf);
   } catch (err) { next(err); }

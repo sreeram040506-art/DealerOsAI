@@ -59,14 +59,14 @@ export default function PriceSuggestionCard({ vehicleId }: { vehicleId: string }
       )}
       {!!pending.comparables?.length && (
         <details className="text-xs">
-          <summary className="cursor-pointer font-bold text-muted-foreground">See the {pending.comparables.length} listings used</summary>
+          <summary className="cursor-pointer font-bold text-muted-foreground">See the {pending.comparables.length} {pending.comparables.every((c) => c.price == null) ? 'price guides' : 'listings'} used</summary>
           <ul className="mt-2 space-y-1">
             {pending.comparables.map((c) => (
               <li key={c.url} className="flex items-center justify-between gap-3">
                 <a href={safeHref(c.url)} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 items-center gap-1.5 text-primary hover:underline">
                   <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" /><span className="truncate">{c.source}{c.mileage ? ` · ${c.mileage.toLocaleString()} mi` : ''}</span>
                 </a>
-                <span className="font-bold tabular-nums text-foreground">{formatCurrency(c.price)}</span>
+                <span className="font-bold tabular-nums text-foreground">{c.price == null ? <span className="text-xs font-medium text-muted-foreground">price guide</span> : formatCurrency(c.price)}</span>
               </li>
             ))}
           </ul>

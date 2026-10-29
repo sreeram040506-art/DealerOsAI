@@ -36,3 +36,8 @@ server/data/demand_model.json
 # scripts/setup-bg-removal-assets.mjs (runs automatically on npm install) so the feature works
 # offline. Fetched from imgly's CDN, not authored here, so it doesn't belong in git history.
 public/bg-removal/
+
+# Local exported / test reports
+PnL_*.pdf
+Revenue_Report_*.pdf
+

@@ -119,7 +119,7 @@ const PASSES = [
   },
 ];
 
-async function searchOnce(prompt, apiKey, loc) {
+async function callSearch(prompt, apiKey, loc) {
   const response = await fetch(`${process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'}/responses`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -130,7 +130,11 @@ async function searchOnce(prompt, apiKey, loc) {
     const detail = await response.text().catch(() => '');
     throw new Error(`Market search failed (${response.status}) ${detail.slice(0, 200)}`);
   }
-  const { text, cited } = readResponse(await response.json());
+  return readResponse(await response.json());
+}
+
+async function searchOnce(prompt, apiKey, loc) {
+  const { text, cited } = await callSearch(prompt, apiKey, loc);
   const json = text.match(/\{[\s\S]*\}/)?.[0];
   if (!json) return [];
   let parsed;
@@ -139,6 +143,27 @@ async function searchOnce(prompt, apiKey, loc) {
   const asked = Array.isArray(parsed.comparables) ? parsed.comparables.length : 0;
   if (asked !== cleaned.length) console.log(`[Pricing] ${asked} listings returned, ${cleaned.length} kept after checks`);
   return cleaned;
+}
+
+/**
+ * Last resort when too few listings turn up: ask for the going retail price range from price
+ * guides and market-value pages. The range must come with pages the search actually opened, and
+ * it is only ever shown as an estimate.
+ */
+export async function estimateRange(vehicle, loc, apiKey) {
+  const prompt = `What is the current retail market price range for a used ${vehicle.year} ${vehicle.make} ${vehicle.model} with about ${Number(vehicle.mileage).toLocaleString('en-US')} miles, sold by a dealership in ${loc.state}? Use price guides and market-value pages (Kelley Blue Book, Edmunds, CarGurus market value, J.D. Power / NADA, Cars.com) and any similar listings you find. I want what dealers typically ASK, not trade-in value.
+Reply with JSON only, no other text: {"low":11000,"high":13500,"basis":"one short sentence on where the range comes from"}
+"low" and "high" are US dollars as plain numbers.`;
+  const { text, cited } = await callSearch(prompt, apiKey, loc);
+  const json = text.match(/\{[\s\S]*\}/)?.[0];
+  if (!json || !cited.size) return null;
+  let parsed;
+  try { parsed = JSON.parse(json); } catch { return null; }
+  const low = Number(parsed.low);
+  const high = Number(parsed.high);
+  if (!Number.isFinite(low) || !Number.isFinite(high) || low < 1000 || high > 500000 || low > high || high > low * 2.5) return null;
+  const sources = [...cited.values()].slice(0, 5).map((url) => ({ title: hostOf(url) || 'Price guide', price: null, mileage: null, url, source: hostOf(url) || 'Price guide' }));
+  return { low, high, sources };
 }
 
 /**
@@ -189,9 +214,22 @@ export async function checkVehicle(vehicleId, dealershipId, { now = new Date() }
   }
 
   const base = { vehicleId, dealershipId, daysOnLot: daysInStock(vehicle, now), currentPrice: vehicle.askingPrice ?? null };
-  const market = marketFrom(comparables);
+  let market = marketFrom(comparables);
+  let estimated = false;
   if (!market) {
-    const record = await prisma.priceSuggestion.create({ data: { ...base, status: 'NO_DATA', reason: `Only ${comparables.length} comparable listing${comparables.length === 1 ? ' was' : 's were'} found on CarMax, listing sites and dealership websites; at least ${MIN_COMPARABLES} are needed to suggest a price. Try again later, or check similar vehicles by hand.`, comparables } });
+    // Not enough listings: fall back to the going range from price guides, clearly marked as an estimate.
+    try {
+      const guide = await estimateRange(vehicle, locationOf(dealership?.address), apiKey);
+      if (guide) {
+        market = { low: guide.low, high: guide.high, median: (guide.low + guide.high) / 2, used: guide.sources };
+        estimated = true;
+      }
+    } catch (err) {
+      console.error('[Pricing] Price-range estimate failed:', err.message);
+    }
+  }
+  if (!market) {
+    const record = await prisma.priceSuggestion.create({ data: { ...base, status: 'NO_DATA', reason: `Only ${comparables.length} comparable listing${comparables.length === 1 ? ' was' : 's were'} found on CarMax, listing sites and dealership websites, and no price-guide range could be found either. Try again later, or check similar vehicles by hand.`, comparables } });
     return { record };
   }
 
@@ -204,13 +242,20 @@ export async function checkVehicle(vehicleId, dealershipId, { now = new Date() }
     comparables: market.used,
   };
   const current = vehicle.askingPrice;
-  const rough = market.used.length < CONFIDENT_COMPARABLES ? ` Only ${market.used.length} listings were found, so treat this as a rough guide.` : '';
+  const widenedNote = widened ? ', search widened to more years and areas' : '';
+  // How the market figure was reached, in plain words.
+  const basis = estimated
+    ? `the estimated market range of ${money(market.low)}–${money(market.high)} (midpoint ${money(market.median)})`
+    : `the market median of ${money(market.median)} (range ${money(market.low)}–${money(market.high)}, ${market.used.length} similar listings${widenedNote})`;
+  const caution = estimated
+    ? ' Too few matching listings were found, so this is an estimate from price guides rather than from specific cars. Treat it as a rough guide.'
+    : market.used.length < CONFIDENT_COMPARABLES ? ` Only ${market.used.length} listings were found, so treat this as a rough guide.` : '';
   if (current && Math.abs(current - suggested) / suggested < CHANGE_THRESHOLD) {
-    return { record: await prisma.priceSuggestion.create({ data: { ...data, status: 'IN_LINE', reason: `Your price of ${money(current)} is in line with the market (${money(market.median)} from ${market.used.length} listings${widened ? ', search widened to more years and areas' : ''}).${rough}` } }) };
+    return { record: await prisma.priceSuggestion.create({ data: { ...data, status: 'IN_LINE', reason: `Your price of ${money(current)} is in line with ${basis}.${caution}` } }) };
   }
   const reason = current
-    ? `Your price of ${money(current)} is ${Math.round((Math.abs(current - suggested) / suggested) * 100)}% ${current > suggested ? 'above' : 'below'} the market median of ${money(market.median)} (range ${money(market.low)}–${money(market.high)}, ${market.used.length} similar listings${widened ? '; search widened to more years and areas' : ''}).${rough}`
-    : `No asking price is set. Similar vehicles list around ${money(market.median)} (range ${money(market.low)}–${money(market.high)}, ${market.used.length} listings).`;
+    ? `Your price of ${money(current)} is ${Math.round((Math.abs(current - suggested) / suggested) * 100)}% ${current > suggested ? 'above' : 'below'} ${basis}.${caution}`
+    : `No asking price is set. Similar vehicles are priced around ${money(market.median)}, based on ${basis}.${caution}`;
   return { record: await prisma.priceSuggestion.create({ data: { ...data, status: 'PENDING', reason } }) };
 }
 
