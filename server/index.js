@@ -23,7 +23,11 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 
   // Ensure super admin accounts exist on every boot
-  await ensureSuperAdmin();
+  try {
+    await ensureSuperAdmin();
+  } catch (e) {
+    console.error('[Boot] ensureSuperAdmin failed (non-fatal):', e?.message || e);
+  }
   
   // Self-ping logic to prevent Render sleep (every 5 minutes)
   const renderUrl = process.env.VITE_API_ORIGIN;
@@ -98,8 +102,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 });
 
 // Handle unhandled promise rejections
+// Log them but do NOT crash the server — background tasks (cron jobs, training, marketing)
+// can produce transient rejections (e.g. a momentary DB hiccup) that should not take down
+// the entire API for every connected user.
 process.on('unhandledRejection', (err) => {
-  console.error(`Error: ${err.message}`);
-  // Close server & exit process
-  server.close(() => process.exit(1));
+  console.error('[UnhandledRejection]', err?.message || err);
+  if (err?.stack) console.error(err.stack);
 });

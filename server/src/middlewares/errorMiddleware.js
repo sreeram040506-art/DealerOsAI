@@ -26,6 +26,13 @@ export const errorHandler = (err, req, res, next) => {
     }
   }
 
+  // Map Prisma connection/timeout errors to 503 Service Unavailable
+  if (err.code === 'P2010' || err.code === 'P1001' || err.code === 'P1002' ||
+      (err.message && err.message.includes('Server selection timeout'))) {
+    statusCode = 503;
+    message = 'Database temporarily unavailable. Please try again in a moment.';
+  }
+
   const isProduction = process.env.NODE_ENV === 'production';
   
   // Clean up any uploaded file in memory/disk if there was an error in handling
